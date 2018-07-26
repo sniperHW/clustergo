@@ -1,0 +1,10 @@
+syntax = "proto2";
+package message;
+
+message echo_toS {
+	required string msg = 1;
+}
+
+message echo_toC {
+	required string msg = 2;
+}

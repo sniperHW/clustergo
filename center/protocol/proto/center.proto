@@ -1,0 +1,36 @@
+syntax = "proto2";
+package protocol;
+
+message login {
+	required string tt   = 1;
+	required string ip   = 2;
+	required int32  port = 3;
+}
+
+message loginFailed {
+	required string msg  = 1;
+}
+
+message heartbeatToCenter {
+	required int64  timestamp = 1;
+}
+
+message heartbeatToNode {
+	required int64  timestamp = 1;
+	required int64  timestamp_back = 2;
+}
+
+message nodeInfo {
+	required string tt   = 1;
+	required string ip   = 2;
+	required int32  port = 3;	
+}
+
+message notifyNodeInfo {
+	repeated nodeInfo nodes = 1;
+}
+
+message nodeLose {
+	repeated nodeInfo nodes = 1;
+}
+

@@ -1,0 +1,49 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "iOh5nq0kF9a2txPOhApsVuDcj6Y=",
+			"path": "github.com/golang/protobuf/proto",
+			"revision": "93b26e6a70e37abb14f2f88194949312b0592a84",
+			"revisionTime": "2018-07-24T20:30:48Z"
+		},
+		{
+			"checksumSHA1": "U3ku2roO6E1KSOIaZQEkLiIWtqg=",
+			"path": "github.com/sniperHW/kendynet",
+			"revision": "5a43890700424837aa47423f8ac260776aa74321",
+			"revisionTime": "2018-07-24T03:42:30Z"
+		},
+		{
+			"checksumSHA1": "+ejw3wVXCYwzm3cm203ka8fwnts=",
+			"path": "github.com/sniperHW/kendynet/golog",
+			"revision": "5a43890700424837aa47423f8ac260776aa74321",
+			"revisionTime": "2018-07-24T03:42:30Z"
+		},
+		{
+			"checksumSHA1": "/VJbHF8SaMAsyCQm77vsodsja4I=",
+			"path": "github.com/sniperHW/kendynet/rpc",
+			"revision": "5a43890700424837aa47423f8ac260776aa74321",
+			"revisionTime": "2018-07-24T03:42:30Z"
+		},
+		{
+			"checksumSHA1": "W9Tr2A7UlZXWeUxq0bpO2feEjaE=",
+			"path": "github.com/sniperHW/kendynet/socket/stream_socket",
+			"revision": "5a43890700424837aa47423f8ac260776aa74321",
+			"revisionTime": "2018-07-24T03:42:30Z"
+		},
+		{
+			"checksumSHA1": "guNfA1wfd0AjpUf0qjo4TQ32Ymc=",
+			"path": "github.com/sniperHW/kendynet/socket/stream_socket/tcp",
+			"revision": "5a43890700424837aa47423f8ac260776aa74321",
+			"revisionTime": "2018-07-24T03:42:30Z"
+		},
+		{
+			"checksumSHA1": "9IAnaIOWVwqmJfcy7sK9NIzRbsQ=",
+			"path": "github.com/sniperHW/kendynet/util",
+			"revision": "5a43890700424837aa47423f8ac260776aa74321",
+			"revisionTime": "2018-07-24T03:42:30Z"
+		}
+	],
+	"rootPath": "sanguo"
+}
