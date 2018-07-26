@@ -450,6 +450,10 @@ func Start(center_addr string,def Service) error {
 	}
 }
 
+func GetProcessQueue() *util.BlockQueue {
+	return queue
+}
+
 func init() {
 	handlers        = make(map[string]MsgHandler)
 	queue           = util.NewBlockQueue()
