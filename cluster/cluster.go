@@ -71,7 +71,7 @@ type rpcCall struct {
 }
 
 
-func postTask(task func()) {
+func PostTask(task func()) {
 	queue.Add(task)
 }
 
@@ -129,7 +129,7 @@ func dialOK(end *endPoint,session kendynet.StreamSession) {
 		if event.EventType == kendynet.EventTypeError {
 			event.Session.Close(event.Data.(error).Error(),0)
 		} else {
-			postTask(func(){
+			PostTask(func(){
 				switch event.Data.(type) {
 					case *ss.Message:
 						//处理普通消息
@@ -178,7 +178,7 @@ func login(end *endPoint,session kendynet.StreamSession) {
 		conn.SetWriteDeadline(time.Time{})		
 		Infof("login send ok\n")
 		if nil != err {
-			postTask(func () {
+			PostTask(func () {
 				dialError(end,session,err)
 			})
 		} else {
@@ -212,16 +212,16 @@ func login(end *endPoint,session kendynet.StreamSession) {
 			}
 
 			if nil != err {
-				postTask(func () {
+				PostTask(func () {
 					dialError(end,session,err)
 				})
 			} else {
 				if ret == "ok" {
-					postTask(func () {
+					PostTask(func () {
 						dialOK(end,session)
 					})
 				} else {
-					postTask(func () {
+					PostTask(func () {
 						dialError(end,session,fmt.Errorf(ret))
 					})
 				}
@@ -229,7 +229,7 @@ func login(end *endPoint,session kendynet.StreamSession) {
 		}
 	}()
 	/*
-	postTask(func () {
+	PostTask(func () {
 		dialOK(end,session)
 	})*/	
 }
@@ -256,12 +256,12 @@ func dial(end *endPoint) {
 		go func(){
 			client,err := tcp.NewConnector("tcp4",fmt.Sprintf("%s:%d",end.ip,end.port))
 			if err != nil {
-				postTask(func () {
+				PostTask(func () {
 					dialRet(end,nil,err)
 				})
 			} else {
 		    	session,err := client.Dial(time.Second * 3)
-				postTask(func () {
+				PostTask(func () {
 					dialRet(end,session,err)
 				})
 		    }
@@ -270,7 +270,7 @@ func dial(end *endPoint) {
 }
 
 func Brocast(tt string,msg proto.Message) {
-	postTask(func () {
+	PostTask(func () {
 		if ttmap,ok := ttEndPointMap[tt];ok {
 			for _,v := range(ttmap) {
 				PostMessage(v.toPeerID(),msg)
@@ -288,7 +288,7 @@ func PostMessage(peer PeerID,msg proto.Message) error {
 		return fmt.Errorf("cluster not started")
 	} 
 
-	postTask(func () {
+	PostTask(func () {
 		endPoint := getEndPointByID(peer)
 		if nil != endPoint {
 			if nil != endPoint.conn {
@@ -419,7 +419,7 @@ func Start(center_addr string,def Service) error {
 						if event.EventType == kendynet.EventTypeError {
 							event.Session.Close(event.Data.(error).Error(),0)
 						} else {
-							postTask(func() {
+							PostTask(func() {
 								switch event.Data.(type) {
 									case *ss.Message:
 										//处理普通消息
@@ -450,10 +450,6 @@ func Start(center_addr string,def Service) error {
 	}
 }
 
-func GetProcessQueue() *util.BlockQueue {
-	return queue
-}
-
 func init() {
 	handlers        = make(map[string]MsgHandler)
 	queue           = util.NewBlockQueue()
@@ -471,7 +467,7 @@ func init() {
 	})
 
 	RegisterCenterMsgHandler(&center_proto.NotifyNodeInfo{},func (session kendynet.StreamSession, msg proto.Message) {
-		postTask(func () {
+		PostTask(func () {
 			NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
 			Infof("process NotifyNodeInfo %d\n",len(NotifyNodeInfo.Nodes))	
 			for _,v := range(NotifyNodeInfo.Nodes) {
@@ -486,7 +482,7 @@ func init() {
 
 
 	RegisterCenterMsgHandler(&center_proto.NodeLose{},func (session kendynet.StreamSession, msg proto.Message) {
-		postTask(func () {
+		PostTask(func () {
 			NodeLose := msg.(*center_proto.NodeLose)
 			for _,v := range(NodeLose.Nodes) {
 				s := Service{
@@ -500,7 +496,7 @@ func init() {
 	})
 
 	RegisterCenterMsgHandler(&center_proto.LoginFailed{},func (session kendynet.StreamSession, msg proto.Message) {
-		postTask(func () {
+		PostTask(func () {
 			LoginFailed := msg.(*center_proto.LoginFailed)
 			Errorf("login center failed:%s",LoginFailed.GetMsg())	
 		})		
@@ -508,7 +504,7 @@ func init() {
 
 	go func () {
 		for {
-			postTask(tick)
+			PostTask(tick)
 			time.Sleep(time.Millisecond * 500)
 		}
 	}()	

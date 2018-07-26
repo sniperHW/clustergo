@@ -1,0 +1,8 @@
+log/
+
+protocol/cs/message
+protocol/ss/message
+protocol/ss/rpc
+
+*.txt
+*.exe

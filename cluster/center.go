@@ -62,7 +62,7 @@ func connectCenter(addr string,self Service) {
 					session.SetEncoder(center_proto.NewEncoder())
 					session.SetCloseCallBack(func (sess kendynet.StreamSession, reason string) {
 						Infof("center disconnected %s self:%s\n",reason,self.ToPeerID().ToString())
-						postTask(onCenterLose)
+						PostTask(onCenterLose)
 						connectCenter(addr,self)
 						atomic.StoreInt32(&stoped,1)
 					})
@@ -71,7 +71,7 @@ func connectCenter(addr string,self Service) {
 							Errorf("disconnected\n")
 							event.Session.Close(event.Data.(error).Error(),0)
 						} else {
-							postTask(func (){
+							PostTask(func (){
 								dispatchCenterMsg(session,event.Data.(*ss.Message))
 							})
 						}

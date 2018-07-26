@@ -67,11 +67,11 @@ func RegisterMethod(arg proto.Message,handler rpc.RPCMethodHandler) {
 */
 
 func SyncCall(peer PeerID,arg proto.Message,timeout uint32) (ret interface{},err error) {
-	respChan := make(chan interface{})
+	respChan := make(chan struct{})
 	AsynCall(peer,arg,timeout,func (ret_ interface{},err_ error) {
 		ret = ret_
 		err = err_
-		respChan <- nil
+		respChan <- struct{}{}
 	})
 	_ = <- respChan
 	return
@@ -83,13 +83,13 @@ func SyncCall(peer PeerID,arg proto.Message,timeout uint32) (ret interface{},err
 func AsynCall(peer PeerID,arg proto.Message,timeout uint32,cb rpc.RPCResponseHandler) {
 
 	if started == 0 {
-		postTask(func() {
+		PostTask(func() {
 			cb(nil,fmt.Errorf("cluster not started"))
 		})
 		return
 	} 
 
-	postTask(func () {
+	PostTask(func () {
 		endPoint := getEndPointByID(peer)
 		if nil != endPoint {
 			if nil != endPoint.conn {
