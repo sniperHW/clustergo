@@ -9,9 +9,8 @@ import (
 	"strings"
 )
 
-
 var	template string = `
-package %s
+package [s1]
 
 import (
 	"sanguo/cluster"
@@ -19,51 +18,50 @@ import (
 	ss_rpc "sanguo/protocol/ss/rpc"
 )
 
-type %s struct {
+type [s2] struct {
 	replyer_ *rpc.RPCReplyer
 }
 
-func (this *%s) Reply(result *%s) {
+func (this *[s2]) Reply(result *ss_rpc.[s3]) {
 	this.replyer_.Reply(result,nil)
 }
 
-func (this *%s) Error(err error) {
+func (this *[s2]) Error(err error) {
 	this.replyer_.Reply(nil,err)
 }
 
-type %s interface {
-	OnCall(*%s,*%s)
+type Echo interface {
+	OnCall(*[s2],*ss_rpc.[s4])
 }
 
-func Register(methodObj %s) {
+func Register(methodObj Echo) {
 	f := func(r *rpc.RPCReplyer, arg interface{}) {
-		replyer_ := &%s{replyer_:r}
-		methodObj.OnCall(replyer_,arg.(*%s))
+		replyer_ := &[s2]{replyer_:r}
+		methodObj.OnCall(replyer_,arg.(*ss_rpc.[s4]))
 	}
 
-	cluster.RegisterMethod(&%s{},f)
+	cluster.RegisterMethod(&ss_rpc.[s4]{},f)
 }
 
-func AsynCall(peer cluster.PeerID,arg *%s,timeout uint32,cb func(*%s,error)) {
+func AsynCall(peer cluster.PeerID,arg *ss_rpc.[s4],timeout uint32,cb func(*ss_rpc.[s3],error)) {
 	callback := func(r interface{},e error) {
-		cb(r.(*%s),e)
+		cb(r.(*ss_rpc.[s3]),e)
 	}
 	cluster.AsynCall(peer,arg,timeout,callback)
 }
 
 
-func SyncCall(peer cluster.PeerID,arg *%s,timeout uint32) (ret *%s,err error) {
-	respChan := make(chan interface{})
-	AsynCall(peer,arg,timeout,func (ret_ *%s,err_ error) {
+func SyncCall(peer cluster.PeerID,arg *ss_rpc.[s4],timeout uint32) (ret *ss_rpc.[s3],err error) {
+	respChan := make(chan struct{})
+	AsynCall(peer,arg,timeout,func (ret_ *ss_rpc.[s3],err_ error) {
 		ret = ret_
 		err = err_
-		respChan <- nil
+		respChan <- struct{}{}
 	})
 	_ = <- respChan
 	return
 }
 `
-
 
 func gen_rpc(array []string) {
 
@@ -92,33 +90,11 @@ func gen_rpc(array []string) {
 			return
 		}
 
-		reqTypeStr := fmt.Sprintf("ss_rpc.%sReq",strings.Title(v))
-		respTypeStr := fmt.Sprintf("ss_rpc.%sResp",strings.Title(v))
-		replyerTypeStr := fmt.Sprintf("%sReplyer",strings.Title(v))
-		packageStr := v
-		interfaceStr := strings.Title(v)
-
-
-		content := fmt.Sprintf(template,
-							   packageStr,
-							   replyerTypeStr,
-							   replyerTypeStr,
-							   respTypeStr,
-							   replyerTypeStr,
-							   interfaceStr,
-							   replyerTypeStr,
-							   reqTypeStr, 							   
-							   interfaceStr,
-							   replyerTypeStr,
-							   reqTypeStr,
-							   reqTypeStr,
-							   reqTypeStr,
-							   respTypeStr,
-							   respTypeStr,
-							   reqTypeStr,
-							   respTypeStr,
-							   respTypeStr,
-							   )
+		content := template
+		content = strings.Replace(content,"[s1]","echo",-1)
+		content = strings.Replace(content,"[s2]","EchoReplyer",-1)
+		content = strings.Replace(content,"[s3]","EchoResp",-1)
+		content = strings.Replace(content,"[s4]","EchoReq",-1)
 
 		_,err = f.WriteString(content)
 
@@ -134,6 +110,7 @@ func gen_rpc(array []string) {
 		f.Close()
 	}
 }
+
 
 
 func main() {
