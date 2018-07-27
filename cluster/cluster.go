@@ -7,7 +7,6 @@ import(
 	"github.com/sniperHW/kendynet/util"
 	"github.com/golang/protobuf/proto"
 	_ "sanguo/protocol/ss" //触发pb注册
-	ss_proto "sanguo/protocol/ss/message"
 	center_proto "sanguo/center/protocol"
 	"sanguo/codec/ss"
 	"sanguo/common"
@@ -17,6 +16,7 @@ import(
 	"net"
 	"io"
 	"encoding/binary"
+	"sanguo/codec/pb"
 )
 
 //外部不能依赖PeerID的类型
@@ -360,7 +360,7 @@ func tick() {
 	for _,v := range(idEndPointMap) {
 		if nil != v.conn && now >= v.conn.nextHeartbeat {
 			v.conn.nextHeartbeat = now + (common.HeartBeat_Timeout/2)
-			heartbeat := &ss_proto.Heartbeat{}
+			heartbeat := &Heartbeat{}
 			heartbeat.Timestamp1 = proto.Int64(time.Now().UnixNano())
 			v.conn.session.Send(heartbeat)
 		}
@@ -457,6 +457,9 @@ func init() {
 	ttEndPointMap   = make(map[string]ttMap)	
 	sessionPeerIDMap = make(map[kendynet.StreamSession]PeerID)	
 	center_handlers = make(map[string]MsgHandler)
+
+
+	pb.Register("ss",&Heartbeat{},2)
 
 	rpcServer,_     = rpc.NewRPCServer(&decoder{},&encoder{})
 

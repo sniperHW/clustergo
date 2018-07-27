@@ -4,11 +4,11 @@ import(
 	"github.com/golang/protobuf/proto"
 	"sanguo/codec/ss"
 	"github.com/sniperHW/kendynet"
-	ss_proto "sanguo/protocol/ss/message"
 	"runtime"
 	"reflect"
 	"time"
 	"sync"
+	"fmt"
 )
 
 type MsgHandler func (kendynet.StreamSession,proto.Message)
@@ -67,9 +67,9 @@ func dispatch(session kendynet.StreamSession,msg *ss.Message) {
 func dispatchServer(session kendynet.StreamSession,msg *ss.Message) {
 	if nil != msg {
 		switch msg.GetData().(type) {
-			case *ss_proto.Heartbeat:
-				heartbeat := msg.GetData().(*ss_proto.Heartbeat)
-				heartbeat_resp := &ss_proto.Heartbeat{}
+			case *Heartbeat:
+				heartbeat := msg.GetData().(*Heartbeat)
+				heartbeat_resp := &Heartbeat{}
 				heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
 				heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
 				session.Send(heartbeat_resp)				
@@ -85,7 +85,7 @@ func dispatchServer(session kendynet.StreamSession,msg *ss.Message) {
 func dispatchClient(session kendynet.StreamSession,msg *ss.Message) {
 	if nil != msg {
 		switch msg.GetData().(type) {
-			case *ss_proto.Heartbeat:			
+			case *Heartbeat:			
 				break
 			default:
 				dispatch(session,msg)

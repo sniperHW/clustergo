@@ -100,7 +100,7 @@ func gen_register(out_path string) {
 
 	message_str := ""
 	for id,v := range(proto_def.SS_message) {
-		message_str = message_str + fmt.Sprintf(`	pb.Register("ss",&message.%s{},%d)`,strings.Title(v),id+1) + "\n"
+		message_str = message_str + fmt.Sprintf(`	pb.Register("ss",&message.%s{},%d)`,strings.Title(v),id+2) + "\n"
 	}
 
 	rpc_req_str := ""

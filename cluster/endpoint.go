@@ -3,7 +3,6 @@ package cluster
 import(
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
-	_ "sanguo/protocol/ss" //触发pb注册
 	"fmt"
 	"math/rand"
 	"sync"

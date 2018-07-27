@@ -1,0 +1,16 @@
+syntax = "proto2";
+package message;
+import "common.proto";
+
+message actormove_toS 
+{
+	required Vector3 currentPosition = 1;
+	required Vector3 speed = 2;
+}
+
+message actormove_toC 
+{
+	required string clientId = 1;
+	required Vector3 currentPosition = 2;
+	required Vector3 speed = 3;
+}

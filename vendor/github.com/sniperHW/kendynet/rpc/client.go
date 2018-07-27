@@ -243,11 +243,11 @@ func (this *RPCClient) AsynCall(method string,arg interface{},timeout uint32,cb 
 
 //同步调用
 func (this *RPCClient) SyncCall(method string,arg interface{},timeout uint32) (ret interface{},err error) {
-	respChan := make(chan interface{})
+	respChan := make(chan struct{})
 	f := func (ret_ interface{},err_ error) {
 		ret = ret_
 		err = err_
-		respChan <- nil	
+		respChan <- struct{}{}	
 	}
 	if err = this.AsynCall(method,arg,timeout,f); err != nil {
 		return

@@ -8,7 +8,6 @@ import (
 
 func init() {
 	//普通消息
-	pb.Register("ss",&message.Heartbeat{},1)
 	pb.Register("ss",&message.Echo{},2)
 
 	//rpc请求
