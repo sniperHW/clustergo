@@ -208,7 +208,7 @@ func init() {
 	sessionPeerIDMap = make(map[kendynet.StreamSession]PeerID)	
 	center_handlers = make(map[string]MsgHandler)
 
-	pb.Register("ss",&Heartbeat{},2)
+	pb.Register("ss",&Heartbeat{},1)
 
 	rpcServer,_     = rpc.NewRPCServer(&decoder{},&encoder{})
 
