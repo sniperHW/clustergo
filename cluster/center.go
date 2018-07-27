@@ -100,3 +100,56 @@ func connectCenter(addr string,self Service) {
 		Errorf("NewConnector failed:%s\n",err.Error())
 	}
 }
+
+func onCenterLose() {
+	for _,v := range(idEndPointMap) {
+		if nil != v.conn {
+			v.conn.session.Close("lose center",0)
+		}
+	}
+	idEndPointMap = make(map[PeerID]*endPoint)	
+	ttEndPointMap = make(map[string]ttMap)
+}
+
+func centerInit() {
+	RegisterCenterMsgHandler(&center_proto.HeartbeatToNode{},func (session kendynet.StreamSession, msg proto.Message) {
+		//心跳响应暂时不处理
+		//kendynet.Infof("HeartbeatToNode\n")
+	})
+
+	RegisterCenterMsgHandler(&center_proto.NotifyNodeInfo{},func (session kendynet.StreamSession, msg proto.Message) {
+		PostTask(func () {
+			NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
+			Infof("process NotifyNodeInfo %d\n",len(NotifyNodeInfo.Nodes))	
+			for _,v := range(NotifyNodeInfo.Nodes) {
+				addEndPoint(&endPoint{
+					tt   : v.GetTt(),
+					ip   : v.GetIp(),
+					port : v.GetPort(),
+				})
+			}
+		})
+	})
+
+
+	RegisterCenterMsgHandler(&center_proto.NodeLose{},func (session kendynet.StreamSession, msg proto.Message) {
+		PostTask(func () {
+			NodeLose := msg.(*center_proto.NodeLose)
+			for _,v := range(NodeLose.Nodes) {
+				s := Service{
+					tt : v.GetTt(),
+					ip : v.GetIp(),
+					port : v.GetPort(),
+				}
+				remEndPoint(s.ToPeerID())
+			}
+		})		
+	})
+
+	RegisterCenterMsgHandler(&center_proto.LoginFailed{},func (session kendynet.StreamSession, msg proto.Message) {
+		PostTask(func () {
+			LoginFailed := msg.(*center_proto.LoginFailed)
+			Errorf("login center failed:%s",LoginFailed.GetMsg())	
+		})		
+	})	
+}

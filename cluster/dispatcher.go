@@ -8,7 +8,6 @@ import(
 	"reflect"
 	"time"
 	"sync"
-	"fmt"
 )
 
 type MsgHandler func (kendynet.StreamSession,proto.Message)
