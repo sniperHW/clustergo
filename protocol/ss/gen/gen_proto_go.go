@@ -98,16 +98,19 @@ func gen_register(out_path string) {
 		return
 	}
 
+	//用户定义ID开始区段
+	id_start := 1001
+
 	message_str := ""
 	for id,v := range(proto_def.SS_message) {
-		message_str = message_str + fmt.Sprintf(`	pb.Register("ss",&message.%s{},%d)`,strings.Title(v),id+2) + "\n"
+		message_str = message_str + fmt.Sprintf(`	pb.Register("ss",&message.%s{},%d)`,strings.Title(v),id+id_start) + "\n"
 	}
 
 	rpc_req_str := ""
 	rpc_resp_str := ""
 	for id,v := range(proto_def.SS_rpc) {
-		rpc_req_str  = rpc_req_str + fmt.Sprintf(`	pb.Register("rpc_req",&rpc.%sReq{},%d)`,strings.Title(v),id+1) + "\n"
-		rpc_resp_str = rpc_resp_str + fmt.Sprintf(`	pb.Register("rpc_resp",&rpc.%sResp{},%d)`,strings.Title(v),id+1) + "\n"
+		rpc_req_str  = rpc_req_str + fmt.Sprintf(`	pb.Register("rpc_req",&rpc.%sReq{},%d)`,strings.Title(v),id+id_start) + "\n"
+		rpc_resp_str = rpc_resp_str + fmt.Sprintf(`	pb.Register("rpc_resp",&rpc.%sResp{},%d)`,strings.Title(v),id+id_start) + "\n"
 	}
 
 	content := fmt.Sprintf(register_template,message_str,rpc_req_str,rpc_resp_str)

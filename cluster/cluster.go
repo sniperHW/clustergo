@@ -4,7 +4,6 @@ import(
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
-	"github.com/sniperHW/kendynet/util"
 	"github.com/golang/protobuf/proto"
 	_ "sanguo/protocol/ss" //触发pb注册
 	"sanguo/codec/ss"
@@ -22,7 +21,7 @@ var selfService Service
 
 
 var (
-	queue        *util.BlockQueue
+	queue        *kendynet.EventQueue
 	started       int32
 )
 
@@ -66,13 +65,8 @@ type rpcCall struct {
 	cb       rpc.RPCResponseHandler
 }
 
-
-func PostTask(task func()) {
-	queue.Add(task)
-}
-
 func Brocast(tt string,msg proto.Message) {
-	PostTask(func () {
+	queue.Post(func () {
 		if ttmap,ok := ttEndPointMap[tt];ok {
 			for _,v := range(ttmap) {
 				PostMessage(v.toPeerID(),msg)
@@ -90,7 +84,7 @@ func PostMessage(peer PeerID,msg proto.Message) error {
 		return fmt.Errorf("cluster not started")
 	} 
 
-	PostTask(func () {
+	queue.Post(func () {
 		endPoint := getEndPointByID(peer)
 		if nil != endPoint {
 			if nil != endPoint.conn {
@@ -169,7 +163,7 @@ func Start(center_addr string,def Service) error {
 						if event.EventType == kendynet.EventTypeError {
 							event.Session.Close(event.Data.(error).Error(),0)
 						} else {
-							PostTask(func() {
+							queue.Post(func() {
 								switch event.Data.(type) {
 									case *ss.Message:
 										//处理普通消息
@@ -202,7 +196,7 @@ func Start(center_addr string,def Service) error {
 
 func init() {
 	handlers        = make(map[string]MsgHandler)
-	queue           = util.NewBlockQueue()
+	queue           = kendynet.NewEventQueue()
 	idEndPointMap   = make(map[PeerID]*endPoint)
 	ttEndPointMap   = make(map[string]ttMap)	
 	sessionPeerIDMap = make(map[kendynet.StreamSession]PeerID)	
@@ -216,18 +210,13 @@ func init() {
 
 	go func () {
 		for {
-			PostTask(tick)
+			queue.Post(tick)
 			time.Sleep(time.Millisecond * 500)
 		}
 	}()	
 
 	go func() {
-		for {
-			_,localList := queue.Get()
-			for _ , task := range localList {
-				task.(func())()
-			}
-		}		
+		queue.Run()
 	}()
 
 }

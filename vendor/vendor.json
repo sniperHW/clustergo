@@ -9,10 +9,10 @@
 			"revisionTime": "2018-07-24T20:30:48Z"
 		},
 		{
-			"checksumSHA1": "U3ku2roO6E1KSOIaZQEkLiIWtqg=",
+			"checksumSHA1": "A/t5gwXvJxH4iroXRQKUe5og4TQ=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "5a43890700424837aa47423f8ac260776aa74321",
-			"revisionTime": "2018-07-24T03:42:30Z"
+			"revision": "23e62b9014bfb5fe20e7a125537bdfd24b5b8ae9",
+			"revisionTime": "2018-07-31T07:53:26Z"
 		},
 		{
 			"checksumSHA1": "+ejw3wVXCYwzm3cm203ka8fwnts=",
@@ -43,6 +43,12 @@
 			"path": "github.com/sniperHW/kendynet/util",
 			"revision": "5a43890700424837aa47423f8ac260776aa74321",
 			"revisionTime": "2018-07-24T03:42:30Z"
+		},
+		{
+			"checksumSHA1": "SLQzqGxeBbaYPF16bas60tKsaso=",
+			"path": "github.com/sniperHW/kendynet/util/asyn",
+			"revision": "197e3a98b4895370fb785fba0acf4e57c49382a5",
+			"revisionTime": "2018-07-31T10:46:03Z"
 		}
 	],
 	"rootPath": "sanguo"

@@ -83,13 +83,13 @@ func SyncCall(peer PeerID,arg proto.Message,timeout uint32) (ret interface{},err
 func AsynCall(peer PeerID,arg proto.Message,timeout uint32,cb rpc.RPCResponseHandler) {
 
 	if started == 0 {
-		PostTask(func() {
+		queue.Post(func() {
 			cb(nil,fmt.Errorf("cluster not started"))
 		})
 		return
 	} 
 
-	PostTask(func () {
+	queue.Post(func () {
 		endPoint := getEndPointByID(peer)
 		if nil != endPoint {
 			if nil != endPoint.conn {

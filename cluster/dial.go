@@ -65,7 +65,7 @@ func dialOK(end *endPoint,session kendynet.StreamSession) {
 		if event.EventType == kendynet.EventTypeError {
 			event.Session.Close(event.Data.(error).Error(),0)
 		} else {
-			PostTask(func(){
+			queue.Post(func(){
 				switch event.Data.(type) {
 					case *ss.Message:
 						//处理普通消息
@@ -126,12 +126,12 @@ func dial(end *endPoint) {
 		go func(){
 			client,err := tcp.NewConnector("tcp4",fmt.Sprintf("%s:%d",end.ip,end.port))
 			if err != nil {
-				PostTask(func () {
+				queue.Post(func () {
 					dialRet(end,nil,err)
 				})
 			} else {
 		    	session,err := client.Dial(time.Second * 3)
-				PostTask(func () {
+				queue.Post(func () {
 					dialRet(end,session,err)
 				})
 		    }

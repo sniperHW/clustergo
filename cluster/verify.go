@@ -22,7 +22,7 @@ func login(end *endPoint,session kendynet.StreamSession) {
 		conn.SetWriteDeadline(time.Time{})		
 		Infof("login send ok\n")
 		if nil != err {
-			PostTask(func () {
+			queue.Post(func () {
 				dialError(end,session,err)
 			})
 		} else {
@@ -56,16 +56,16 @@ func login(end *endPoint,session kendynet.StreamSession) {
 			}
 
 			if nil != err {
-				PostTask(func () {
+				queue.Post(func () {
 					dialError(end,session,err)
 				})
 			} else {
 				if ret == "ok" {
-					PostTask(func () {
+					queue.Post(func () {
 						dialOK(end,session)
 					})
 				} else {
-					PostTask(func () {
+					queue.Post(func () {
 						dialError(end,session,fmt.Errorf(ret))
 					})
 				}

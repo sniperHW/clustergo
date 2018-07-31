@@ -62,7 +62,7 @@ func connectCenter(addr string,self Service) {
 					session.SetEncoder(center_proto.NewEncoder())
 					session.SetCloseCallBack(func (sess kendynet.StreamSession, reason string) {
 						Infof("center disconnected %s self:%s\n",reason,self.ToPeerID().ToString())
-						PostTask(onCenterLose)
+						queue.Post(onCenterLose)
 						connectCenter(addr,self)
 						atomic.StoreInt32(&stoped,1)
 					})
@@ -71,7 +71,7 @@ func connectCenter(addr string,self Service) {
 							Errorf("disconnected\n")
 							event.Session.Close(event.Data.(error).Error(),0)
 						} else {
-							PostTask(func (){
+							queue.Post(func (){
 								dispatchCenterMsg(session,event.Data.(*ss.Message))
 							})
 						}
@@ -118,7 +118,7 @@ func centerInit() {
 	})
 
 	RegisterCenterMsgHandler(&center_proto.NotifyNodeInfo{},func (session kendynet.StreamSession, msg proto.Message) {
-		PostTask(func () {
+		queue.Post(func () {
 			NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
 			Infof("process NotifyNodeInfo %d\n",len(NotifyNodeInfo.Nodes))	
 			for _,v := range(NotifyNodeInfo.Nodes) {
@@ -133,7 +133,7 @@ func centerInit() {
 
 
 	RegisterCenterMsgHandler(&center_proto.NodeLose{},func (session kendynet.StreamSession, msg proto.Message) {
-		PostTask(func () {
+		queue.Post(func () {
 			NodeLose := msg.(*center_proto.NodeLose)
 			for _,v := range(NodeLose.Nodes) {
 				s := Service{
@@ -147,7 +147,7 @@ func centerInit() {
 	})
 
 	RegisterCenterMsgHandler(&center_proto.LoginFailed{},func (session kendynet.StreamSession, msg proto.Message) {
-		PostTask(func () {
+		queue.Post(func () {
 			LoginFailed := msg.(*center_proto.LoginFailed)
 			Errorf("login center failed:%s",LoginFailed.GetMsg())	
 		})		
