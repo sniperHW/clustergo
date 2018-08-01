@@ -3,22 +3,64 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "5paEOrPNmte9PRyvpBF8HTDjQD4=",
+			"path": "github.com/globalsign/mgo",
+			"revision": "113d3961e7311526535a1ef7042196563d442761",
+			"revisionTime": "2018-06-15T13:49:36Z"
+		},
+		{
+			"checksumSHA1": "6070Ot/n8eAtJPtejV9SovspdJU=",
+			"path": "github.com/globalsign/mgo/bson",
+			"revision": "113d3961e7311526535a1ef7042196563d442761",
+			"revisionTime": "2018-06-15T13:49:36Z"
+		},
+		{
+			"checksumSHA1": "//bXQG4HblBwxHJDIW/PklXAxu0=",
+			"path": "github.com/globalsign/mgo/internal/json",
+			"revision": "113d3961e7311526535a1ef7042196563d442761",
+			"revisionTime": "2018-06-15T13:49:36Z"
+		},
+		{
+			"checksumSHA1": "loubUcDO2QAStKIlVd7DqSeoEaw=",
+			"path": "github.com/globalsign/mgo/internal/sasl",
+			"revision": "113d3961e7311526535a1ef7042196563d442761",
+			"revisionTime": "2018-06-15T13:49:36Z"
+		},
+		{
+			"checksumSHA1": "xjfEsfN7ho6dDOVeUQJhW4KzD2I=",
+			"path": "github.com/globalsign/mgo/internal/scram",
+			"revision": "113d3961e7311526535a1ef7042196563d442761",
+			"revisionTime": "2018-06-15T13:49:36Z"
+		},
+		{
 			"checksumSHA1": "iOh5nq0kF9a2txPOhApsVuDcj6Y=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "93b26e6a70e37abb14f2f88194949312b0592a84",
 			"revisionTime": "2018-07-24T20:30:48Z"
 		},
 		{
-			"checksumSHA1": "A/t5gwXvJxH4iroXRQKUe5og4TQ=",
+			"checksumSHA1": "ybwior74Mac6UxMwygcPwtPwVrg=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "23e62b9014bfb5fe20e7a125537bdfd24b5b8ae9",
-			"revisionTime": "2018-07-31T07:53:26Z"
+			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
+			"revisionTime": "2018-08-01T10:09:56Z"
+		},
+		{
+			"checksumSHA1": "rL/Dei6Uq63lY9SyWWpT+hLs60Y=",
+			"path": "github.com/sniperHW/kendynet/asyn",
+			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
+			"revisionTime": "2018-08-01T10:09:56Z"
+		},
+		{
+			"checksumSHA1": "CYY6yPx7eXByi9nm+16ltipH3Go=",
+			"path": "github.com/sniperHW/kendynet/event",
+			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
+			"revisionTime": "2018-08-01T10:09:56Z"
 		},
 		{
 			"checksumSHA1": "+ejw3wVXCYwzm3cm203ka8fwnts=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "5a43890700424837aa47423f8ac260776aa74321",
-			"revisionTime": "2018-07-24T03:42:30Z"
+			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
+			"revisionTime": "2018-08-01T10:09:56Z"
 		},
 		{
 			"checksumSHA1": "/VJbHF8SaMAsyCQm77vsodsja4I=",
@@ -41,14 +83,20 @@
 		{
 			"checksumSHA1": "9IAnaIOWVwqmJfcy7sK9NIzRbsQ=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "5a43890700424837aa47423f8ac260776aa74321",
-			"revisionTime": "2018-07-24T03:42:30Z"
+			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
+			"revisionTime": "2018-08-01T10:09:56Z"
 		},
 		{
-			"checksumSHA1": "SLQzqGxeBbaYPF16bas60tKsaso=",
+			"checksumSHA1": "Y0EIlK5hLyTq0lXel6Fmrt/tf58=",
 			"path": "github.com/sniperHW/kendynet/util/asyn",
-			"revision": "197e3a98b4895370fb785fba0acf4e57c49382a5",
-			"revisionTime": "2018-07-31T10:46:03Z"
+			"revision": "f28d0a1ffc37ff6aea9507e380fa0dcaa473a12e",
+			"revisionTime": "2018-07-31T15:42:36Z"
+		},
+		{
+			"checksumSHA1": "AqJVYS/Pe4SKQ8Czo9w9S7Yh9X8=",
+			"path": "github.com/tealeg/xlsx",
+			"revision": "f36fa3be8893d528004c0938e06b65c67f69b76f",
+			"revisionTime": "2018-04-19T19:51:53Z"
 		}
 	],
 	"rootPath": "sanguo"

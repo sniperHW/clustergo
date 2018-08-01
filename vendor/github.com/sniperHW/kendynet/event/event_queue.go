@@ -1,17 +1,13 @@
-package kendynet
+package event
 
 import (
 	"fmt"
 	"github.com/sniperHW/kendynet/util"
+	"github.com/sniperHW/kendynet"
 	"sync/atomic"
 	"runtime"
 )
 
-
-const (
-	tt_noargs  = 1   //无参回调
-	tt_varargs = 2   //不定参数回调
-)
 
 type element struct {
 	tt            int
@@ -54,20 +50,20 @@ func (this *EventQueue) Close() {
 	this.eventQueue.Close()
 }
 
-func pcall(e *element) {
 
+func pcall(tt int,callback interface{},args []interface{}) {
 	defer func(){
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
 			l := runtime.Stack(buf, false)
-			Errorf("%v: %s\n", r, buf[:l])
+			kendynet.Errorf("%v: %s\n", r, buf[:l])
 		}			
 	}()	
 
-	if e.tt == tt_noargs {
-		e.callback.(func())()
+	if tt == tt_noargs {
+		callback.(func())()
 	} else {
-		e.callback.(func([]interface{}))(e.args)
+		callback.(func([]interface{}))(args)
 	}	
 }
 
@@ -80,7 +76,8 @@ func (this *EventQueue) Run() error {
 	for {
 		closed, localList := this.eventQueue.Get()
 		for _,v := range(localList) {
-			pcall(v.(*element))
+			e := v.(*element)
+			pcall(e.tt,e.callback,e.args)
 		}
 		if closed {
 			return nil

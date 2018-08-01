@@ -4,6 +4,7 @@ import(
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
+	"github.com/sniperHW/kendynet/event"
 	"github.com/golang/protobuf/proto"
 	_ "sanguo/protocol/ss" //触发pb注册
 	"sanguo/codec/ss"
@@ -21,7 +22,7 @@ var selfService Service
 
 
 var (
-	queue        *kendynet.EventQueue
+	queue        *event.EventQueue
 	started       int32
 )
 
@@ -194,9 +195,20 @@ func Start(center_addr string,def Service) error {
 	}
 }
 
+func GetEventQueue() *event.EventQueue {
+	return queue
+}
+
+/*
+*  将一个闭包投递到队列中执行，args为传递给闭包的参数
+*/
+func PostTask(function interface{},args ...interface{}) {
+	queue.Post(function,args...)
+}
+
 func init() {
 	handlers        = make(map[string]MsgHandler)
-	queue           = kendynet.NewEventQueue()
+	queue           = event.NewEventQueue()
 	idEndPointMap   = make(map[PeerID]*endPoint)
 	ttEndPointMap   = make(map[string]ttMap)	
 	sessionPeerIDMap = make(map[kendynet.StreamSession]PeerID)	
