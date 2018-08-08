@@ -39,22 +39,22 @@
 			"revisionTime": "2018-07-24T20:30:48Z"
 		},
 		{
-			"checksumSHA1": "ybwior74Mac6UxMwygcPwtPwVrg=",
+			"checksumSHA1": "8AlrFAUyIXkf8Jr1NkSDMZGEW9s=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
-			"revisionTime": "2018-08-01T10:09:56Z"
+			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
+			"revisionTime": "2018-08-08T08:33:12Z"
 		},
 		{
 			"checksumSHA1": "rL/Dei6Uq63lY9SyWWpT+hLs60Y=",
 			"path": "github.com/sniperHW/kendynet/asyn",
-			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
-			"revisionTime": "2018-08-01T10:09:56Z"
+			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
+			"revisionTime": "2018-08-08T08:33:12Z"
 		},
 		{
 			"checksumSHA1": "CYY6yPx7eXByi9nm+16ltipH3Go=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
-			"revisionTime": "2018-08-01T10:09:56Z"
+			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
+			"revisionTime": "2018-08-08T08:33:12Z"
 		},
 		{
 			"checksumSHA1": "+ejw3wVXCYwzm3cm203ka8fwnts=",
@@ -63,10 +63,10 @@
 			"revisionTime": "2018-08-01T10:09:56Z"
 		},
 		{
-			"checksumSHA1": "/VJbHF8SaMAsyCQm77vsodsja4I=",
+			"checksumSHA1": "8sBVTKw3thtplgpuJ3xSva4Dv8E=",
 			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "5a43890700424837aa47423f8ac260776aa74321",
-			"revisionTime": "2018-07-24T03:42:30Z"
+			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
+			"revisionTime": "2018-08-08T08:33:12Z"
 		},
 		{
 			"checksumSHA1": "W9Tr2A7UlZXWeUxq0bpO2feEjaE=",
