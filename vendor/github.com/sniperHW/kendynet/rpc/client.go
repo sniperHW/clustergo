@@ -7,9 +7,7 @@ import (
 	"runtime"	
 	"github.com/sniperHW/kendynet/util"
 	"github.com/sniperHW/kendynet"
-	//"github.com/sniperHW/kendynet/socket/stream_socket"
 	"os"
-	//"net"
 )
 
 var ErrCallTimeout error = fmt.Errorf("rpc call timeout")
@@ -21,7 +19,6 @@ type reqContext struct {
 	seq         uint64
 	onResponse  RPCResponseHandler
 	deadline    time.Time
-	eventQueue *kendynet.EventQueue
 	timestamp   int64 
 }
 
@@ -242,12 +239,13 @@ func (this *RPCClient) AsynCall(method string,arg interface{},timeout uint32,cb 
 }
 
 //同步调用
+//同步调用
 func (this *RPCClient) SyncCall(method string,arg interface{},timeout uint32) (ret interface{},err error) {
-	respChan := make(chan struct{})
+	respChan := make(chan interface{})
 	f := func (ret_ interface{},err_ error) {
 		ret = ret_
 		err = err_
-		respChan <- struct{}{}	
+		respChan <- nil	
 	}
 	if err = this.AsynCall(method,arg,timeout,f); err != nil {
 		return
