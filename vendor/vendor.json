@@ -33,64 +33,190 @@
 			"revisionTime": "2018-06-15T13:49:36Z"
 		},
 		{
-			"checksumSHA1": "iOh5nq0kF9a2txPOhApsVuDcj6Y=",
+			"checksumSHA1": "lqS0NXwKskDGDWUvP/aNmPKLW04=",
+			"path": "github.com/go-ini/ini",
+			"revision": "bda519ae5f4cbc60d391ff8610711627a08b86ae",
+			"revisionTime": "2018-04-20T15:00:25Z"
+		},
+		{
+			"checksumSHA1": "wCHDvNrgHFpd00v+QcuwJW+/pFQ=",
+			"path": "github.com/go-redis/redis",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "nVXciulY6rLU5aGPqX/uMMSaFAQ=",
+			"path": "github.com/go-redis/redis/internal",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "GQZsUVg/+6UpQAYpc4luMvMutSI=",
+			"path": "github.com/go-redis/redis/internal/consistenthash",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "l66eTZiJqueypc56HXCakGDm784=",
+			"path": "github.com/go-redis/redis/internal/hashtag",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "pHCccW9AW674BjzDgHEbyBz2K2g=",
+			"path": "github.com/go-redis/redis/internal/pool",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "gG/yb4wBfWRFhjdYWAUxfHpQoVk=",
+			"path": "github.com/go-redis/redis/internal/proto",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "sjbjSJrTdvyDwNjrWjTNeXgUhaU=",
+			"path": "github.com/go-redis/redis/internal/singleflight",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "SvyqZrzHTVxCIBoawql2ucvfWLE=",
+			"path": "github.com/go-redis/redis/internal/util",
+			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
+			"revisionTime": "2018-08-15T09:05:44Z"
+		},
+		{
+			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "93b26e6a70e37abb14f2f88194949312b0592a84",
-			"revisionTime": "2018-07-24T20:30:48Z"
+			"revision": "1d3f30b51784bec5aad268e59fd3c2fc1c2fe73f",
+			"revisionTime": "2018-11-28T19:23:52Z"
 		},
 		{
-			"checksumSHA1": "8AlrFAUyIXkf8Jr1NkSDMZGEW9s=",
+			"checksumSHA1": "EFilcRi6b0Bf3nckKo3UbeqoW50=",
+			"path": "github.com/gorilla/websocket",
+			"revision": "95ba29eb981bbb27d92e1f70bf8a1949452d926b",
+			"revisionTime": "2018-12-06T07:02:39Z"
+		},
+		{
+			"checksumSHA1": "AbEjLQwboKYNWCAT38wNhhb+ErY=",
+			"path": "github.com/hqpko/hconcurrent",
+			"revision": "4136bb0c920ee4468b54ce089060ab9e1bde08fd",
+			"revisionTime": "2018-06-06T01:53:24Z"
+		},
+		{
+			"checksumSHA1": "Hi++mMzrIOD048SS1MuC3wNbc+g=",
+			"path": "github.com/hqpko/hticker",
+			"revision": "1e49ce2b94a6b329ed0ab52ee3f5ddae23f93fc3",
+			"revisionTime": "2019-01-23T13:59:50Z"
+		},
+		{
+			"checksumSHA1": "cIiyvAduLLFvu+tg1Qr5Jw3jeWo=",
+			"path": "github.com/jtolds/gls",
+			"revision": "b4936e06046bbecbb94cae9c18127ebe510a2cb9",
+			"revisionTime": "2018-11-10T20:28:10Z"
+		},
+		{
+			"checksumSHA1": "IFtQxH02Qj36QooV+Z41enAh/hc=",
+			"path": "github.com/smartystreets/assertions",
+			"revision": "b2de0cb4f26d0705483a2f495d89896d0b808573",
+			"revisionTime": "2018-09-27T18:05:07Z"
+		},
+		{
+			"checksumSHA1": "v6W3GIQMzr3QSXB2NtBa9X7SwiI=",
+			"path": "github.com/smartystreets/assertions/internal/go-render/render",
+			"revision": "b2de0cb4f26d0705483a2f495d89896d0b808573",
+			"revisionTime": "2018-09-27T18:05:07Z"
+		},
+		{
+			"checksumSHA1": "r6FauVdOTFnwYQgrKGFuWUbIAJE=",
+			"path": "github.com/smartystreets/assertions/internal/oglematchers",
+			"revision": "b2de0cb4f26d0705483a2f495d89896d0b808573",
+			"revisionTime": "2018-09-27T18:05:07Z"
+		},
+		{
+			"checksumSHA1": "c71WVAQlpp3r4I+BtTxRz1Cq1Lw=",
+			"path": "github.com/smartystreets/goconvey/convey",
+			"revision": "044398e4856c3a83fb98f9de0a8ed1c6495e2843",
+			"revisionTime": "2018-11-08T00:35:08Z"
+		},
+		{
+			"checksumSHA1": "6Mgn4H/4vpqYGlaIKZ0UwOmJN0E=",
+			"path": "github.com/smartystreets/goconvey/convey/gotest",
+			"revision": "044398e4856c3a83fb98f9de0a8ed1c6495e2843",
+			"revisionTime": "2018-11-08T00:35:08Z"
+		},
+		{
+			"checksumSHA1": "uTSA/KWQA01sKPYfmLyMPvXbYaA=",
+			"path": "github.com/smartystreets/goconvey/convey/reporting",
+			"revision": "044398e4856c3a83fb98f9de0a8ed1c6495e2843",
+			"revisionTime": "2018-11-08T00:35:08Z"
+		},
+		{
+			"checksumSHA1": "Ao+tsh+PpJH0NwJhuL4StQvr61I=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
-			"revisionTime": "2018-08-08T08:33:12Z"
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "rL/Dei6Uq63lY9SyWWpT+hLs60Y=",
+			"checksumSHA1": "jpdQHy2FxZ0rj683SrltD1/SE8g=",
 			"path": "github.com/sniperHW/kendynet/asyn",
-			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
-			"revisionTime": "2018-08-08T08:33:12Z"
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "CYY6yPx7eXByi9nm+16ltipH3Go=",
+			"checksumSHA1": "Vp7PIrW+TrOmhwxessuCE2EB+UQ=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
-			"revisionTime": "2018-08-08T08:33:12Z"
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "+ejw3wVXCYwzm3cm203ka8fwnts=",
+			"checksumSHA1": "ilH4bYrjSdQUzZKhHXi+Im0GWE8=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
-			"revisionTime": "2018-08-01T10:09:56Z"
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "8sBVTKw3thtplgpuJ3xSva4Dv8E=",
+			"checksumSHA1": "fQ6WtEsUGFzMSfbchZFYbL8fBBw=",
+			"path": "github.com/sniperHW/kendynet/message",
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
+		},
+		{
+			"checksumSHA1": "uy7IO1kOBK+aLx4Fq1R3Od2CUKA=",
 			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "b8525847717bcc33986ba7e7db9f80f446fb5fe9",
-			"revisionTime": "2018-08-08T08:33:12Z"
+			"revision": "020840a6e418e0d49a5cb653375bf4567aef8f0f",
+			"revisionTime": "2019-02-02T17:00:12Z"
 		},
 		{
-			"checksumSHA1": "W9Tr2A7UlZXWeUxq0bpO2feEjaE=",
-			"path": "github.com/sniperHW/kendynet/socket/stream_socket",
-			"revision": "5a43890700424837aa47423f8ac260776aa74321",
-			"revisionTime": "2018-07-24T03:42:30Z"
+			"checksumSHA1": "LaTlZP2ZKyymyXNkBPZNZQGuFIM=",
+			"path": "github.com/sniperHW/kendynet/socket",
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "guNfA1wfd0AjpUf0qjo4TQ32Ymc=",
-			"path": "github.com/sniperHW/kendynet/socket/stream_socket/tcp",
-			"revision": "5a43890700424837aa47423f8ac260776aa74321",
-			"revisionTime": "2018-07-24T03:42:30Z"
+			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
+			"path": "github.com/sniperHW/kendynet/socket/connector/tcp",
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "9IAnaIOWVwqmJfcy7sK9NIzRbsQ=",
+			"checksumSHA1": "r6zyPaUP3z1cAz89972sXC3SrmQ=",
+			"path": "github.com/sniperHW/kendynet/socket/listener/tcp",
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
+		},
+		{
+			"checksumSHA1": "uJ9CicI+xWki+61FuxZSy9ROhyo=",
+			"path": "github.com/sniperHW/kendynet/timer",
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
+		},
+		{
+			"checksumSHA1": "0pt7/5TSubGOpDo1sUNlXeJR2jQ=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "b4510a7224808f86f21fd6f2744b5000d4e35df0",
-			"revisionTime": "2018-08-01T10:09:56Z"
-		},
-		{
-			"checksumSHA1": "Y0EIlK5hLyTq0lXel6Fmrt/tf58=",
-			"path": "github.com/sniperHW/kendynet/util/asyn",
-			"revision": "f28d0a1ffc37ff6aea9507e380fa0dcaa473a12e",
-			"revisionTime": "2018-07-31T15:42:36Z"
+			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
+			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
 			"checksumSHA1": "AqJVYS/Pe4SKQ8Czo9w9S7Yh9X8=",

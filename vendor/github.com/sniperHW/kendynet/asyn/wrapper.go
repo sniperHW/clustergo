@@ -1,20 +1,19 @@
 package asyn
 
-
 /*
 *  将同步接函数调用转换成基于回调的接口
-*/ 
+ */
 
-import(
+import (
 	"github.com/sniperHW/kendynet/event"
 	"reflect"
 )
 
-var routinePool_ * routinePool
+var routinePool_ *routinePool
 
-type wrapFunc func(callback func([]interface{}),args ...interface{})
+type wrapFunc func(callback func([]interface{}), args ...interface{})
 
-func AsynWrap(queue *event.EventQueue,oriFunc interface{}) wrapFunc {
+func AsynWrap(queue *event.EventQueue, oriFunc interface{}) wrapFunc {
 
 	if nil == queue {
 		return nil
@@ -26,18 +25,28 @@ func AsynWrap(queue *event.EventQueue,oriFunc interface{}) wrapFunc {
 		return nil
 	}
 
-	return func(callback func([]interface{}),args ...interface{}){
-		f := func () {
+	return func(callback func([]interface{}), args ...interface{}) {
+		f := func() {
 			in := []reflect.Value{}
-			for _,v := range(args) {
-				in = append(in,reflect.ValueOf(v))
+			for _, v := range args {
+				in = append(in, reflect.ValueOf(v))
 			}
-			out := oriF.Call(in) 
-			ret := []interface{}{}
-			for _,v := range(out) {
-				ret = append(ret,v.Interface())
+			out := oriF.Call(in)
+
+			if len(out) > 0 {
+
+				ret := make([]interface{}, len(out))[0:0]
+				for _, v := range out {
+					ret = append(ret, v.Interface())
+				}
+				if nil != callback {
+					queue.PostNoWait(callback, ret...)
+				}
+			} else {
+				if nil != callback {
+					queue.PostNoWait(callback)
+				}
 			}
-			queue.Post(callback,ret...)
 		}
 
 		if nil == routinePool_ {
@@ -45,11 +54,10 @@ func AsynWrap(queue *event.EventQueue,oriFunc interface{}) wrapFunc {
 		} else {
 			//设置了go程池，交给go程池执行
 			routinePool_.AddTask(f)
-		}		
+		}
 	}
 }
 
 func SetRoutinePool(pool *routinePool) {
 	routinePool_ = pool
 }
-

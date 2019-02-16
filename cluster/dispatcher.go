@@ -1,94 +1,107 @@
 package cluster
 
-import(
+import (
 	"github.com/golang/protobuf/proto"
-	"sanguo/codec/ss"
 	"github.com/sniperHW/kendynet"
-	"runtime"
 	"reflect"
-	"time"
+	"runtime"
+	"sanguo/cluster/addr"
 	"sync"
+	"time"
 )
 
-type MsgHandler func (kendynet.StreamSession,proto.Message)
+type MsgHandler func(addr.LogicAddr, proto.Message)
 
 var mtxHandler sync.Mutex
-var handlers map[string]MsgHandler
+var handlers map[string]MsgHandler = map[string]MsgHandler{}
+var onPeerDisconnected func(addr.LogicAddr, error)
 
-func Register(msg proto.Message,handler MsgHandler) {
+func RegisterPeerDisconnected(cb func(addr.LogicAddr, error)) {
+	defer mtxHandler.Unlock()
+	mtxHandler.Lock()
+	onPeerDisconnected = cb
+}
+
+func Register(msg proto.Message, handler MsgHandler) {
 	defer mtxHandler.Unlock()
 	mtxHandler.Lock()
 
-	msgName := reflect.TypeOf(msg).String()	
+	msgName := reflect.TypeOf(msg).String()
 	if nil == handler {
 		//记录日志
-		Errorf("Register %s failed: handler is nil\n",msgName)
+		Errorf("Register %s failed: handler is nil\n", msgName)
 		return
 	}
-	_,ok := handlers[msgName]
+	_, ok := handlers[msgName]
 	if ok {
 		//记录日志
-		Errorf("Register %s failed: duplicate handler\n",msgName)
+		Errorf("Register %s failed: duplicate handler\n", msgName)
 		return
 	}
 
 	handlers[msgName] = handler
 }
 
-
-func pcall(handler MsgHandler,name string,session kendynet.StreamSession,msg proto.Message) {
-	defer func(){
+func pcall(handler MsgHandler, from addr.LogicAddr, name string, msg proto.Message) {
+	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
 			l := runtime.Stack(buf, false)
-			Errorf("error on Dispatch:%s\nstack:%v,%s\n",name,r,buf[:l])
-		}		 
+			Errorf("error on Dispatch:%s\nstack:%v,%s\n", name, r, buf[:l])
+		}
 	}()
-	handler(session,msg)
+	handler(from, msg)
 }
 
-func dispatch(session kendynet.StreamSession,msg *ss.Message) {
+func dispatch(from addr.LogicAddr, name string, msg proto.Message) {
 	if nil != msg {
-		name := msg.GetName()
 		mtxHandler.Lock()
-		handler,ok := handlers[name]
+		handler, ok := handlers[name]
 		mtxHandler.Unlock()
 		if ok {
-			pcall(handler,name,session,msg.GetData())
+			pcall(handler, from, name, msg)
 		} else {
 			//记录日志
-			Errorf("unkonw msg:%s\n",name)
+			Errorf("unkonw msg:%s\n", name)
 		}
 	}
 }
 
+func dispatchPeerDisconnected(peer addr.LogicAddr, err error) {
+	var h func(addr.LogicAddr, error)
+	mtxHandler.Lock()
+	h = onPeerDisconnected
+	mtxHandler.Unlock()
+	if nil != h {
+		h(peer, err)
+	}
+}
 
-func dispatchServer(session kendynet.StreamSession,msg *ss.Message) {
+func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
 	if nil != msg {
-		switch msg.GetData().(type) {
-			case *Heartbeat:
-				heartbeat := msg.GetData().(*Heartbeat)
-				heartbeat_resp := &Heartbeat{}
-				heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
-				heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
-				session.Send(heartbeat_resp)				
-				break
-			default:
-				dispatch(session,msg)
-				break
+		switch msg.(type) {
+		case *Heartbeat:
+			heartbeat := msg.(*Heartbeat)
+			heartbeat_resp := &Heartbeat{}
+			heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
+			heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
+			session.Send(heartbeat_resp)
+			break
+		default:
+			dispatch(from, name, msg)
+			break
 		}
 	}
 }
 
-
-func dispatchClient(session kendynet.StreamSession,msg *ss.Message) {
+func dispatchClient(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
 	if nil != msg {
-		switch msg.GetData().(type) {
-			case *Heartbeat:			
-				break
-			default:
-				dispatch(session,msg)
-				break
-		}		
-	}	
+		switch msg.(type) {
+		case *Heartbeat:
+			break
+		default:
+			dispatch(from, name, msg)
+			break
+		}
+	}
 }

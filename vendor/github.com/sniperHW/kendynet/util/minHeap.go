@@ -35,6 +35,10 @@ func NewMinHeap(size uint32) *MinHeap {
 	return m
 }
 
+func (this *MinHeap) Size() uint32 {
+	return this.size
+}
+
 func (this *MinHeap) swap(idx1,idx2 uint32) {
 	if idx1 != idx2 {
 		ele := this.data[idx1]

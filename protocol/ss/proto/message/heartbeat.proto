@@ -1,7 +1,0 @@
-syntax = "proto2";
-package message;
-
-message heartbeat {
-	required int64  timestamp1 = 1;
-	optional int64  timestamp2 = 2;
-}

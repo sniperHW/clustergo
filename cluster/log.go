@@ -1,32 +1,19 @@
 package cluster
 
-import(
+import (
 	"github.com/sniperHW/kendynet/golog"
-	"sync/atomic"	
-	"github.com/sniperHW/kendynet/rpc"
-	"fmt"
 )
 
-var logger *golog.Logger
-var is_init int32
+var logger golog.LoggerI
 
-func InitLogger(out *golog.OutputLogger,name ...string) {
-	if atomic.CompareAndSwapInt32(&is_init, 0, 1) {
-		var fullname string
-		if len(name) > 0 {
-			fullname = fmt.Sprintf("(%s|cluster)",name[0])
-		} else {
-			fullname = "(cluster)"
-		}
-		logger = golog.New(fullname,out)
-		logger.Debugf("%s logger init",fullname)
-		rpc.InitLogger(out,name...)
-	}	
+func InitLogger(l golog.LoggerI) {
+	logger = l
+
 }
 
 func Debugf(format string, v ...interface{}) {
 	if nil != logger {
-		logger.Debugf(format,v...)
+		logger.Debugf(format, v...)
 	}
 }
 
@@ -38,7 +25,7 @@ func Debugln(v ...interface{}) {
 
 func Infof(format string, v ...interface{}) {
 	if nil != logger {
-		logger.Infof(format,v...)
+		logger.Infof(format, v...)
 	}
 }
 
@@ -50,7 +37,7 @@ func Infoln(v ...interface{}) {
 
 func Warnf(format string, v ...interface{}) {
 	if nil != logger {
-		logger.Warnf(format,v...)
+		logger.Warnf(format, v...)
 	}
 }
 
@@ -62,7 +49,7 @@ func Warnln(v ...interface{}) {
 
 func Errorf(format string, v ...interface{}) {
 	if nil != logger {
-		logger.Errorf(format,v...)
+		logger.Errorf(format, v...)
 	}
 }
 
@@ -74,7 +61,7 @@ func Errorln(v ...interface{}) {
 
 func Fatalf(format string, v ...interface{}) {
 	if nil != logger {
-		logger.Fatalf(format,v...)
+		logger.Fatalf(format, v...)
 	}
 }
 

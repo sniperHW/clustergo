@@ -1,19 +1,20 @@
 package main
-	
+
 import (
-	"sanguo/protocol/ss/proto_def"
 	"fmt"
-	"os"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"os"
+	"sanguo/protocol/ss/proto_def"
 	"strings"
 )
 
-var	template string = `
+var template string = `
 package [s1]
 
 import (
 	"sanguo/cluster"
+	"sanguo/cluster/addr"
 	"github.com/sniperHW/kendynet/rpc"
 	ss_rpc "sanguo/protocol/ss/rpc"
 )
@@ -30,11 +31,17 @@ func (this *[s2]) Error(err error) {
 	this.replyer_.Reply(nil,err)
 }
 
-type Echo interface {
+
+func (this *[s2]) GetChannel() rpc.RPCChannel {
+	return this.replyer_.GetChannel()
+}
+
+
+type [s5] interface {
 	OnCall(*[s2],*ss_rpc.[s4])
 }
 
-func Register(methodObj Echo) {
+func Register(methodObj [s5]) {
 	f := func(r *rpc.RPCReplyer, arg interface{}) {
 		replyer_ := &[s2]{replyer_:r}
 		methodObj.OnCall(replyer_,arg.(*ss_rpc.[s4]))
@@ -43,79 +50,84 @@ func Register(methodObj Echo) {
 	cluster.RegisterMethod(&ss_rpc.[s4]{},f)
 }
 
-func AsynCall(peer cluster.PeerID,arg *ss_rpc.[s4],timeout uint32,cb func(*ss_rpc.[s3],error)) {
+func AsynCall(peer addr.LogicAddr,arg *ss_rpc.[s4],timeout uint32,cb func(*ss_rpc.[s3],error)) {
 	callback := func(r interface{},e error) {
-		cb(r.(*ss_rpc.[s3]),e)
+		if nil != r {
+			cb(r.(*ss_rpc.[s3]),e)
+		} else {
+			cb(nil,e)
+		}
 	}
 	cluster.AsynCall(peer,arg,timeout,callback)
 }
 
-
-func SyncCall(peer cluster.PeerID,arg *ss_rpc.[s4],timeout uint32) (ret *ss_rpc.[s3],err error) {
+func SyncCall(peer addr.LogicAddr,arg *ss_rpc.[s4],timeout uint32) (ret *ss_rpc.[s3], err error) {
 	respChan := make(chan struct{})
-	AsynCall(peer,arg,timeout,func (ret_ *ss_rpc.[s3],err_ error) {
+	f := func(ret_ *ss_rpc.[s3], err_ error) {
 		ret = ret_
 		err = err_
 		respChan <- struct{}{}
-	})
-	_ = <- respChan
+	}
+	AsynCall(peer,arg,timeout,f)
+	_ = <-respChan
 	return
 }
+
 `
 
-func gen_rpc(array []string) {
+func gen_rpc(array []proto_def.St) {
 
-	for _,v := range(array) {
+	for _, v := range array {
 
-		path := v
-		filename := fmt.Sprintf("%s/%s.go",path,v)
-		os.MkdirAll(path,os.ModePerm)
-		f,err := os.OpenFile(filename,os.O_RDWR,os.ModePerm)
+		path := v.Name
+		filename := fmt.Sprintf("%s/%s.go", path, v.Name)
+		os.MkdirAll(path, os.ModePerm)
+		f, err := os.OpenFile(filename, os.O_RDWR, os.ModePerm)
 		if err != nil {
 			if os.IsNotExist(err) {
-				f,err = os.Create(filename)
+				f, err = os.Create(filename)
 				if err != nil {
-					kendynet.Errorf("create %s failed:%s",filename,err.Error())
+					kendynet.Errorf("create %s failed:%s", filename, err.Error())
 					return
 				}
 			} else {
-				kendynet.Errorf("open %s failed:%s",filename,err.Error())			
+				kendynet.Errorf("open %s failed:%s", filename, err.Error())
 				return
 			}
 		}
-		err = os.Truncate(filename,0)
+		err = os.Truncate(filename, 0)
 		if err != nil {
-			kendynet.Errorf("Truncate %s failed:%s",filename,err.Error())		
-			f.Close()	
+			kendynet.Errorf("Truncate %s failed:%s", filename, err.Error())
+			f.Close()
 			return
 		}
 
 		content := template
-		content = strings.Replace(content,"[s1]","echo",-1)
-		content = strings.Replace(content,"[s2]","EchoReplyer",-1)
-		content = strings.Replace(content,"[s3]","EchoResp",-1)
-		content = strings.Replace(content,"[s4]","EchoReq",-1)
+		content = strings.Replace(content, "[s1]", v.Name, -1)
+		content = strings.Replace(content, "[s2]", strings.Title(v.Name)+"Replyer", -1)
+		content = strings.Replace(content, "[s3]", strings.Title(v.Name)+"Resp", -1)
+		content = strings.Replace(content, "[s4]", strings.Title(v.Name)+"Req", -1)
+		content = strings.Replace(content, "[s5]", strings.Title(v.Name), -1)
+		_, err = f.WriteString(content)
 
-		_,err = f.WriteString(content)
-
-		fmt.Printf(content)
+		//fmt.Printf(content)
 
 		if nil != err {
-			kendynet.Errorf("%s Write error:%s\n",filename,err.Error())		
-			return				
+			kendynet.Errorf("%s Write error:%s\n", filename, err.Error())
+			return
 		} else {
-			kendynet.Infof("%s Write ok\n",filename)		
+			kendynet.Infof("%s Write ok\n", filename)
 		}
 
 		f.Close()
 	}
 }
 
-
-
 func main() {
 	fmt.Printf("gen_rpc\n")
-	outLogger := golog.NewOutputLogger("log","gen_rpc",1024*1024*1000)
-	kendynet.InitLogger(outLogger)
+	outLogger := golog.NewOutputLogger("log", "gen_rpc", 1024*1024*1000)
+	kendynet.InitLogger(golog.New("gen_rpc", outLogger))
 	gen_rpc(proto_def.SS_rpc)
+	kendynet.Infoln("------------------------------------------")
+	kendynet.Infoln("gen_rpc ok!")
 }

@@ -2,24 +2,85 @@ package rpc
 
 import (
 	"fmt"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/event"
+	"github.com/sniperHW/kendynet/util"
+	"sync"
 	"sync/atomic"
 	"time"
-	"runtime"	
-	"github.com/sniperHW/kendynet/util"
-	"github.com/sniperHW/kendynet"
-	"os"
 )
 
 var ErrCallTimeout error = fmt.Errorf("rpc call timeout")
 
-type RPCResponseHandler func(interface{},error)
+var client_once sync.Once
+var sequence uint64
+var groupCount uint64 = 63
+var contextGroups []*contextGroup = make([]*contextGroup, groupCount)
+
+type RPCResponseHandler func(interface{}, error)
+
+type contextGroup struct {
+	mtx      sync.Mutex
+	minheap  *util.MinHeap          // = util.NewMinHeap(4096)
+	waitResp map[uint64]*reqContext // = map[uint64]*reqContext{} //待响应的请求
+}
+
+func (this *contextGroup) checkTimeout() {
+
+	timeout := []*reqContext{}
+
+	this.mtx.Lock()
+	for {
+		now := time.Now()
+		r := this.minheap.Min()
+		if r != nil && now.After(r.(*reqContext).deadline) {
+			this.minheap.PopMin()
+			if _, ok := this.waitResp[r.(*reqContext).seq]; !ok {
+				kendynet.Infof("timeout context:%d not found\n", r.(*reqContext).seq)
+			} else {
+				delete(this.waitResp, r.(*reqContext).seq)
+				timeout = append(timeout, r.(*reqContext))
+				kendynet.Infof("timeout context:%d\n", r.(*reqContext).seq)
+			}
+		} else {
+			break
+		}
+	}
+	this.mtx.Unlock()
+
+	for _, v := range timeout {
+		v.callResponseCB(nil, ErrCallTimeout)
+	}
+}
+
+func (this *contextGroup) onResponse(resp *RPCResponse) {
+	var (
+		ctx *reqContext
+		ok  bool
+	)
+
+	seq := resp.GetSeq()
+
+	this.mtx.Lock()
+	if ctx, ok = this.waitResp[seq]; ok {
+		delete(this.waitResp, seq)
+		this.minheap.Remove(ctx)
+	}
+	this.mtx.Unlock()
+
+	if nil != ctx {
+		ctx.callResponseCB(resp.Ret, resp.Err)
+	} else {
+		kendynet.Debugf("on response,but missing reqContext:%d\n", seq)
+	}
+}
 
 type reqContext struct {
-	heapIdx     uint32
-	seq         uint64
-	onResponse  RPCResponseHandler
-	deadline    time.Time
-	timestamp   int64 
+	heapIdx      uint32
+	seq          uint64
+	onResponse   RPCResponseHandler
+	deadline     time.Time
+	cbEventQueue *event.EventQueue
 }
 
 func (this *reqContext) Less(o util.HeapElement) bool {
@@ -34,256 +95,166 @@ func (this *reqContext) SetIndex(idx uint32) {
 	this.heapIdx = idx
 }
 
-func (this *reqContext) callResponseCB(ret interface{},err error) {
-	pCallOnResponse(this.onResponse,ret,err)
-}
-
-func pCallOnResponse(onResponse  RPCResponseHandler,ret interface{}, err error) {
-	defer func(){
-		if r := recover(); r != nil {
-			buf := make([]byte, 65535)
-			l := runtime.Stack(buf, false)
-			err := fmt.Errorf("%v: %s", r, buf[:l])
-			Errorf(util.FormatFileLine("%s\n",err.Error()))
-		}			
-	}()
-	onResponse(ret,err)	
-}
-
-type channelContext struct {
-	minheap          *util.MinHeap
-	pendingCalls      map[uint64]*reqContext
-}
-
-type reqContextMgr struct {
-	queue            *util.BlockQueue   
-	channels         map[RPCChannel]*channelContext
-}
-
-func (this *reqContextMgr) onRequest(channel RPCChannel,context *reqContext,msg interface{}) {
-	var ok bool
-	var cContext *channelContext
-	err := channel.SendRequest(msg)
-	if nil != err {
-		context.callResponseCB(nil,err)
+func (this *reqContext) callResponseCB(ret interface{}, err error) {
+	if this.cbEventQueue != nil {
+		this.cbEventQueue.PostNoWait(func() {
+			this.callResponseCB_(ret, err)
+		})
 	} else {
-		if cContext,ok = this.channels[channel] ; !ok {
-			cContext = &channelContext{minheap:util.NewMinHeap(1024),pendingCalls:map[uint64]*reqContext{}}
-			this.channels[channel] = cContext
-		}
-		cContext.pendingCalls[context.seq] = context
-		cContext.minheap.Insert(context)
+		this.callResponseCB_(ret, err)
 	}
 }
 
-func (this *reqContextMgr) onClose(channel RPCChannel,err error) {
-	if cContext,ok := this.channels[channel] ; ok {
-		delete(this.channels,channel)
-		for _ , v := range cContext.pendingCalls {
-			v.callResponseCB(nil,err)
-		}
-	}	
+func (this *reqContext) callResponseCB_(ret interface{}, err error) {
+	defer util.Recover(kendynet.GetLogger())
+	this.onResponse(ret, err)
 }
-
-func (this *reqContextMgr) onResponse(channel RPCChannel,rpcMsg RPCMessage) {
-	var ok bool
-	var cContext *channelContext
-	var context  *reqContext
-	if cContext,ok = this.channels[channel] ; ok {
-		if context,ok = cContext.pendingCalls[rpcMsg.GetSeq()] ; ok {
-			//kendynet.Debugf("on response reqContext:%d\n",rpcMsg.GetSeq())
-			delete(cContext.pendingCalls,rpcMsg.GetSeq())
-			cContext.minheap.Remove(context)
-			resp := rpcMsg.(*RPCResponse)
-			context.callResponseCB(resp.Ret,resp.Err)			
-		} else {			
-			kendynet.Debugf("on response,but missing reqContext:%d\n",rpcMsg.GetSeq())
-			fmt.Fprintf(os.Stderr,"on response,but missing reqContext:%d\n",rpcMsg.GetSeq())
-		}	
-	} else {
-		kendynet.Debugf("on response,but missing channel reqContext:%d\n",rpcMsg.GetSeq())		
-	} 
-}
-
-func (this *reqContextMgr) checkTimeout() {
-	now := time.Now()
-	for _,v := range this.channels {
-		for {
-			r := v.minheap.Min()
-			if r != nil && now.After(r.(*reqContext).deadline) {
-				v.minheap.PopMin()
-				if _,ok := v.pendingCalls[r.(*reqContext).seq];!ok {
-					kendynet.Infof("timeout context:%d not found\n",r.(*reqContext).seq)
-				}else{
-					delete(v.pendingCalls,r.(*reqContext).seq)
-					kendynet.Infof("timeout context:%d\n",r.(*reqContext).seq)
-					fmt.Fprintf(os.Stderr,"timeout context:%d\n",r.(*reqContext).seq)				
-					r.(*reqContext).callResponseCB(nil,ErrCallTimeout)
-				}
-			} else {
-				break
-			}
-		}
-	}	
-}
-
-
-func (this *reqContextMgr) loop() {
-	for {
-		_,localList := this.queue.Get()
-		for _ , v := range localList {
-			v.(func())()
-		}
-	}
-}
-
-
-var reqMgr *reqContextMgr
 
 type RPCClient struct {
-	encoder   		  	RPCMessageEncoder
-	decoder   		  	RPCMessageDecoder
-	sequence            uint64
-	channel             RPCChannel         
-}
-
-//通道关闭后调用
-func (this *RPCClient) OnChannelClose(err error) {
-	reqMgr.queue.Add(func(){
-		reqMgr.onClose(this.channel,err)
-	})
+	encoder      RPCMessageEncoder
+	decoder      RPCMessageDecoder
+	cbEventQueue *event.EventQueue
 }
 
 //收到RPC消息后调用
 func (this *RPCClient) OnRPCMessage(message interface{}) {
-	msg,err := this.decoder.Decode(message)
+	msg, err := this.decoder.Decode(message)
 	if nil != err {
-		Errorf(util.FormatFileLine("RPCClient rpc message from(%s) decode err:%s\n",this.channel.Name,err.Error()))
+		kendynet.Errorf(util.FormatFileLine("RPCClient rpc message decode err:%s\n", err.Error()))
 		return
-	}	
-	reqMgr.queue.Add(func(){
-		reqMgr.onResponse(this.channel,msg)
-	})
+	}
+
+	switch msg.(type) {
+	case *RPCResponse:
+		break
+	default:
+		panic("RPCClient.OnRPCMessage() invaild msg type")
+	}
+	contextGroups[msg.GetSeq()%uint64(len(contextGroups))].onResponse(msg.(*RPCResponse))
 }
 
 //投递，不关心响应和是否失败
-func (this *RPCClient) Post(method string,arg interface{}) error {
+func (this *RPCClient) Post(channel RPCChannel, method string, arg interface{}) error {
 
 	req := &RPCRequest{
-		Method : method,
-		Seq : atomic.AddUint64(&this.sequence,1), 
-		Arg : arg,
-		NeedResp : false,
+		Method:   method,
+		Seq:      atomic.AddUint64(&sequence, 1),
+		Arg:      arg,
+		NeedResp: false,
 	}
 
-	request,err := this.encoder.Encode(req)
+	request, err := this.encoder.Encode(req)
 	if err != nil {
-		return fmt.Errorf("encode error:%s\n",err.Error())
-	} 
+		return fmt.Errorf("encode error:%s\n", err.Error())
+	}
 
-	err = this.channel.SendRequest(request)
+	err = channel.SendRequest(request)
 	if nil != err {
 		return err
 	}
 	return nil
 }
 
-
-func AsynHandler(cb RPCResponseHandler) RPCResponseHandler {
-	if nil != cb {
-		return func (r interface{},e error) {
-			go cb(r,e)
-		}
-	} else {
-		return nil
-	}
-}
-
 /*
-*  异步调用
-*  cb将在一个单独的go程中执行,如需在cb中调用阻塞函数请使用AsynHandler封装cb
-*/
-func (this *RPCClient) AsynCall(method string,arg interface{},timeout uint32,cb RPCResponseHandler) error {
+ *  异步调用
+ */
+
+func (this *RPCClient) AsynCall(channel RPCChannel, method string, arg interface{}, timeout time.Duration, cb RPCResponseHandler) error {
 
 	if cb == nil {
-		return fmt.Errorf("cb == nil")
+		panic("cb == nil")
 	}
 
-	reqMgr.queue.Add(func (){
-		req := &RPCRequest{ 
-			Method : method,
-			Seq : atomic.AddUint64(&this.sequence,1), 
-			Arg : arg,
-			NeedResp : true,
+	req := &RPCRequest{
+		Method:   method,
+		Seq:      atomic.AddUint64(&sequence, 1),
+		Arg:      arg,
+		NeedResp: true,
+	}
+
+	context := &reqContext{
+		onResponse:   cb,
+		seq:          req.Seq,
+		cbEventQueue: this.cbEventQueue,
+	}
+
+	request, err := this.encoder.Encode(req)
+	if err != nil {
+		return err
+	} else {
+		context.deadline = time.Now().Add(timeout)
+
+		group := contextGroups[req.Seq%uint64(len(contextGroups))]
+
+		group.mtx.Lock()
+		defer group.mtx.Unlock()
+		err := channel.SendRequest(request)
+		if err == nil {
+			group.waitResp[context.seq] = context
+			group.minheap.Insert(context)
+			return nil
+		} else {
+			return err
 		}
-
-		request,err := this.encoder.Encode(req)
-		if err != nil {
-			cb(nil,fmt.Errorf("encode error:%s\n",err.Error()))
-			return
-		} 
-
-		if timeout <= 0 {
-			timeout = 5000
-		}
-
-		context := &reqContext{}
-		context.heapIdx = 0
-		context.seq = req.Seq
-		context.onResponse = cb
-		context.deadline = time.Now().Add(time.Duration(timeout) * time.Millisecond)
-		context.timestamp = time.Now().UnixNano()
-		reqMgr.onRequest(this.channel,context,request)
-	})
-	return nil
+	}
 }
 
 //同步调用
-//同步调用
-func (this *RPCClient) SyncCall(method string,arg interface{},timeout uint32) (ret interface{},err error) {
+func (this *RPCClient) Call(channel RPCChannel, method string, arg interface{}, timeout time.Duration) (ret interface{}, err error) {
 	respChan := make(chan interface{})
-	f := func (ret_ interface{},err_ error) {
+	f := func(ret_ interface{}, err_ error) {
 		ret = ret_
 		err = err_
-		respChan <- nil	
+		respChan <- nil
 	}
-	if err = this.AsynCall(method,arg,timeout,f); err != nil {
-		return
+	err = this.AsynCall(channel, method, arg, timeout, f)
+	if nil == err {
+		_ = <-respChan
 	}
-	_ = <- respChan
 	return
 }
 
-func NewClient(channel RPCChannel,decoder RPCMessageDecoder,encoder RPCMessageEncoder) (*RPCClient,error) {
+func onceRoutine() {
+
+	client_once.Do(func() {
+		for i := uint64(0); i < groupCount; i++ {
+			contextGroups[i] = &contextGroup{
+				minheap:  util.NewMinHeap(128),
+				waitResp: map[uint64]*reqContext{},
+			}
+		}
+
+		go func() {
+			for {
+				time.Sleep(time.Duration(10) * time.Millisecond)
+				for _, v := range contextGroups {
+					v.checkTimeout()
+				}
+			}
+		}()
+	})
+}
+
+func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder, cbEventQueue ...*event.EventQueue) *RPCClient {
 	if nil == decoder {
-		return nil,fmt.Errorf("decoder == nil")
+		panic("decoder == nil")
 	}
 
 	if nil == encoder {
-		return nil,fmt.Errorf("encoder == nil")
+		panic("encoder == nil")
 	}
 
-	if nil == channel {
-		return nil,fmt.Errorf("channel == nil")
+	var q *event.EventQueue
+
+	if len(cbEventQueue) > 0 {
+		q = cbEventQueue[0]
 	}
 
-	return &RPCClient{encoder:encoder,decoder:decoder,channel:channel},nil
-}
+	onceRoutine()
 
-func init() {
-
-	reqMgr = &reqContextMgr{queue:util.NewBlockQueue(),channels:map[RPCChannel]*channelContext{}}
-
-	//启动一个go程，每10毫秒向queue投递一个定时器消息
-	go func() {
-		for {
-			time.Sleep(time.Duration(10)*time.Millisecond)
-			reqMgr.queue.Add(func (){
-				reqMgr.checkTimeout()				
-			})
-		}
-	}()
-
-	go reqMgr.loop()
-	
+	return &RPCClient{
+		encoder:      encoder,
+		decoder:      decoder,
+		cbEventQueue: q,
+	}
 }

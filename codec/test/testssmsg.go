@@ -1,16 +1,16 @@
 package main
 
 import (
+	"fmt"
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet/rpc"
+	"sanguo/cluster/vaddr"
 	"sanguo/codec/pb"
 	"sanguo/codec/ss"
 	"sanguo/codec/test/testproto"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet/rpc"
-	"fmt"
 )
 
-func testRPCREQ () {
-
+func testRPCREQ() {
 
 	req := &rpc.RPCRequest{}
 	req.Seq = 1
@@ -19,9 +19,9 @@ func testRPCREQ () {
 	toS.Content = proto.String("RPC REQ")
 	req.Arg = toS
 
-	encoder := ss.NewEncoder("ss","rpc_req","rpc_resp")
+	encoder := ss.NewEncoder("ss", "rpc_req", "rpc_resp")
 
-	buff,err := encoder.EnCode(req)
+	buff, err := encoder.EnCode(req)
 
 	if nil != err {
 		fmt.Println(err)
@@ -30,9 +30,9 @@ func testRPCREQ () {
 
 	if nil != buff {
 
-		receiver := ss.NewReceiver("ss","rpc_req","rpc_resp")
+		receiver := ss.NewReceiver("ss", "rpc_req", "rpc_resp")
 
-		r,err := receiver.TestUnpack(buff.Bytes())
+		r, err := receiver.TestUnpack(buff.Bytes())
 
 		if nil != err {
 			fmt.Println(err)
@@ -43,9 +43,7 @@ func testRPCREQ () {
 	}
 }
 
-
-func testRPCRESP () {
-
+func testRPCRESP() {
 
 	resp := &rpc.RPCResponse{}
 	resp.Seq = 2
@@ -53,9 +51,9 @@ func testRPCRESP () {
 	toC.Response = proto.String("RPC RESP")
 	resp.Ret = toC
 
-	encoder := ss.NewEncoder("ss","rpc_req","rpc_resp")
+	encoder := ss.NewEncoder("ss", "rpc_req", "rpc_resp")
 
-	buff,err := encoder.EnCode(resp)
+	buff, err := encoder.EnCode(resp)
 
 	if nil != err {
 		fmt.Println(err)
@@ -64,9 +62,9 @@ func testRPCRESP () {
 
 	if nil != buff {
 
-		receiver := ss.NewReceiver("ss","rpc_req","rpc_resp")
+		receiver := ss.NewReceiver("ss", "rpc_req", "rpc_resp")
 
-		r,err := receiver.TestUnpack(buff.Bytes())
+		r, err := receiver.TestUnpack(buff.Bytes())
 
 		if nil != err {
 			fmt.Println(err)
@@ -77,16 +75,15 @@ func testRPCRESP () {
 	}
 }
 
-func testRPCRESPErr () {
-
+func testRPCRESPErr() {
 
 	resp := &rpc.RPCResponse{}
 	resp.Seq = 3
 	resp.Err = fmt.Errorf("error")
 
-	encoder := ss.NewEncoder("ss","rpc_req","rpc_resp")
+	encoder := ss.NewEncoder("ss", "rpc_req", "rpc_resp")
 
-	buff,err := encoder.EnCode(resp)
+	buff, err := encoder.EnCode(resp)
 
 	if nil != err {
 		fmt.Println(err)
@@ -95,9 +92,9 @@ func testRPCRESPErr () {
 
 	if nil != buff {
 
-		receiver := ss.NewReceiver("ss","rpc_req","rpc_resp")
+		receiver := ss.NewReceiver("ss", "rpc_req", "rpc_resp")
 
-		r,err := receiver.TestUnpack(buff.Bytes())
+		r, err := receiver.TestUnpack(buff.Bytes())
 
 		if nil != err {
 			fmt.Println(err)
@@ -108,14 +105,18 @@ func testRPCRESPErr () {
 	}
 }
 
-
 func testMessage() {
 	toS := &testproto.ChatToS{}
 	toS.Content = proto.String("Message")
 
-	encoder := ss.NewEncoder("ss","rpc_req","rpc_resp")
+	toAddr, _ := vaddr.MakeLogicAddr("1.1.1")
+	fromAddr, _ := vaddr.MakeLogicAddr("1.2.1")
 
-	buff,err := encoder.EnCode(toS)
+	msg := ss.NewMessage("echo", toS, toAddr, fromAddr)
+
+	encoder := ss.NewEncoder("ss", "rpc_req", "rpc_resp")
+
+	buff, err := encoder.EnCode(msg)
 
 	if nil != err {
 		fmt.Println(err)
@@ -124,28 +125,27 @@ func testMessage() {
 
 	if nil != buff {
 
-		receiver := ss.NewReceiver("ss","rpc_req","rpc_resp")
+		receiver := ss.NewReceiver("ss", "rpc_req", "rpc_resp", toAddr)
 
-		r,err := receiver.TestUnpack(buff.Bytes())
+		r, err := receiver.TestUnpack(buff.Bytes())
 
 		if nil != err {
 			fmt.Println(err)
 			return
 		}
 
-		msg := r.(ss.Message)
-		fmt.Println(msg.GetName(),msg.GetData())
-	}	
+		msg := r.(*ss.Message)
+		fmt.Println(msg.GetName(), msg.GetData())
+	}
 
 }
 
-
 func main() {
-	pb.Register("rpc_req",&testproto.ChatToS{},1);
-	pb.Register("rpc_resp",&testproto.ChatToC{},1);
-	pb.Register("ss",&testproto.ChatToS{},1);
-	testRPCREQ()
-	testRPCRESP()
-	testRPCRESPErr()
+	pb.Register("rpc_req", &testproto.ChatToS{}, 1)
+	pb.Register("rpc_resp", &testproto.ChatToC{}, 1)
+	pb.Register("ss", &testproto.ChatToS{}, 1)
+	//testRPCREQ()
+	//testRPCRESP()
+	//testRPCRESPErr()
 	testMessage()
 }

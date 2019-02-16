@@ -3,8 +3,10 @@ package rpc;
 
 message echo_req {
 	required string message = 1;
+	optional int64  seqno   = 2;
 }
 
 message echo_resp {
-	required string message = 1;	
+	required string message = 1;
+	optional int64  seqno   = 2;	
 }

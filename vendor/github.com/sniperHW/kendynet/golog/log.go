@@ -25,14 +25,27 @@ const (
 	// order they appear (the order listed here) or the format they present (as
 	// described in the comments).  A colon appears after these items:
 	//	2009/01/23 01:23:23.123123 /a/b/c/d.go:23: message
-	Ldate         = 1 << iota     // the date: 2009/01/23
-	Ltime                         // the time: 01:23:23
-	Lmicroseconds                 // microsecond resolution: 01:23:23.123123.  assumes Ltime.
-	Llongfile                     // full file name and line number: /a/b/c/d.go:23
-	Lshortfile                    // final file name element and line number: d.go:23. overrides Llongfile
+	Ldate         = 1 << iota                     // the date: 2009/01/23
+	Ltime                                         // the time: 01:23:23
+	Lmicroseconds                                 // microsecond resolution: 01:23:23.123123.  assumes Ltime.
+	Llongfile                                     // full file name and line number: /a/b/c/d.go:23
+	Lshortfile                                    // final file name element and line number: d.go:23. overrides Llongfile
 	LstdFlags     = Ldate | Ltime | Lmicroseconds // initial values for the standard logger
 
 )
+
+type LoggerI interface {
+	Debugf(format string, v ...interface{})
+	Debugln(v ...interface{})
+	Infof(format string, v ...interface{})
+	Infoln(v ...interface{})
+	Warnf(format string, v ...interface{})
+	Warnln(v ...interface{})
+	Errorf(format string, v ...interface{})
+	Errorln(v ...interface{})
+	Fatalf(format string, v ...interface{})
+	Fatalln(v ...interface{})
+}
 
 var enableStdOut bool = true
 
@@ -82,8 +95,8 @@ type Logger struct {
 // The prefix appears at the beginning of each generated log line.
 // The flag argument defines the logging properties.
 
-func New(name string,fileOutput *OutputLogger) *Logger {
-	l := &Logger{flag: LstdFlags, level: Level_Debug, name: name, panicLevel: Level_Fatal, fileOutput:fileOutput}
+func New(name string, fileOutput *OutputLogger) *Logger {
+	l := &Logger{flag: LstdFlags | Lshortfile, level: Level_Debug, name: name, panicLevel: Level_Fatal, fileOutput: fileOutput}
 	return l
 }
 
@@ -195,7 +208,7 @@ func (self *Logger) Output(calldepth int, prefix string, text string, c Color, o
 		self.buf = append(self.buf, '\n')
 	}
 
-	out.Write(&now,self.buf)
+	out.Write(&now, self.buf)
 
 }
 
@@ -205,9 +218,9 @@ func (self *Logger) Log(c Color, level Level, format string, v ...interface{}) {
 		return
 	}
 
-	if nil   == self.fileOutput && 
-	   false == enableStdOut && 
-	   int(level) < int(self.panicLevel) {
+	if nil == self.fileOutput &&
+		false == enableStdOut &&
+		int(level) < int(self.panicLevel) {
 		return
 	}
 
@@ -222,11 +235,11 @@ func (self *Logger) Log(c Color, level Level, format string, v ...interface{}) {
 	}
 
 	if enableStdOut {
-		self.Output(3, prefix, text, c, stdOutLogger)
+		self.Output(4, prefix, text, c, stdOutLogger)
 	}
 
 	if self.fileOutput != nil {
-		self.Output(3, prefix, text, NoColor, self.fileOutput)
+		self.Output(4, prefix, text, NoColor, self.fileOutput)
 	}
 
 	if int(level) >= int(self.panicLevel) {

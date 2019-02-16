@@ -65,10 +65,10 @@ func (m *Heartbeat) GetTimestamp2() int64 {
 }
 
 func init() {
-	proto.RegisterType((*Heartbeat)(nil), "message.heartbeat")
+	proto.RegisterType((*Heartbeat)(nil), "cluster.heartbeat")
 }
 
-func init() { proto.RegisterFile("heartbeat.proto", fileDescriptor_heartbeat_ffb18f674b19f042) }
+func init() { proto.RegisterFile("ss_heartbeat.proto", fileDescriptor_heartbeat_ffb18f674b19f042) }
 
 var fileDescriptor_heartbeat_ffb18f674b19f042 = []byte{
 	// 85 bytes of a gzipped FileDescriptorProto

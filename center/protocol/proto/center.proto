@@ -2,9 +2,8 @@ syntax = "proto2";
 package protocol;
 
 message login {
-	required string tt   = 1;
-	required string ip   = 2;
-	required int32  port = 3;
+	required uint32 logicAddr   = 1;
+	required string netAddr     = 2;
 }
 
 message loginFailed {
@@ -21,16 +20,15 @@ message heartbeatToNode {
 }
 
 message nodeInfo {
-	required string tt   = 1;
-	required string ip   = 2;
-	required int32  port = 3;	
+	required uint32 logicAddr   = 1;
+	required string netAddr     = 2;	
 }
 
 message notifyNodeInfo {
 	repeated nodeInfo nodes = 1;
 }
 
-message nodeLose {
-	repeated nodeInfo nodes = 1;
+message nodeLeave {
+	repeated uint32 nodes = 1;
 }
 

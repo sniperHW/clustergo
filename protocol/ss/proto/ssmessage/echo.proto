@@ -1,0 +1,6 @@
+syntax = "proto2";
+package ssmessage;
+
+message echo {
+	required string message = 1;
+}

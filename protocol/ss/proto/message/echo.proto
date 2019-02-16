@@ -1,6 +1,0 @@
-syntax = "proto2";
-package message;
-
-message echo {
-	required string message = 1;	
-}

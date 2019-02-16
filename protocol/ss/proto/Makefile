@@ -1,3 +1,3 @@
 all:
-	cd message;make;cd ..
+	cd ssmessage;make;cd ..
 	cd rpc;make;cd ..

@@ -1,0 +1,41 @@
+package main
+
+import (
+	"fmt"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
+	"os"
+	"sanguo/cluster"
+	"sanguo/cluster/addr"
+	_ "sanguo/protocol/ss" //触发pb注册
+	"strings"
+)
+
+func main() {
+	logger := golog.New("log", golog.NewOutputLogger("log", "harbor", 1024*1024*50))
+	kendynet.InitLogger(logger)
+	cluster.InitLogger(logger)
+
+	if len(os.Args) < 4 {
+		fmt.Println("useage harbor centers logicAddr netAddr")
+		return
+	}
+
+	centerAddrs := os.Args[1]
+	selfLogic := os.Args[2]
+	selfNet := os.Args[3]
+
+	selfAddr, err := addr.MakeHarborAddr(selfLogic, selfNet)
+
+	if nil != err {
+		fmt.Println(err)
+	} else {
+		err = cluster.Start(strings.Split(centerAddrs, "@"), selfAddr)
+		if nil != err {
+			fmt.Println(err)
+		} else {
+			sigStop := make(chan bool)
+			_, _ = <-sigStop
+		}
+	}
+}

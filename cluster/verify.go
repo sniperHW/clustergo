@@ -1,115 +1,77 @@
 package cluster
 
-import(
+import (
+	"encoding/binary"
+	"fmt"
 	"github.com/sniperHW/kendynet"
+	"io"
+	"net"
+	"sanguo/cluster/addr"
 	"sanguo/common"
 	"time"
-	"fmt"
-	"net"
-	"io"
-	"encoding/binary"
 )
 
-func login(end *endPoint,session kendynet.StreamSession) {
+func login(end *endPoint, session kendynet.StreamSession) {
 	go func() {
 		conn := session.GetUnderConn().(*net.TCPConn)
-		name := selfService.ToPeerID().ToString()
-		buffer := kendynet.NewByteBuffer(len(name)+2)
-		buffer.PutUint16(0,uint16(len(name)))
-		buffer.PutString(2,name)
+		logicAddr := selfAddr.Logic
+		buffer := kendynet.NewByteBuffer(4)
+		buffer.PutUint32(0, uint32(logicAddr))
 		conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
-		_,err := conn.Write(buffer.Bytes())
-		conn.SetWriteDeadline(time.Time{})		
+		_, err := conn.Write(buffer.Bytes())
+		conn.SetWriteDeadline(time.Time{})
 		Infof("login send ok\n")
 		if nil != err {
-			queue.Post(func () {
-				dialError(end,session,err)
-			})
+			dialError(end, session, err)
 		} else {
-			
-			buffer := make([]byte,512)
-			var err  error	
-			var ret  string		
-
+			var err error
+			buffer := make([]byte, 4)
 			for {
 				conn.SetReadDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
-				_,err = io.ReadFull(conn,buffer[:2])
+				_, err = io.ReadFull(conn, buffer)
 				if nil != err {
 					break
 				}
 
-				s := binary.BigEndian.Uint16(buffer[:2])
-				if s > 510 {
-					err = fmt.Errorf("too large")
-					break
-				}	
+				ret := binary.BigEndian.Uint32(buffer)
 
-				_,err = io.ReadFull(conn,buffer[2:2+s])
-				if nil != err {
-					break
+				if ret != 0 {
+					err = fmt.Errorf("login failed")
 				}
-
-				ret = string(buffer[2:2+s])
-
-				conn.SetReadDeadline(time.Time{})
 				break
 			}
 
 			if nil != err {
-				queue.Post(func () {
-					dialError(end,session,err)
-				})
+				dialError(end, session, err)
 			} else {
-				if ret == "ok" {
-					queue.Post(func () {
-						dialOK(end,session)
-					})
-				} else {
-					queue.Post(func () {
-						dialError(end,session,fmt.Errorf(ret))
-					})
-				}
+				dialOK(end, session)
 			}
 		}
 	}()
 }
 
-func auth(session kendynet.StreamSession) (string,error) {
-	buffer := make([]byte,512)
-	var name string
-	var err  error
-
+func auth(session kendynet.StreamSession) (addr.LogicAddr, error) {
+	buffer := make([]byte, 4)
+	var err error
 	conn := session.GetUnderConn().(*net.TCPConn)
 
-	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
-		_,err = io.ReadFull(conn,buffer[:2])
-		if nil != err {
-			break
-		}
-
-		s := binary.BigEndian.Uint16(buffer[:2])
-		if s > 510 {
-			err = fmt.Errorf("too large")
-			break
-		}	
-
-		_,err = io.ReadFull(conn,buffer[2:2+s])
-		if nil != err {
-			break
-		}
-
-		name = string(buffer[2:2+s])
-
-		conn.SetReadDeadline(time.Time{})
-
-		resp := kendynet.NewByteBuffer(64)
-		resp.PutUint16(0,uint16(len("ok")))
-		resp.PutString(2,"ok")
-		conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
-		_,err = conn.Write(resp.Bytes())
-		conn.SetWriteDeadline(time.Time{})
-		break
+	conn.SetReadDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+	_, err = io.ReadFull(conn, buffer)
+	if nil != err {
+		session.Close(err.Error(), 0)
+		return addr.LogicAddr(0), err
 	}
-	return name,err
+
+	resp := kendynet.NewByteBuffer(4)
+	resp.PutUint32(0, 0)
+	conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+	_, err = conn.Write(resp.Bytes())
+
+	if nil != err {
+		session.Close(err.Error(), 0)
+		return addr.LogicAddr(0), err
+	} else {
+		conn.SetWriteDeadline(time.Time{})
+		return addr.LogicAddr(binary.BigEndian.Uint32(buffer)), err
+	}
 }

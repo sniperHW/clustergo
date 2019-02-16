@@ -1,66 +1,75 @@
-package main 
+package main
 
-import(
-	"sanguo/cluster"
-	"os"
+import (
 	"fmt"
-	_ "sanguo/protocol/ss" //触发pb注册
-	ss_msg "sanguo/protocol/ss/message"
-	ss_rpc "sanguo/protocol/ss/rpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	"time"	
-	"github.com/sniperHW/kendynet/golog"	
+	"github.com/sniperHW/kendynet/golog"
+	"os"
+	"sanguo/cluster"
+	"sanguo/cluster/addr"
+	_ "sanguo/protocol/ss" //触发pb注册
+	ss_rpc "sanguo/protocol/ss/rpc"
+	ss_msg "sanguo/protocol/ss/ssmessage"
+	"time"
 )
 
 func main() {
-	outLogger := golog.NewOutputLogger("log","test_node1",1024*1024*1000)
-	kendynet.InitLogger(outLogger)
-	
-	center_addr := os.Args[1]
-	tt          := "test_node1"
-	ip          := "localhost"
-	port        := 8011 
 
-	cluster.Register(&ss_msg.Echo{},func (session kendynet.StreamSession,msg proto.Message){
-		fmt.Printf("on echo\n")
+	if len(os.Args) != 2 {
+		fmt.Println("useage node2 centeraddr")
+		return
+	}
+
+	logger := golog.New("log", golog.NewOutputLogger("log", "node1", 1024*1024*50))
+	kendynet.InitLogger(logger)
+	cluster.InitLogger(logger)
+
+	center_addr := os.Args[1]
+
+	cluster.Register(&ss_msg.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+		fmt.Printf("on echo resp\n")
 	})
 
-	err := cluster.Start(center_addr,cluster.MakeService(tt,ip,int32(port)))
+	selfAddr, err := addr.MakeAddr("1.1.2", "localhost:8012")
 
-	peer := cluster.MakePeerID("test_node2","localhost",8012)
-
-	if nil == err {
-		go func(){
-			for {
-
-				time.Sleep(time.Second)
-				echo := &ss_msg.Echo{}
-				echo.Message = proto.String("hello")
-				cluster.PostMessage(peer,echo)
-
-				echoReq := &ss_rpc.EchoReq{}
-				echoReq.Message = proto.String("hello")
-				
-				//同步调用
-				ret,err := cluster.SyncCall(peer,echoReq,0)
-				if nil == err {
-					resp := ret.(*ss_rpc.EchoResp)
-					kendynet.Infof("echo response %s\n",resp.GetMessage())
-				}
-
-				//异步调用
-				/*cluster.AsynCall(peer,echoReq,0,func(result interface{},err error){
-					if nil == err {
-						resp := result.(*ss_rpc.EchoResp)
-						kendynet.Infof("echo response %s\n",resp.GetMessage())
-					}
-				})*/
-			}
-		}()
-		sigStop := make(chan bool)
-		_,_ = <- sigStop
+	if nil != err {
+		fmt.Println(err)
 	} else {
-		fmt.Printf("cluster Start error:%s\n",err.Error())
+
+		err = cluster.Start([]string{center_addr}, selfAddr)
+
+		peer, _ := addr.MakeLogicAddr("1.1.1")
+
+		if nil == err {
+			go func() {
+				for i := 0; ; i++ {
+
+					time.Sleep(time.Second)
+					echo := &ss_msg.Echo{}
+					echo.Message = proto.String("hello")
+					cluster.PostMessage(peer, echo)
+
+					echoReq := &ss_rpc.EchoReq{}
+					echoReq.Message = proto.String(fmt.Sprintf("hello:%d", i))
+
+					//fmt.Println("send req", echoReq.GetMessage())
+
+					//异步调用
+					cluster.AsynCall(peer, echoReq, 10, func(result interface{}, err error) {
+						if nil == err {
+							resp := result.(*ss_rpc.EchoResp)
+							kendynet.Infof("echoRpc response %s\n", resp.GetMessage())
+						} else {
+							kendynet.Infoln(echoReq.GetMessage(), err)
+						}
+					})
+				}
+			}()
+			sigStop := make(chan bool)
+			_, _ = <-sigStop
+		} else {
+			fmt.Printf("cluster Start error:%s\n", err.Error())
+		}
 	}
 }
