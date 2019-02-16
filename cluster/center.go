@@ -4,11 +4,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	center_proto "github.com/sniperHW/sanguo/center/protocol"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/common"
 	"reflect"
-	center_proto "sanguo/center/protocol"
-	"sanguo/cluster/addr"
-	"sanguo/codec/ss"
-	"sanguo/common"
 	"time"
 )
 

@@ -7,11 +7,11 @@ import (
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/rpc"
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/codec/ss"
+	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	"reflect"
-	"sanguo/cluster/addr"
-	"sanguo/codec/pb"
-	"sanguo/codec/ss"
-	_ "sanguo/protocol/ss" //触发pb注册
 	"sync"
 	"sync/atomic"
 	"time"

@@ -1,10 +1,10 @@
 package cs
 
 import (
-	codecs "sanguo/codec/cs"
-	"sanguo/common"
-	_ "sanguo/protocol/cs" //触发pb注册
-	cs_proto "sanguo/protocol/cs/message"
+	codecs "github.com/sniperHW/sanguo/codec/cs"
+	"github.com/sniperHW/sanguo/common"
+	_ "github.com/sniperHW/sanguo/protocol/cs" //触发pb注册
+	cs_proto "github.com/sniperHW/sanguo/protocol/cs/message"
 	"time"
 
 	"github.com/sniperHW/kendynet"

@@ -1,7 +1,7 @@
 package protocol
 
 import (
-	"sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/codec/pb"
 )
 
 func init() {

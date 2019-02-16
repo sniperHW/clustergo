@@ -2,7 +2,7 @@ package ss
 
 import (
 	"encoding/binary"
-	"sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/addr"
 )
 
 type Message struct {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/sanguo/protocol/ss/proto_def"
 	"os"
-	"sanguo/protocol/ss/proto_def"
 	"strings"
 )
 
@@ -13,10 +13,10 @@ var template string = `
 package [s1]
 
 import (
-	"sanguo/cluster"
-	"sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster"
+	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/kendynet/rpc"
-	ss_rpc "sanguo/protocol/ss/rpc"
+	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
 )
 
 type [s2] struct {

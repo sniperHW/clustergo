@@ -1,0 +1,11 @@
+syntax = "proto2";
+package rpc;
+
+message synctoken_req {
+	required string userid    = 1;
+	required string token     = 2;
+}
+
+message synctoken_resp {
+	required string token  = 1;
+}

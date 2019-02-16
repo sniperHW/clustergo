@@ -3,9 +3,9 @@ package cluster
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/sanguo/cluster/addr"
 	"reflect"
 	"runtime"
-	"sanguo/cluster/addr"
 	"sync"
 	"time"
 )

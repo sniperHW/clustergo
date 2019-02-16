@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 	//"os"
-	"sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/codec/pb"
 	//"time"
 
 	"github.com/golang/protobuf/proto"

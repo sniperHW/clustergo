@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/rpc"
-	"sanguo/cluster/vaddr"
-	"sanguo/codec/pb"
-	"sanguo/codec/ss"
-	"sanguo/codec/test/testproto"
+	"github.com/sniperHW/sanguo/cluster/vaddr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/codec/test/testproto"
 )
 
 func testRPCREQ() {

@@ -4,10 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/common"
 	"io"
 	"net"
-	"sanguo/cluster/addr"
-	"sanguo/common"
 	"time"
 )
 

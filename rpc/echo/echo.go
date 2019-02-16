@@ -2,10 +2,10 @@
 package echo
 
 import (
-	"sanguo/cluster"
-	"sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster"
+	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/kendynet/rpc"
-	ss_rpc "sanguo/protocol/ss/rpc"
+	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
 )
 
 type EchoReplyer struct {

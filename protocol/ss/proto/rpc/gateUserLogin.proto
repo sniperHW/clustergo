@@ -1,0 +1,21 @@
+syntax = "proto2";
+package rpc;
+
+enum GateLoginEnumType
+{
+	OK             = 1;
+	ERROR    	   = 2;
+	RETRY          = 3;
+	REDIRECT       = 4;
+}
+
+message gateUserLogin_req {
+	required string userID     = 1;
+	required uint32 gateUserID = 2;	
+	required int32  serverID   = 3;
+}
+
+message gateUserLogin_resp {
+	required GateLoginEnumType  code  = 1;
+	optional string redirectInfo = 2;   	
+}

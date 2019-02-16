@@ -2,7 +2,7 @@ package cs
 
 import (
 	"github.com/sniperHW/kendynet"
-	codecs "sanguo/codec/cs"
+	codecs "github.com/sniperHW/sanguo/codec/cs"
 )
 
 type ServerDispatcher interface {

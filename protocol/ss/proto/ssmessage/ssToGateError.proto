@@ -1,0 +1,6 @@
+syntax = "proto2";
+package ssmessage;
+
+message ssToGateError {
+	optional uint32 guid = 1;
+}

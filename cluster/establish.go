@@ -5,9 +5,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
-	"sanguo/cluster/addr"
-	"sanguo/codec/ss"
-	"sanguo/common"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/common"
 	"time"
 )
 

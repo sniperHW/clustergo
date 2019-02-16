@@ -1,0 +1,90 @@
+syntax = "proto2";
+package message;
+
+enum EnumType
+{
+	OK             = 1;
+	ERROR          = 2;
+	LOGIN_ERROR    = 3;
+	LOGIN_RETRY    = 4;
+	LOGIN_NOGAME   = 5;
+	RETRY          = 6;
+	MAX_ROLE_COUNT = 7;
+	ROLE_NAME_ERROR = 8;
+	ROLE_NAME_REPEATED = 9;
+	ROOM_ID_ERROR = 10;
+	ROOM_ENTER_REPACT = 11;
+	ROLE_ID_ERROR	= 12;
+}
+
+enum TeamEnum
+{
+	NO_TEAM       = 1;
+	MAXROLECOUNT  = 2;
+	AGREED        = 3;
+	DISAGREE      = 4; 
+	JOINOTHERTEAM = 5;
+	OFF_LINE      = 6;
+	IN_BATTLE     = 7;
+}
+
+message viewObj {
+	optional string userID    = 1;
+	optional uint64 roleID    = 2;
+	optional Position pos     = 3;
+	optional int32  Face      = 4;   
+	optional int32  Hair      = 5;   //发型
+	optional int32  HairColor = 6;   //发色
+	optional int32  EyeColor  = 7;   //瞳色
+	optional int32  Outline   = 8;
+	optional string Name      = 9;
+	optional int32  Weapon1   = 10;	
+	optional int32  Cloth     = 11;
+	optional int32  ClothColor = 12;
+	optional int32  Level      = 13;
+	optional int32  Angle      = 14;
+	optional int32  Weapon2    = 15;
+	optional int32  Portrait   = 16;
+	optional int32  CampType   = 17; //1红 2蓝
+}
+
+message simpleObj{
+	optional uint64 roleID = 1;
+	optional string name   = 2;
+	optional int32  level  = 3;
+	optional int32  portrait = 4;
+}
+
+message Attr {
+	optional int32 id  = 1;
+	optional int64 val = 2;
+}
+
+message BattleAttr {
+	optional int32 id  = 1;
+	optional int32 val = 2;
+}
+
+
+message Position {
+	optional int32 x       = 1;
+	optional int32 y       = 2;
+	optional int32 z       = 3;
+}
+
+
+message Vector3D {
+	optional int32 x       = 1;
+	optional int32 y       = 2;
+	optional int32 z       = 3;	
+}
+
+message AwardInfo {
+	optional  int32  AwardType   = 1;
+	optional  int32  ID          = 2;
+	optional  int32  Count       = 3;
+}
+
+message Award {
+	repeated AwardInfo AwardInfos = 1;
+}

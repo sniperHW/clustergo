@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/sanguo/cluster"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	"os"
-	"sanguo/cluster"
-	"sanguo/cluster/addr"
-	_ "sanguo/protocol/ss" //触发pb注册
 	"strings"
 )
 

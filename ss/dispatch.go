@@ -1,7 +1,7 @@
 package ss
 
 import (
-	codess "sanguo/codec/ss"
+	codess "github.com/sniperHW/sanguo/codec/ss"
 
 	"github.com/sniperHW/kendynet"
 )

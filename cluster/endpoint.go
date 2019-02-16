@@ -3,10 +3,10 @@ package cluster
 import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
+	center_proto "github.com/sniperHW/sanguo/center/protocol"
+	"github.com/sniperHW/sanguo/cluster/addr"
 	"math/rand"
 	"net"
-	center_proto "sanguo/center/protocol"
-	"sanguo/cluster/addr"
 	"sort"
 	"sync"
 )

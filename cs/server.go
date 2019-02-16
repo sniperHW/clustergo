@@ -2,9 +2,9 @@ package cs
 
 import (
 	"fmt"
-	codecs "sanguo/codec/cs"
-	_ "sanguo/protocol/cs" //触发pb注册
-	cs_proto "sanguo/protocol/cs/message"
+	codecs "github.com/sniperHW/sanguo/codec/cs"
+	_ "github.com/sniperHW/sanguo/protocol/cs" //触发pb注册
+	cs_proto "github.com/sniperHW/sanguo/protocol/cs/message"
 	"sync/atomic"
 
 	"github.com/sniperHW/kendynet"

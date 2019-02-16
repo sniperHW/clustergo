@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
-	"sanguo/codec/pb"
-	_ "sanguo/protocol/cs"
+	"github.com/sniperHW/sanguo/codec/pb"
+	_ "github.com/sniperHW/sanguo/protocol/cs"
 
 	"github.com/sniperHW/kendynet"
 )

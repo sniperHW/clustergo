@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/sniperHW/sanguo/protocol/cs/proto_def"
 	"os"
-	"sanguo/protocol/cs/proto_def"
 	"strings"
 
 	"github.com/sniperHW/kendynet"
@@ -47,8 +47,8 @@ func gen_proto(out_path string) {
 var register_template string = `
 package cs
 import (
-	"sanguo/codec/pb"
-	"sanguo/protocol/cs/message"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/protocol/cs/message"
 )
 
 func init() {

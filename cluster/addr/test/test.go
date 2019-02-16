@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/addr"
 )
 
 func main() {

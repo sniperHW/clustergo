@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/sanguo/protocol/cs/proto_def"
 	"os"
-	"sanguo/protocol/cs/proto_def"
 	//"strings"
 )
 

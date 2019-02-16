@@ -5,10 +5,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	_ "github.com/sniperHW/sanguo/protocol/ss"
 	"os"
-	"sanguo/cluster/addr"
-	"sanguo/codec/pb"
-	_ "sanguo/protocol/ss"
 )
 
 const (

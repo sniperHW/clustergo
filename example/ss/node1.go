@@ -5,12 +5,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/sanguo/cluster"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
+	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
+	ss_msg "github.com/sniperHW/sanguo/protocol/ss/ssmessage"
 	"os"
-	"sanguo/cluster"
-	"sanguo/cluster/addr"
-	_ "sanguo/protocol/ss" //触发pb注册
-	ss_rpc "sanguo/protocol/ss/rpc"
-	ss_msg "sanguo/protocol/ss/ssmessage"
 	"time"
 )
 

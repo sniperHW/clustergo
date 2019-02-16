@@ -1,7 +1,7 @@
 package protocol
 
 import (
-	"sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/codec/ss"
 )
 
 func NewEncoder() *ss.Encoder {

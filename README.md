@@ -43,9 +43,9 @@ var SS_message = []string {
 
 package ss
 import (
-	"sanguo/codec/pb"
-	"sanguo/protocol/ss/message"
-	"sanguo/protocol/ss/rpc"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/protocol/ss/message"
+	"github.com/sniperHW/sanguo/protocol/ss/rpc"
 )
 
 func init() {
@@ -95,9 +95,9 @@ rpc定义及产生骨架
 
 ```go
 	import(
-		"sanguo/cluster"
-		ss_rpc "sanguo/protocol/ss/rpc"
-		echo "sanguo/rpc/echo"
+		"github.com/sniperHW/sanguo/cluster"
+		ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
+		echo "github.com/sniperHW/sanguo/rpc/echo"
 	)
 
 	//实现echo.Echo接口

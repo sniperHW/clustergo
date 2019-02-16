@@ -1,0 +1,6 @@
+syntax = "proto2";
+package ssmessage;
+
+message kickGateUser {
+	required string userID = 1;	
+}

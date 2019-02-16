@@ -1,0 +1,14 @@
+syntax = "proto2";
+package message;
+import "common.proto";
+
+message gameLogin_toS {
+	required string userID    = 1;
+	required string token     = 2;
+	required int32  serverID  = 3;
+	
+}
+
+message gameLogin_toC {
+	required EnumType code  = 1;
+}

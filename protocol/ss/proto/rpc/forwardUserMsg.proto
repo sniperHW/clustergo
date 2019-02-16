@@ -1,0 +1,20 @@
+syntax = "proto2";
+package rpc;
+
+enum ForwordEnumType
+{
+	Forword_OK             = 1;
+	Forword_ERROR_UID      = 2;   //不合法的userID
+	Forword_ERROR_GUID     = 3;   //不合法的gateUserID
+	Forword_ERROR_REDIRECT = 4;   //正在迁移
+}
+
+message forwardUserMsg_req {
+	required string  userID = 1;
+	required uint32  gateUserID = 2;
+	repeated bytes   messages = 3;	
+}
+
+message forwardUserMsg_resp {
+	required ForwordEnumType code = 1;
+}

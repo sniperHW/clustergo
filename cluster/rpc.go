@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/rpc"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/ss"
 	"reflect"
-	"sanguo/cluster/addr"
-	"sanguo/codec/ss"
 	"sync/atomic"
 	"time"
 )
