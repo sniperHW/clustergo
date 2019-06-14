@@ -2,14 +2,15 @@ package ss
 
 import (
 	"fmt"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 	codess "github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	ss_proto "github.com/sniperHW/sanguo/protocol/ss/message"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 )
 
 var (
@@ -48,7 +49,7 @@ func (this *tcpListener) Start() error {
 		return fmt.Errorf("invaild listener")
 	}
 	return this.l.Start(func(session kendynet.StreamSession) {
-		session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
+		//session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
 		session.SetReceiver(codess.NewReceiver("ss", "rpc_req", "rpc_resp"))
 		session.SetEncoder(codess.NewEncoder("ss", "rpc_req", "rpc_resp"))
 		session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {

@@ -2,13 +2,14 @@ package ss
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/pb"
 	_ "github.com/sniperHW/sanguo/protocol/ss"
 	"os"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/rpc"
 )
 
 const (
@@ -21,19 +22,22 @@ const (
 )
 
 const (
-	RELAY   = 0x4  //跨集群透传消息
-	MESSAGE = 0x8  //普通消息
-	RPCREQ  = 0x10 //RPC请求
-	RPCRESP = 0x18 //RPC响应
-	RPCERR  = 0x20 //PRC响应错误信息
+	RELAY        = 0x4  //跨集群透传消息
+	MESSAGE      = 0x8  //普通消息
+	RPCREQ       = 0x10 //RPC请求
+	RPCRESP      = 0x18 //RPC响应
+	RPCERR       = 0x20 //PRC响应错误信息
+	COMPRESS     = 0x80
+	RPC_NEEDRESP = 0x1
+	MESSAGE_TYPE = 0x38
 )
 
 func setCompressFlag(flag *byte) {
-	*flag |= 0x80
+	*flag |= COMPRESS
 }
 
 func getCompresFlag(flag byte) bool {
-	return (flag & 0x80) != 0
+	return (flag & COMPRESS) != 0
 }
 
 func setMsgType(flag *byte, tt byte) {
@@ -43,23 +47,23 @@ func setMsgType(flag *byte, tt byte) {
 }
 
 func getMsgType(flag byte) byte {
-	return flag & 0x38
+	return flag & MESSAGE_TYPE
 }
 
 func setRelay(flag *byte) {
-	*flag |= 0x4
+	*flag |= RELAY
 }
 
 func isRelay(flag byte) bool {
-	return (flag & 0x4) != 0
+	return (flag & RELAY) != 0
 }
 
 func setNeedRPCResp(flag *byte) {
-	*flag |= 0x1
+	*flag |= RPC_NEEDRESP
 }
 
 func getNeedRPCResp(flag byte) bool {
-	return (flag & 0x1) != 0
+	return (flag & RPC_NEEDRESP) != 0
 }
 
 type Encoder struct {

@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/vaddr"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/codec/test/testproto"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet/rpc"
 )
 
 func testRPCREQ() {

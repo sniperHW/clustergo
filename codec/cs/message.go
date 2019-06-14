@@ -1,8 +1,9 @@
 package cs
 
 import (
-	"github.com/golang/protobuf/proto"
 	"reflect"
+
+	"github.com/golang/protobuf/proto"
 )
 
 type Message struct {

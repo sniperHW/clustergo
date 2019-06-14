@@ -5,6 +5,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
+	"github.com/sniperHW/kendynet/timer"
+	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
@@ -16,7 +18,7 @@ func onEstablishClient(end *endPoint, session kendynet.StreamSession) {
 		/*
 		 * 如果end.conn != nil 表示两端同时请求建立连接，本端已经作为服务端成功接受了对端的连接
 		 */
-		Infof("endPoint:%s already have conn\n", end.addr.Logic.String())
+		Infof("endPoint:%s already have conn\n", end.addr.Logic.String(), session.RemoteAddr().String())
 		session.Close("duplicate endPoint connection", 0)
 		return
 	}
@@ -24,13 +26,14 @@ func onEstablishClient(end *endPoint, session kendynet.StreamSession) {
 
 }
 
-func onEstablishServer(peer addr.LogicAddr, session kendynet.StreamSession) error {
+func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamSession) error {
 
-	if peer != selfAddr.Logic {
+	if nodeInfo.GetLogicAddr() != uint32(selfAddr.Logic) {
 
-		end := getEndPoint(peer)
+		end := getEndPoint(addr.LogicAddr(nodeInfo.GetLogicAddr()))
+
 		if nil == end {
-			return fmt.Errorf("invaild endPoint")
+			end = addEndPoint(nodeInfo)
 		}
 
 		end.mtx.Lock()
@@ -54,11 +57,9 @@ func onEstablishServer(peer addr.LogicAddr, session kendynet.StreamSession) erro
 			switch event.Data.(type) {
 			case *ss.Message:
 				msg := event.Data.(*ss.Message)
-
 				from := msg.From()
-				Debugln("msg from", from.String())
 				if addr.LogicAddr(0) == from {
-					from = peer
+					from = addr.LogicAddr(nodeInfo.GetLogicAddr())
 				}
 				if msg.GetName() == "rpc" {
 					onRPCMessage(getEndPoint(selfAddr.Logic), from, msg.GetData())
@@ -94,21 +95,15 @@ func onEstablish(end *endPoint, session kendynet.StreamSession, isClient bool) {
 		session: session,
 	}
 
-	var onTimeout func()
-
-	onTimeout = func() {
-		end.mtx.Lock()
-		defer end.mtx.Unlock()
-		if end.conn != nil {
-			heartbeat := &Heartbeat{}
-			heartbeat.Timestamp1 = proto.Int64(time.Now().UnixNano())
-			session.Send(heartbeat)
-			conn.timer = RegisterTimer(time.Now().Add(time.Second*(common.HeartBeat_Timeout/2)), onTimeout)
-		}
-	}
+	heartbeat := &Heartbeat{}
 
 	if isClient {
-		conn.timer = RegisterTimer(time.Now().Add(time.Second*(common.HeartBeat_Timeout/2)), onTimeout)
+		RegisterTimer(time.Second*(common.HeartBeat_Timeout/2), func(t *timer.Timer) {
+			heartbeat.Timestamp1 = proto.Int64(time.Now().UnixNano())
+			if kendynet.ErrSocketClose == session.Send(heartbeat) {
+				t.Cancel()
+			}
+		})
 	}
 
 	session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
@@ -117,9 +112,6 @@ func onEstablish(end *endPoint, session kendynet.StreamSession, isClient bool) {
 	session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 		end.mtx.Lock()
 		defer end.mtx.Unlock()
-		if nil != conn.timer {
-			UnregisterTimer(conn.timer)
-		}
 		err := fmt.Errorf(reason)
 		end.conn = nil
 		Infof("%s disconnected error:%s\n", end.addr.Logic.String(), reason)
@@ -171,7 +163,7 @@ func onEstablish(end *endPoint, session kendynet.StreamSession, isClient bool) {
 
 	pendingMsg := end.pendingMsg
 	end.pendingMsg = []interface{}{}
-	Infof("Flush pending message:%d\n", len(pendingMsg))
+	//Infof("Flush pending message:%d\n", len(pendingMsg))
 	for _, v := range pendingMsg {
 		session.Send(v)
 	}
@@ -180,7 +172,7 @@ func onEstablish(end *endPoint, session kendynet.StreamSession, isClient bool) {
 
 	now := time.Now()
 
-	Infof("Flush pending call:%d\n", len(pendingCall))
+	//Infof("Flush pending call:%d\n", len(pendingCall))
 
 	for _, v := range pendingCall {
 		if now.After(v.deadline) {

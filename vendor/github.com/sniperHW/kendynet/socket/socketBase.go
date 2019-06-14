@@ -123,6 +123,7 @@ func (this *SocketBase) Start(eventCB func(*kendynet.Event)) error {
 
 	this.onEvent = eventCB
 	this.flag |= started
+
 	go this.imp.sendThreadFunc()
 	go this.imp.recvThreadFunc()
 	return nil
@@ -157,6 +158,10 @@ func (this *SocketBase) SetReceiver(r kendynet.Receiver) {
 	this.receiver = r
 }
 
+func (this *SocketBase) SetSendQueueSize(size int) {
+	this.sendQue.SetFullSize(size)
+}
+
 func (this *SocketBase) Send(o interface{}) error {
 	if o == nil {
 		return kendynet.ErrInvaildObject
@@ -164,6 +169,10 @@ func (this *SocketBase) Send(o interface{}) error {
 
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
+
+	if (this.flag & started) == 0 {
+		return kendynet.ErrNotStart
+	}
 
 	if this.encoder == nil {
 		return kendynet.ErrInvaildEncoder
@@ -181,6 +190,11 @@ func (this *SocketBase) Send(o interface{}) error {
 func (this *SocketBase) SendMessage(msg kendynet.Message) error {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
+
+	if (this.flag & started) == 0 {
+		return kendynet.ErrNotStart
+	}
+
 	return this.imp.sendMessage(msg)
 }
 

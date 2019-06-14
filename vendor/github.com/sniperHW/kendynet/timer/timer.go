@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var once sync.Once
+
 type Timer struct {
 	id int64
 }
@@ -107,6 +109,15 @@ func loop() {
  */
 
 func newTimer(timeout time.Duration, repeat bool, eventQue *event.EventQueue, fn func(*Timer)) *Timer {
+
+	once.Do(func() {
+		notiChan = util.NewNotifyer()
+		minheap = util.NewMinHeap(65536)
+		idTimerMap = map[int64]*timer{}
+		go loop()
+
+	})
+
 	if nil == fn {
 		panic("fn == nil")
 	}
@@ -157,22 +168,12 @@ func Repeat(timeout time.Duration, eventQue *event.EventQueue, callback func(*Ti
  *        一个go程中调用Cancel），对于重复定时器，可以保证定时器最多在执行一次之后终止。
  */
 func (this *Timer) Cancel() {
+	defer mtx.Unlock()
 	mtx.Lock()
 	id := this.id
 	t, ok := idTimerMap[id]
 	if ok {
 		delete(idTimerMap, id)
 		minheap.Remove(t)
-	} else {
-		mtx.Unlock()
-		return
 	}
-	mtx.Unlock()
-}
-
-func init() {
-	notiChan = util.NewNotifyer()
-	minheap = util.NewMinHeap(65536)
-	idTimerMap = map[int64]*timer{}
-	go loop()
 }

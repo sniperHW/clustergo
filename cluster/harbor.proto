@@ -1,0 +1,23 @@
+syntax = "proto2";
+package cluster;
+
+
+//harbor向cluster的节点发送
+
+message addForginServicesH2S {
+	repeated uint32 nodes = 1;
+}
+
+message remForginServicesH2S {
+	repeated uint32 nodes = 1;
+}
+
+
+//harbor之间发送
+message addForginServicesH2H {
+	repeated uint32 nodes = 1;
+}
+
+message remForginServicesH2H {
+	repeated uint32 nodes = 1;
+}

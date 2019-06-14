@@ -2,7 +2,6 @@ package node_gate
 
 import (
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/sanguo/cluster"
 	"github.com/sniperHW/sanguo/node/node_gate/codec"
 	cs_message "github.com/sniperHW/sanguo/protocol/cs/message"
 )
@@ -36,7 +35,7 @@ func onReconnect(session kendynet.StreamSession, msg *codec.Message) {
 	u.mtx.Lock()
 	u.conn = session
 	if nil != u.t {
-		cluster.UnregisterTimer(u.t)
+		u.t.Cancel()
 		u.t = nil
 	}
 	session.Send(codec.NewMessage(msg.GetSeriNo(), &cs_message.ReconnectToC{

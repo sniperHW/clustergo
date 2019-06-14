@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 	"github.com/sniperHW/sanguo/codec/cs"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/test/testproto"
@@ -14,6 +11,10 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 )
 
 func server(service string) {

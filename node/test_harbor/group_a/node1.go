@@ -33,10 +33,11 @@ func main() {
 
 		err = cluster.Start([]string{center_addr}, selfAddr)
 
-		peer, _ := addr.MakeLogicAddr("2.1.1")
-
 		if nil == err {
 			go func() {
+				time.Sleep(time.Second)
+				peer, _ := cluster.Random(2)
+
 				for i := 0; ; i++ {
 
 					time.Sleep(time.Second)

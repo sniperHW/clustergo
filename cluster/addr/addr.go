@@ -74,6 +74,14 @@ func (this LogicAddr) String() string {
 	return fmt.Sprintf("%d.%d.%d", this.Group(), this.Type(), this.Server())
 }
 
+func (this LogicAddr) Empty() bool {
+	return uint32(this) == 0
+}
+
+func (this *LogicAddr) Clear() {
+	(*this) = 0
+}
+
 func MakeLogicAddr(addr string) (LogicAddr, error) {
 	var err error
 	v := strings.Split(addr, ".")

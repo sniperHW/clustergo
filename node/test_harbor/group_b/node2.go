@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
-	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
 	ss_msg "github.com/sniperHW/sanguo/protocol/ss/ssmessage"
 	"os"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/kendynet/rpc"
 )
 
 func main() {
@@ -35,14 +36,14 @@ func main() {
 		replyer.Reply(echoResp, nil)
 	})
 
-	addr, err := addr.MakeAddr("2.1.1", "localhost:9001")
+	addr, err := addr.MakeAddr("2.2.1", "localhost:9001")
 
 	if nil != err {
 		fmt.Println(err)
 		return
 	}
 
-	err = cluster.Start([]string{center_addr}, addr)
+	err = cluster.Start([]string{center_addr}, addr, 1)
 
 	if nil == err {
 		sigStop := make(chan bool)

@@ -3,6 +3,7 @@ package event
 import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
+	"reflect"
 	"sync/atomic"
 )
 
@@ -65,6 +66,8 @@ func pcall(fn interface{}, args []interface{}) {
 	case func([]interface{}):
 		fn.(func([]interface{}))(args)
 		break
+	default:
+		panic("invaild fn type:" + reflect.TypeOf(fn).Name())
 	}
 }
 

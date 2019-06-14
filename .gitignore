@@ -6,3 +6,5 @@ protocol/ss/rpc
 
 *.txt
 *.exe
+*.log
+*.out

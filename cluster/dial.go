@@ -2,9 +2,10 @@ package cluster
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/sniperHW/kendynet"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
-	"time"
 )
 
 var ErrDial error = fmt.Errorf("dail failed")

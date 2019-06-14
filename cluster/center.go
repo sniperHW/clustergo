@@ -1,16 +1,19 @@
 package cluster
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
 	"reflect"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 )
+
+var exportService uint32 //本节点是否暴露到服务器组外面
 
 type centerHandler func(kendynet.StreamSession, proto.Message)
 
@@ -58,7 +61,6 @@ func (this *center) connect() {
 		go func() {
 			for {
 				session, err := c.Dial(time.Second * 3)
-				Infof("connect to center:%s\n", this.addr)
 				if err != nil {
 					time.Sleep(time.Millisecond * 1000)
 				} else {
@@ -82,8 +84,9 @@ func (this *center) connect() {
 					})
 					//发送login
 					session.Send(&center_proto.Login{
-						LogicAddr: proto.Uint32(uint32(this.selfAddr.Logic)),
-						NetAddr:   proto.String(this.selfAddr.Net.String()),
+						LogicAddr:     proto.Uint32(uint32(this.selfAddr.Logic)),
+						NetAddr:       proto.String(this.selfAddr.Net.String()),
+						ExportService: proto.Uint32(exportService),
 					})
 
 					ticker := time.NewTicker(time.Second * (common.HeartBeat_Timeout / 2))
@@ -107,7 +110,12 @@ func (this *center) connect() {
 	}
 }
 
-func connectCenter(centerAddrs []string, selfAddr addr.Addr) {
+func connectCenter(centerAddrs []string, selfAddr addr.Addr, export ...uint32) {
+
+	if len(export) > 0 {
+		exportService = 1
+	}
+
 	centers := map[string]bool{}
 	for _, v := range centerAddrs {
 		if _, ok := centers[v]; !ok {
@@ -128,7 +136,6 @@ func centerInit() {
 	})
 
 	RegisterCenterMsgHandler(&center_proto.NotifyNodeInfo{}, func(session kendynet.StreamSession, msg proto.Message) {
-		kendynet.Debugln("NotifyNodeInfo")
 		NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
 		for _, v := range NotifyNodeInfo.Nodes {
 			addEndPoint(v)

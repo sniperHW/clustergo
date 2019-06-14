@@ -14,6 +14,10 @@ func main() {
 		} else {
 			fmt.Println(addr.Logic.String(), addr.Logic.Group(), addr.Logic.Type(), addr.Logic.Server(), addr.Net)
 		}
+
+		addr.Logic.Clear()
+		fmt.Println(addr.Logic.String())
+
 	}
 
 	{

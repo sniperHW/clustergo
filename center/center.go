@@ -2,10 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
-	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 	"github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
@@ -15,13 +11,19 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
+	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 )
 
 type MsgHandler func(kendynet.StreamSession, proto.Message)
 
 type node struct {
-	addr    addr.Addr
-	session kendynet.StreamSession
+	addr          addr.Addr
+	session       kendynet.StreamSession
+	exportService uint32
 }
 
 var (
@@ -92,6 +94,7 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 				Logic: logicAddr,
 				Net:   netAddr,
 			},
+			exportService: login.GetExportService(),
 		}
 		nodes[logicAddr] = n
 		kendynet.Infoln("add new node", logicAddr.String())
@@ -116,8 +119,9 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 	notify := &protocol.NotifyNodeInfo{}
 
 	notify.Nodes = append(notify.Nodes, &protocol.NodeInfo{
-		LogicAddr: proto.Uint32(uint32(n.addr.Logic)),
-		NetAddr:   proto.String(n.addr.Net.String()),
+		LogicAddr:     proto.Uint32(uint32(n.addr.Logic)),
+		NetAddr:       proto.String(n.addr.Net.String()),
+		ExportService: proto.Uint32(n.exportService),
 	})
 
 	//将新节点的信息通告给除自己以外的其它节点
@@ -128,8 +132,9 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 
 	for _, v := range nodes {
 		notify.Nodes = append(notify.Nodes, &protocol.NodeInfo{
-			LogicAddr: proto.Uint32(uint32(v.addr.Logic)),
-			NetAddr:   proto.String(v.addr.Net.String()),
+			LogicAddr:     proto.Uint32(uint32(v.addr.Logic)),
+			NetAddr:       proto.String(v.addr.Net.String()),
+			ExportService: proto.Uint32(n.exportService),
 		})
 	}
 

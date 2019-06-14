@@ -1,13 +1,14 @@
 package cluster
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"reflect"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
 )
 
 type MsgHandler func(addr.LogicAddr, proto.Message)
@@ -77,15 +78,29 @@ func dispatchPeerDisconnected(peer addr.LogicAddr, err error) {
 	}
 }
 
-func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
+func dispatch_(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message, server bool) {
 	if nil != msg {
 		switch msg.(type) {
 		case *Heartbeat:
-			heartbeat := msg.(*Heartbeat)
-			heartbeat_resp := &Heartbeat{}
-			heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
-			heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
-			session.Send(heartbeat_resp)
+			if server {
+				heartbeat := msg.(*Heartbeat)
+				heartbeat_resp := &Heartbeat{}
+				heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
+				heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
+				session.Send(heartbeat_resp)
+			}
+			break
+		case *AddForginServicesH2S:
+			onAddForginServicesH2S(msg.(*AddForginServicesH2S))
+			break
+		case *RemForginServicesH2S:
+			onRemForginServicesH2S(msg.(*RemForginServicesH2S))
+			break
+		case *AddForginServicesH2H:
+			onAddForginServicesH2H(msg.(*AddForginServicesH2H))
+			break
+		case *RemForginServicesH2H:
+			onRemForginServicesH2H(msg.(*RemForginServicesH2H))
 			break
 		default:
 			dispatch(from, name, msg)
@@ -94,14 +109,10 @@ func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, name st
 	}
 }
 
+func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
+	dispatch_(from, session, name, msg, true)
+}
+
 func dispatchClient(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
-	if nil != msg {
-		switch msg.(type) {
-		case *Heartbeat:
-			break
-		default:
-			dispatch(from, name, msg)
-			break
-		}
-	}
+	dispatch_(from, session, name, msg, false)
 }

@@ -153,46 +153,46 @@
 			"revisionTime": "2018-11-08T00:35:08Z"
 		},
 		{
-			"checksumSHA1": "Ao+tsh+PpJH0NwJhuL4StQvr61I=",
+			"checksumSHA1": "YGauIpoVLtfzB1RGiyNNDKiJ0CY=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
 			"checksumSHA1": "jpdQHy2FxZ0rj683SrltD1/SE8g=",
 			"path": "github.com/sniperHW/kendynet/asyn",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
-			"checksumSHA1": "Vp7PIrW+TrOmhwxessuCE2EB+UQ=",
+			"checksumSHA1": "t8Mt638LdXE4etggcVnEbxSn8fI=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
-			"checksumSHA1": "ilH4bYrjSdQUzZKhHXi+Im0GWE8=",
+			"checksumSHA1": "GbOwtuKtJMXAx8osvZ1jwbFTZs8=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
 			"checksumSHA1": "fQ6WtEsUGFzMSfbchZFYbL8fBBw=",
 			"path": "github.com/sniperHW/kendynet/message",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
 			"checksumSHA1": "uy7IO1kOBK+aLx4Fq1R3Od2CUKA=",
 			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "020840a6e418e0d49a5cb653375bf4567aef8f0f",
-			"revisionTime": "2019-02-02T17:00:12Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
-			"checksumSHA1": "LaTlZP2ZKyymyXNkBPZNZQGuFIM=",
+			"checksumSHA1": "DhTJ6PoCve46CrrY8MGDxuIIck0=",
 			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
@@ -207,16 +207,16 @@
 			"revisionTime": "2019-01-29T07:13:37Z"
 		},
 		{
-			"checksumSHA1": "uJ9CicI+xWki+61FuxZSy9ROhyo=",
+			"checksumSHA1": "KM7lzrH3RBN4Fo4K4wmZA7JDshc=",
 			"path": "github.com/sniperHW/kendynet/timer",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
-			"checksumSHA1": "0pt7/5TSubGOpDo1sUNlXeJR2jQ=",
+			"checksumSHA1": "l8poGJa/xWHaAlzEA3Gx1oHPpfY=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "38d2634c8a20d8bd88ea62c69fa6c0e006f2d154",
-			"revisionTime": "2019-01-29T07:13:37Z"
+			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
+			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
 			"checksumSHA1": "AqJVYS/Pe4SKQ8Czo9w9S7Yh9X8=",
@@ -226,121 +226,121 @@
 		},
 		{
 			"checksumSHA1": "T7frcPAOoCFcdLL+S5DfEGiestQ=",
-			"path": "sanguo/center/protocol",
+			"path": "github.com/sniperHW/sanguo/center/protocol",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "UCy8N9H75UhNU0QIJDZVdsoC6dg=",
-			"path": "sanguo/cluster",
+			"path": "github.com/sniperHW/sanguo/cluster",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "Vog9bwcUQ0vFw5omALlKMKhes0I=",
-			"path": "sanguo/cluster/addr",
+			"path": "github.com/sniperHW/sanguo/cluster/addr",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "WwxRW7LdP/uuRMpGO+TVkvPHLoA=",
-			"path": "sanguo/codec/cs",
+			"path": "github.com/sniperHW/sanguo/codec/cs",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "n0dQ2d9WzQHooMutU9zNpLbCsq8=",
-			"path": "sanguo/codec/pb",
+			"path": "github.com/sniperHW/sanguo/codec/pb",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "e9eCb6XdxQaN72/Jy9ykEd6JNMk=",
-			"path": "sanguo/codec/ss",
+			"path": "github.com/sniperHW/sanguo/codec/ss",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "k+gOT2xhNTG1LJZC3OymttUgP10=",
-			"path": "sanguo/common",
+			"path": "github.com/sniperHW/sanguo/common",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "fWfFYPA1jBpl4MUcQe6Xp9T0Od0=",
-			"path": "sanguo/cs",
+			"path": "github.com/sniperHW/sanguo/cs",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "IrlKQbkX8KbdBdzCy7RJ08J4XvI=",
-			"path": "sanguo/node/common/serverType",
+			"path": "github.com/sniperHW/sanguo/node/common/serverType",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "3FQfbTFM5RWqQp3paB1AO6nRYYE=",
-			"path": "sanguo/node/node_gate",
+			"path": "github.com/sniperHW/sanguo/node/node_gate",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "y8DvtX/gTXQYoe0WeOwm8qhmTbA=",
-			"path": "sanguo/node/node_gate/codec",
+			"path": "github.com/sniperHW/sanguo/node/node_gate/codec",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "UkL2pCWxQXJ3uzM0iql95D74CR0=",
-			"path": "sanguo/protocol/cs",
+			"path": "github.com/sniperHW/sanguo/protocol/cs",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "hv6z/VUBuFnxYpLGea9/UpNgUvA=",
-			"path": "sanguo/protocol/cs/message",
+			"path": "github.com/sniperHW/sanguo/protocol/cs/message",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "/GbwgRNPR4+25N19VSHbYm2sYf0=",
-			"path": "sanguo/protocol/ss",
+			"path": "github.com/sniperHW/sanguo/protocol/ss",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "wkp58TI8izkv/1MddIs1N3LBPi8=",
-			"path": "sanguo/protocol/ss/rpc",
+			"path": "github.com/sniperHW/sanguo/protocol/ss/rpc",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "yfr+9bUa+TaC3ixPYQLcZrQvWnE=",
-			"path": "sanguo/protocol/ss/ssmessage",
+			"path": "github.com/sniperHW/sanguo/protocol/ss/ssmessage",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "H2UqLCrAie/ebYNYoyuBmgZ4Cgk=",
-			"path": "sanguo/rpc/forwardUserMsg",
+			"path": "github.com/sniperHW/sanguo/rpc/forwardUserMsg",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "3W0FIhpXjZa+OtOZ5bVxsxH+okQ=",
-			"path": "sanguo/rpc/gateUserLogin",
+			"path": "github.com/sniperHW/sanguo/rpc/gateUserLogin",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "hBuEjmqZgMZAfpz/ZdAnWWjqTjw=",
-			"path": "sanguo/rpc/synctoken",
+			"path": "github.com/sniperHW/sanguo/rpc/synctoken",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		},
 		{
 			"checksumSHA1": "9F1nhIgV6XwqWnG3wxg05aah05U=",
-			"path": "sanguo/util",
+			"path": "github.com/sniperHW/sanguo/util",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
 		}

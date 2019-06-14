@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/sanguo/cluster"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/common"
@@ -80,7 +81,7 @@ func onCliClose(session kendynet.StreamSession, reason string) {
 		Debugln("onClient disconnect", reason)
 		if u.status == status_ok || u.status == status_migration {
 			//启动定时器等待重连
-			u.t = cluster.RegisterTimer(time.Now().Add(time.Second*60), func() {
+			u.t = cluster.RegisterTimerOnce(time.Now().Add(time.Second*60), func(_ *timer.Timer) {
 				Debugln("timeout remove gateUser", u.userID)
 				remGateUser(u)
 			})

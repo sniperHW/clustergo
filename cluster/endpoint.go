@@ -2,27 +2,28 @@ package cluster
 
 import (
 	"fmt"
-	"github.com/sniperHW/kendynet"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"math/rand"
 	"net"
 	"sort"
 	"sync"
+
+	"github.com/sniperHW/kendynet"
 )
 
 type connection struct {
 	session kendynet.StreamSession
-	timer   *Timer
 }
 
 type endPoint struct {
-	addr        addr.Addr
-	pendingMsg  []interface{} //待发送的消息
-	pendingCall []*rpcCall    //待发起的rpc请求
-	dialing     bool
-	conn        *connection
-	mtx         sync.Mutex
+	addr          addr.Addr
+	pendingMsg    []interface{} //待发送的消息
+	pendingCall   []*rpcCall    //待发起的rpc请求
+	dialing       bool
+	conn          *connection
+	mtx           sync.Mutex
+	exportService uint32
 }
 
 type typeEndPointMap struct {
@@ -39,9 +40,11 @@ func (this *typeEndPointMap) sort() {
 func (this *typeEndPointMap) removeEndPoint(peer addr.LogicAddr) {
 	for i, v := range this.endPoints {
 		if peer == v.addr.Logic {
+			end := this.endPoints[i]
 			this.endPoints[i] = this.endPoints[len(this.endPoints)-1]
 			this.endPoints = this.endPoints[:len(this.endPoints)-1]
 			this.sort()
+			onEndPointLeave(end)
 			break
 		}
 	}
@@ -61,6 +64,7 @@ func (this *typeEndPointMap) addEndPoint(end *endPoint) {
 		this.endPoints = append(this.endPoints, end)
 		this.sort()
 	}
+
 }
 
 func (this *typeEndPointMap) random() (addr.LogicAddr, error) {
@@ -73,7 +77,7 @@ func (this *typeEndPointMap) random() (addr.LogicAddr, error) {
 	}
 }
 
-func addEndPoint(peer *center_proto.NodeInfo) {
+func addEndPoint(peer *center_proto.NodeInfo) *endPoint {
 	defer mtx.Unlock()
 	mtx.Lock()
 
@@ -82,7 +86,7 @@ func addEndPoint(peer *center_proto.NodeInfo) {
 	netAddr, err := net.ResolveTCPAddr("tcp4", peer.GetNetAddr())
 
 	if nil != err {
-		return
+		return nil
 	}
 
 	peerAddr := addr.Addr{
@@ -92,11 +96,13 @@ func addEndPoint(peer *center_proto.NodeInfo) {
 
 	end := idEndPointMap[addr.LogicAddr(peerAddr.Logic)]
 	if nil != end {
-		return
+		onEndPointJoin(end)
+		return end
 	}
 
 	end = &endPoint{
-		addr: peerAddr,
+		addr:          peerAddr,
+		exportService: peer.GetExportService(),
 	}
 
 	ttMap := ttEndPointMap[peerAddr.Logic.Type()]
@@ -115,7 +121,10 @@ func addEndPoint(peer *center_proto.NodeInfo) {
 		addHarbor(end)
 	}
 
+	onEndPointJoin(end)
 	Infoln("addEndPoint", peerAddr.Logic.String(), end)
+
+	return end
 }
 
 func removeEndPoint(peer addr.LogicAddr) {
@@ -146,14 +155,4 @@ func getEndPoint(id addr.LogicAddr) *endPoint {
 		return end
 	}
 	return nil
-}
-
-//随机获取一个类型为tt的节点id
-func Random(tt uint32) (addr.LogicAddr, error) {
-	defer mtx.Unlock()
-	mtx.Lock()
-	if ttmap, ok := ttEndPointMap[tt]; ok {
-		return ttmap.random()
-	}
-	return addr.LogicAddr(0), fmt.Errorf("invaild tt")
 }

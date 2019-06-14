@@ -167,7 +167,7 @@ func (this *StreamSocket) sendThreadFunc() {
 	}
 }
 
-func NewStreamSocket(conn net.Conn, sendQueueSize ...int) kendynet.StreamSession {
+func NewStreamSocket(conn net.Conn) kendynet.StreamSession {
 	if nil == conn {
 		return nil
 	} else {
@@ -185,7 +185,7 @@ func NewStreamSocket(conn net.Conn, sendQueueSize ...int) kendynet.StreamSession
 			conn: conn,
 		}
 		s.SocketBase = &SocketBase{
-			sendQue:       util.NewBlockQueue(sendQueueSize...),
+			sendQue:       util.NewBlockQueue(8192),
 			sendCloseChan: make(chan int, 1),
 			imp:           s,
 		}

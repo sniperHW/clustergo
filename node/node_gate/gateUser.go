@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/sanguo/cluster"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/node/node_gate/codec"
@@ -120,7 +121,7 @@ type gateUser struct {
 	upQueue         sendQueue //上行消息
 	mtx             sync.Mutex
 	token           string
-	t               *cluster.Timer
+	t               *timer.Timer
 	holdGateSession bool
 }
 
@@ -134,7 +135,7 @@ func (this *gateUser) onRemove() {
 	}
 
 	if nil != this.t {
-		cluster.UnregisterTimer(this.t)
+		this.t.Cancel()
 		this.t = nil
 	}
 }

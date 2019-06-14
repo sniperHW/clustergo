@@ -2,14 +2,15 @@ package ss
 
 import (
 	"fmt"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
-	"github.com/sniperHW/kendynet/util"
 	codess "github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	ss_proto "github.com/sniperHW/sanguo/protocol/ss/message"
 	"time"
+
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
+	"github.com/sniperHW/kendynet/util"
 )
 
 var (

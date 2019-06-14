@@ -3,9 +3,11 @@
 
 package protocol
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,11 +18,12 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type Login struct {
 	LogicAddr            *uint32  `protobuf:"varint,1,req,name=logicAddr" json:"logicAddr,omitempty"`
 	NetAddr              *string  `protobuf:"bytes,2,req,name=netAddr" json:"netAddr,omitempty"`
+	ExportService        *uint32  `protobuf:"varint,3,opt,name=exportService" json:"exportService,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -30,16 +33,17 @@ func (m *Login) Reset()         { *m = Login{} }
 func (m *Login) String() string { return proto.CompactTextString(m) }
 func (*Login) ProtoMessage()    {}
 func (*Login) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{0}
+	return fileDescriptor_1de517c49d537f4b, []int{0}
 }
+
 func (m *Login) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Login.Unmarshal(m, b)
 }
 func (m *Login) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Login.Marshal(b, m, deterministic)
 }
-func (dst *Login) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Login.Merge(dst, src)
+func (m *Login) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Login.Merge(m, src)
 }
 func (m *Login) XXX_Size() int {
 	return xxx_messageInfo_Login.Size(m)
@@ -64,6 +68,13 @@ func (m *Login) GetNetAddr() string {
 	return ""
 }
 
+func (m *Login) GetExportService() uint32 {
+	if m != nil && m.ExportService != nil {
+		return *m.ExportService
+	}
+	return 0
+}
+
 type LoginFailed struct {
 	Msg                  *string  `protobuf:"bytes,1,req,name=msg" json:"msg,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -75,16 +86,17 @@ func (m *LoginFailed) Reset()         { *m = LoginFailed{} }
 func (m *LoginFailed) String() string { return proto.CompactTextString(m) }
 func (*LoginFailed) ProtoMessage()    {}
 func (*LoginFailed) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{1}
+	return fileDescriptor_1de517c49d537f4b, []int{1}
 }
+
 func (m *LoginFailed) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LoginFailed.Unmarshal(m, b)
 }
 func (m *LoginFailed) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_LoginFailed.Marshal(b, m, deterministic)
 }
-func (dst *LoginFailed) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LoginFailed.Merge(dst, src)
+func (m *LoginFailed) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LoginFailed.Merge(m, src)
 }
 func (m *LoginFailed) XXX_Size() int {
 	return xxx_messageInfo_LoginFailed.Size(m)
@@ -113,16 +125,17 @@ func (m *HeartbeatToCenter) Reset()         { *m = HeartbeatToCenter{} }
 func (m *HeartbeatToCenter) String() string { return proto.CompactTextString(m) }
 func (*HeartbeatToCenter) ProtoMessage()    {}
 func (*HeartbeatToCenter) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{2}
+	return fileDescriptor_1de517c49d537f4b, []int{2}
 }
+
 func (m *HeartbeatToCenter) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HeartbeatToCenter.Unmarshal(m, b)
 }
 func (m *HeartbeatToCenter) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HeartbeatToCenter.Marshal(b, m, deterministic)
 }
-func (dst *HeartbeatToCenter) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HeartbeatToCenter.Merge(dst, src)
+func (m *HeartbeatToCenter) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HeartbeatToCenter.Merge(m, src)
 }
 func (m *HeartbeatToCenter) XXX_Size() int {
 	return xxx_messageInfo_HeartbeatToCenter.Size(m)
@@ -152,16 +165,17 @@ func (m *HeartbeatToNode) Reset()         { *m = HeartbeatToNode{} }
 func (m *HeartbeatToNode) String() string { return proto.CompactTextString(m) }
 func (*HeartbeatToNode) ProtoMessage()    {}
 func (*HeartbeatToNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{3}
+	return fileDescriptor_1de517c49d537f4b, []int{3}
 }
+
 func (m *HeartbeatToNode) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HeartbeatToNode.Unmarshal(m, b)
 }
 func (m *HeartbeatToNode) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HeartbeatToNode.Marshal(b, m, deterministic)
 }
-func (dst *HeartbeatToNode) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HeartbeatToNode.Merge(dst, src)
+func (m *HeartbeatToNode) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HeartbeatToNode.Merge(m, src)
 }
 func (m *HeartbeatToNode) XXX_Size() int {
 	return xxx_messageInfo_HeartbeatToNode.Size(m)
@@ -189,6 +203,7 @@ func (m *HeartbeatToNode) GetTimestampBack() int64 {
 type NodeInfo struct {
 	LogicAddr            *uint32  `protobuf:"varint,1,req,name=logicAddr" json:"logicAddr,omitempty"`
 	NetAddr              *string  `protobuf:"bytes,2,req,name=netAddr" json:"netAddr,omitempty"`
+	ExportService        *uint32  `protobuf:"varint,3,opt,name=exportService" json:"exportService,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -198,16 +213,17 @@ func (m *NodeInfo) Reset()         { *m = NodeInfo{} }
 func (m *NodeInfo) String() string { return proto.CompactTextString(m) }
 func (*NodeInfo) ProtoMessage()    {}
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{4}
+	return fileDescriptor_1de517c49d537f4b, []int{4}
 }
+
 func (m *NodeInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeInfo.Unmarshal(m, b)
 }
 func (m *NodeInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NodeInfo.Marshal(b, m, deterministic)
 }
-func (dst *NodeInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NodeInfo.Merge(dst, src)
+func (m *NodeInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeInfo.Merge(m, src)
 }
 func (m *NodeInfo) XXX_Size() int {
 	return xxx_messageInfo_NodeInfo.Size(m)
@@ -232,6 +248,13 @@ func (m *NodeInfo) GetNetAddr() string {
 	return ""
 }
 
+func (m *NodeInfo) GetExportService() uint32 {
+	if m != nil && m.ExportService != nil {
+		return *m.ExportService
+	}
+	return 0
+}
+
 type NotifyNodeInfo struct {
 	Nodes                []*NodeInfo `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
@@ -243,16 +266,17 @@ func (m *NotifyNodeInfo) Reset()         { *m = NotifyNodeInfo{} }
 func (m *NotifyNodeInfo) String() string { return proto.CompactTextString(m) }
 func (*NotifyNodeInfo) ProtoMessage()    {}
 func (*NotifyNodeInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{5}
+	return fileDescriptor_1de517c49d537f4b, []int{5}
 }
+
 func (m *NotifyNodeInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NotifyNodeInfo.Unmarshal(m, b)
 }
 func (m *NotifyNodeInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NotifyNodeInfo.Marshal(b, m, deterministic)
 }
-func (dst *NotifyNodeInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NotifyNodeInfo.Merge(dst, src)
+func (m *NotifyNodeInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NotifyNodeInfo.Merge(m, src)
 }
 func (m *NotifyNodeInfo) XXX_Size() int {
 	return xxx_messageInfo_NotifyNodeInfo.Size(m)
@@ -281,16 +305,17 @@ func (m *NodeLeave) Reset()         { *m = NodeLeave{} }
 func (m *NodeLeave) String() string { return proto.CompactTextString(m) }
 func (*NodeLeave) ProtoMessage()    {}
 func (*NodeLeave) Descriptor() ([]byte, []int) {
-	return fileDescriptor_center_ea363f81ea07fdb7, []int{6}
+	return fileDescriptor_1de517c49d537f4b, []int{6}
 }
+
 func (m *NodeLeave) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeLeave.Unmarshal(m, b)
 }
 func (m *NodeLeave) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NodeLeave.Marshal(b, m, deterministic)
 }
-func (dst *NodeLeave) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NodeLeave.Merge(dst, src)
+func (m *NodeLeave) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeLeave.Merge(m, src)
 }
 func (m *NodeLeave) XXX_Size() int {
 	return xxx_messageInfo_NodeLeave.Size(m)
@@ -318,24 +343,25 @@ func init() {
 	proto.RegisterType((*NodeLeave)(nil), "protocol.nodeLeave")
 }
 
-func init() { proto.RegisterFile("center.proto", fileDescriptor_center_ea363f81ea07fdb7) }
+func init() { proto.RegisterFile("center.proto", fileDescriptor_1de517c49d537f4b) }
 
-var fileDescriptor_center_ea363f81ea07fdb7 = []byte{
-	// 250 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x50, 0x41, 0x4b, 0xc3, 0x30,
-	0x14, 0x66, 0x2d, 0xc3, 0xf5, 0xcd, 0x4e, 0x0d, 0x1e, 0x7a, 0x10, 0xac, 0x01, 0xa1, 0xa7, 0x82,
-	0x1e, 0xbd, 0x88, 0x13, 0x04, 0x41, 0x76, 0x08, 0xe2, 0x55, 0xb2, 0xe4, 0x6d, 0x96, 0xb5, 0x79,
-	0xa3, 0x7d, 0x08, 0xfe, 0x7b, 0x49, 0x34, 0xdb, 0x4e, 0x1e, 0x3c, 0xe5, 0x7b, 0x5f, 0xbe, 0xef,
-	0x7b, 0x5f, 0x02, 0xc7, 0x06, 0x1d, 0x63, 0x5f, 0x6f, 0x7b, 0x62, 0x12, 0x93, 0x70, 0x18, 0x6a,
-	0xe5, 0x3d, 0x8c, 0x5b, 0x5a, 0x37, 0x4e, 0x5c, 0x40, 0xe6, 0x81, 0x79, 0xb0, 0xb6, 0x2f, 0x46,
-	0x65, 0x52, 0xe5, 0x6a, 0x4f, 0x88, 0x02, 0x8e, 0x1c, 0x72, 0xb8, 0x4b, 0xca, 0xa4, 0xca, 0x54,
-	0x1c, 0xe5, 0x25, 0x4c, 0x43, 0xc0, 0x93, 0x6e, 0x5a, 0xb4, 0xe2, 0x14, 0xd2, 0x6e, 0x58, 0x87,
-	0x80, 0x4c, 0x79, 0x28, 0x6f, 0xe0, 0xec, 0x03, 0x75, 0xcf, 0x4b, 0xd4, 0xfc, 0x4a, 0x8f, 0xa1,
-	0x86, 0xdf, 0xc6, 0x4d, 0x87, 0x03, 0xeb, 0x6e, 0x1b, 0xc4, 0xa9, 0xda, 0x13, 0xf2, 0x0d, 0x4e,
-	0x0e, 0x2c, 0x0b, 0xb2, 0xf8, 0xb7, 0x41, 0x5c, 0xc3, 0x6c, 0x37, 0xbc, 0x2f, 0xb5, 0xd9, 0x84,
-	0x96, 0xa9, 0xca, 0x77, 0xec, 0x5c, 0x9b, 0x8d, 0x9c, 0xc3, 0xc4, 0x91, 0xc5, 0x67, 0xb7, 0xa2,
-	0x7f, 0xbf, 0xf7, 0x0e, 0x66, 0x8e, 0xb8, 0x59, 0x7d, 0x2d, 0x62, 0x52, 0x05, 0x63, 0x9f, 0x3a,
-	0x14, 0xa3, 0x32, 0xad, 0xa6, 0xb7, 0xa2, 0x8e, 0x9f, 0x5b, 0xc7, 0x65, 0xea, 0x47, 0x20, 0xaf,
-	0x20, 0xf3, 0xe0, 0x05, 0xf5, 0x27, 0x8a, 0xf3, 0x43, 0x5b, 0xfe, 0x2b, 0xf9, 0x0e, 0x00, 0x00,
-	0xff, 0xff, 0xe9, 0xd1, 0xbd, 0x5a, 0xa8, 0x01, 0x00, 0x00,
+var fileDescriptor_1de517c49d537f4b = []byte{
+	// 269 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x51, 0x41, 0x4b, 0xc3, 0x30,
+	0x18, 0xa5, 0x2d, 0xc3, 0xf5, 0x9b, 0x9d, 0x1a, 0x3c, 0xf4, 0x20, 0x58, 0x83, 0x42, 0x4f, 0x05,
+	0x3d, 0x7a, 0x53, 0x41, 0x10, 0x64, 0x87, 0x28, 0x5e, 0x25, 0x4b, 0xbf, 0x6d, 0x61, 0x6d, 0xbe,
+	0x92, 0x86, 0xa1, 0xff, 0x5e, 0x12, 0xed, 0x36, 0x2f, 0xde, 0x3c, 0xe5, 0x7d, 0x2f, 0xef, 0xf1,
+	0x5e, 0xf2, 0xc1, 0xa1, 0x42, 0xe3, 0xd0, 0x56, 0x9d, 0x25, 0x47, 0x6c, 0x1c, 0x0e, 0x45, 0x0d,
+	0x47, 0x18, 0x35, 0xb4, 0xd4, 0x86, 0x9d, 0x41, 0xea, 0x81, 0xba, 0xab, 0x6b, 0x9b, 0x47, 0x45,
+	0x5c, 0x66, 0x62, 0x47, 0xb0, 0x1c, 0x0e, 0x0c, 0xba, 0x70, 0x17, 0x17, 0x71, 0x99, 0x8a, 0x61,
+	0x64, 0x97, 0x90, 0xe1, 0x47, 0x47, 0xd6, 0xbd, 0xa0, 0xdd, 0x68, 0x85, 0x79, 0x52, 0x44, 0x65,
+	0x26, 0x7e, 0x93, 0xfc, 0x1c, 0x26, 0x21, 0xe6, 0x51, 0xea, 0x06, 0x6b, 0x76, 0x0c, 0x49, 0xdb,
+	0x2f, 0x43, 0x4c, 0x2a, 0x3c, 0xe4, 0xd7, 0x70, 0xb2, 0x42, 0x69, 0xdd, 0x1c, 0xa5, 0x7b, 0xa5,
+	0x87, 0x50, 0xd6, 0x77, 0x72, 0xba, 0xc5, 0xde, 0xc9, 0xb6, 0x0b, 0xe2, 0x44, 0xec, 0x08, 0xfe,
+	0x06, 0x47, 0x7b, 0x96, 0x19, 0xd5, 0xf8, 0xb7, 0x81, 0x5d, 0xc1, 0x74, 0x3b, 0xbc, 0xcf, 0xa5,
+	0x5a, 0x87, 0xb7, 0x24, 0x22, 0xdb, 0xb2, 0xf7, 0x52, 0xad, 0xf9, 0x0a, 0xc6, 0x86, 0x6a, 0x7c,
+	0x32, 0x0b, 0xfa, 0xe7, 0x5f, 0xb9, 0x85, 0xa9, 0x21, 0xa7, 0x17, 0x9f, 0xb3, 0x21, 0xaf, 0x84,
+	0x91, 0xcf, 0xee, 0xf3, 0xa8, 0x48, 0xca, 0xc9, 0x0d, 0xab, 0x86, 0x45, 0x55, 0x43, 0x25, 0xf1,
+	0x2d, 0xe0, 0x17, 0x90, 0x7a, 0xf0, 0x8c, 0x72, 0x83, 0xec, 0x74, 0xdf, 0x96, 0xfd, 0x48, 0xbe,
+	0x02, 0x00, 0x00, 0xff, 0xff, 0x01, 0xba, 0x35, 0x26, 0xf4, 0x01, 0x00, 0x00,
 }

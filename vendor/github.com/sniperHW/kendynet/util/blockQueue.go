@@ -157,6 +157,12 @@ func (self *BlockQueue) Clear() {
 	self.list = self.list[0:0]
 }
 
+func (self *BlockQueue) SetFullSize(fullSize int) {
+	self.listGuard.Lock()
+	defer self.listGuard.Unlock()
+	self.fullSize = fullSize
+}
+
 func NewBlockQueueWithName(name string, fullSize ...int) *BlockQueue {
 	self := &BlockQueue{}
 	self.name = name

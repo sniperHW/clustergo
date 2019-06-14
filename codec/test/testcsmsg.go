@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/sanguo/codec/cs"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/test/testproto"
+
+	"github.com/golang/protobuf/proto"
 )
 
 func main() {

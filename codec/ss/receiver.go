@@ -2,12 +2,13 @@ package ss
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"net"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/rpc"
 )
 
 const (

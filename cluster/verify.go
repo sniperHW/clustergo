@@ -3,24 +3,34 @@ package cluster
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/sanguo/cluster/addr"
+	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/common"
 	"io"
 	"net"
 	"time"
 )
 
+//this.selfAddr.Net.String()
 func login(end *endPoint, session kendynet.StreamSession) {
 	go func() {
 		conn := session.GetUnderConn().(*net.TCPConn)
 		logicAddr := selfAddr.Logic
-		buffer := kendynet.NewByteBuffer(4)
-		buffer.PutUint32(0, uint32(logicAddr))
+		buffer := kendynet.NewByteBuffer(64)
+		buffer.AppendUint32(uint32(exportService))
+		buffer.AppendUint32(uint32(logicAddr))
+		netAddr := selfAddr.Net.String()
+		netAddrSize := len(netAddr)
+		buffer.AppendUint16(uint16(netAddrSize))
+		buffer.AppendString(netAddr)
+		pad := make([]byte, 64-4-4-2-netAddrSize)
+		buffer.AppendBytes(pad)
+
 		conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
 		_, err := conn.Write(buffer.Bytes())
 		conn.SetWriteDeadline(time.Time{})
-		Infof("login send ok\n")
+
 		if nil != err {
 			dialError(end, session, err)
 		} else {
@@ -50,8 +60,8 @@ func login(end *endPoint, session kendynet.StreamSession) {
 	}()
 }
 
-func auth(session kendynet.StreamSession) (addr.LogicAddr, error) {
-	buffer := make([]byte, 4)
+func auth(session kendynet.StreamSession) (*center_proto.NodeInfo, error) {
+	buffer := make([]byte, 64)
 	var err error
 	conn := session.GetUnderConn().(*net.TCPConn)
 
@@ -59,7 +69,7 @@ func auth(session kendynet.StreamSession) (addr.LogicAddr, error) {
 	_, err = io.ReadFull(conn, buffer)
 	if nil != err {
 		session.Close(err.Error(), 0)
-		return addr.LogicAddr(0), err
+		return nil, err
 	}
 
 	resp := kendynet.NewByteBuffer(4)
@@ -69,9 +79,19 @@ func auth(session kendynet.StreamSession) (addr.LogicAddr, error) {
 
 	if nil != err {
 		session.Close(err.Error(), 0)
-		return addr.LogicAddr(0), err
+		return nil, err
 	} else {
 		conn.SetWriteDeadline(time.Time{})
-		return addr.LogicAddr(binary.BigEndian.Uint32(buffer)), err
+		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer, 64))
+		export, _ := reader.GetUint32()
+		logicAddr, _ := reader.GetUint32()
+		strLen, _ := reader.GetUint16()
+		netAddr, _ := reader.GetString(uint64(strLen))
+
+		return &center_proto.NodeInfo{
+			LogicAddr:     proto.Uint32(logicAddr),
+			NetAddr:       proto.String(netAddr),
+			ExportService: proto.Uint32(export),
+		}, nil
 	}
 }
