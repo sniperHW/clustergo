@@ -170,10 +170,6 @@ func (this *SocketBase) Send(o interface{}) error {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
 
-	if (this.flag & started) == 0 {
-		return kendynet.ErrNotStart
-	}
-
 	if this.encoder == nil {
 		return kendynet.ErrInvaildEncoder
 	}
@@ -190,10 +186,6 @@ func (this *SocketBase) Send(o interface{}) error {
 func (this *SocketBase) SendMessage(msg kendynet.Message) error {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
-
-	if (this.flag & started) == 0 {
-		return kendynet.ErrNotStart
-	}
 
 	return this.imp.sendMessage(msg)
 }

@@ -189,10 +189,10 @@
 			"revisionTime": "2019-06-12T08:40:14Z"
 		},
 		{
-			"checksumSHA1": "DhTJ6PoCve46CrrY8MGDxuIIck0=",
+			"checksumSHA1": "cNPuVYLN6j3c/hDIX1/tOOs3G4E=",
 			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
-			"revisionTime": "2019-06-12T08:40:14Z"
+			"revision": "ac194c1fc7a6d723e08609c91589395978492bda",
+			"revisionTime": "2019-06-26T02:12:09Z"
 		},
 		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
@@ -217,12 +217,6 @@
 			"path": "github.com/sniperHW/kendynet/util",
 			"revision": "4739003aeee758794d923c41bd7b04a39df31525",
 			"revisionTime": "2019-06-12T08:40:14Z"
-		},
-		{
-			"checksumSHA1": "AqJVYS/Pe4SKQ8Czo9w9S7Yh9X8=",
-			"path": "github.com/tealeg/xlsx",
-			"revision": "f36fa3be8893d528004c0938e06b65c67f69b76f",
-			"revisionTime": "2018-04-19T19:51:53Z"
 		},
 		{
 			"checksumSHA1": "T7frcPAOoCFcdLL+S5DfEGiestQ=",
@@ -343,6 +337,12 @@
 			"path": "github.com/sniperHW/sanguo/util",
 			"revision": "9adaf170e8f84d0d08be4136d559d3331f5b18dc",
 			"revisionTime": "2019-02-14T12:09:46Z"
+		},
+		{
+			"checksumSHA1": "AqJVYS/Pe4SKQ8Czo9w9S7Yh9X8=",
+			"path": "github.com/tealeg/xlsx",
+			"revision": "f36fa3be8893d528004c0938e06b65c67f69b76f",
+			"revisionTime": "2018-04-19T19:51:53Z"
 		}
 	],
 	"rootPath": "github.com/sniperHW/sanguo"
