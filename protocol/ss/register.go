@@ -12,8 +12,10 @@ func init() {
 
 	//rpc请求
 	pb.Register("rpc_req",&rpc.EchoReq{},1001)
+	pb.Register("rpc_req",&rpc.GateToGameReq{},1002)
 
 	//rpc响应
 	pb.Register("rpc_resp",&rpc.EchoResp{},1001)
+	pb.Register("rpc_resp",&rpc.GateToGameResp{},1002)
 
 }

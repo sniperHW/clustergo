@@ -2,13 +2,11 @@ package cs
 
 import (
 	"fmt"
-	codecs "github.com/sniperHW/sanguo/codec/cs"
-	_ "github.com/sniperHW/sanguo/protocol/cs" //触发pb注册
-	cs_proto "github.com/sniperHW/sanguo/protocol/cs/message"
-	"sync/atomic"
-
 	"github.com/sniperHW/kendynet"
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
+	codecs "github.com/sniperHW/sanguo/codec/cs"
+	_ "github.com/sniperHW/sanguo/protocol/cs" //触发pb注册
+	"sync/atomic"
 )
 
 var (
@@ -60,18 +58,7 @@ func (this *tcpListener) Start() error {
 			if event.EventType == kendynet.EventTypeError {
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
-				msg := event.Data.(*codecs.Message)
-				switch msg.GetData().(type) {
-				case *cs_proto.HeartbeatToS:
-					//fmt.Printf("on HeartbeatToS\n")
-					dispatcher.Dispatch(session, msg)
-					//Heartbeat := &cs_proto.HeartbeatToC{}
-					//session.Send(codecs.NewMessage(0, Heartbeat))
-					break
-				default:
-					dispatcher.Dispatch(session, msg)
-					break
-				}
+				dispatcher.Dispatch(session, event.Data.(*codecs.Message))
 			}
 		})
 	})

@@ -1,0 +1,12 @@
+syntax = "proto2";
+package rpc;
+
+message gateToGame_req {
+	optional int64 userid = 1;
+	optional string message = 2;
+}
+
+message gateToGame_resp {
+	optional int64 userid = 1;
+	optional string message = 2;	
+}
