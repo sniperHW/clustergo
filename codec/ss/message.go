@@ -3,17 +3,17 @@ package ss
 import (
 	"encoding/binary"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"reflect"
 )
 
 type Message struct {
-	name      string
 	data      interface{}
 	relayInfo []addr.LogicAddr
 }
 
-func NewMessage(name string, data interface{}, relay ...addr.LogicAddr) *Message {
+func NewMessage(data interface{}, relay ...addr.LogicAddr) *Message {
 	m := &Message{
-		name: name,
 		data: data,
 	}
 	if len(relay) == 2 {
@@ -26,8 +26,9 @@ func (this *Message) GetData() interface{} {
 	return this.data
 }
 
-func (this *Message) GetName() string {
-	return this.name
+func (this *Message) GetCmd() uint16 {
+	name := reflect.TypeOf(this.data).String()
+	return uint16(pb.GetCmdByName(name))
 }
 
 func (this *Message) From() addr.LogicAddr {

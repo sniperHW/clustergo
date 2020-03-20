@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"sync"
 	"sync/atomic"
@@ -14,85 +15,30 @@ var ErrCallTimeout error = fmt.Errorf("rpc call timeout")
 
 var client_once sync.Once
 var sequence uint64
-var groupCount uint64 = 63
+var groupCount uint64 = 61
 var contextGroups []*contextGroup = make([]*contextGroup, groupCount)
 
 type RPCResponseHandler func(interface{}, error)
 
 type contextGroup struct {
-	mtx      sync.Mutex
-	minheap  *util.MinHeap          // = util.NewMinHeap(4096)
-	waitResp map[uint64]*reqContext // = map[uint64]*reqContext{} //待响应的请求
-}
-
-func (this *contextGroup) checkTimeout() {
-
-	timeout := []*reqContext{}
-
-	this.mtx.Lock()
-	for {
-		now := time.Now()
-		r := this.minheap.Min()
-		if r != nil && now.After(r.(*reqContext).deadline) {
-			this.minheap.PopMin()
-			if _, ok := this.waitResp[r.(*reqContext).seq]; !ok {
-				kendynet.Infof("timeout context:%d not found\n", r.(*reqContext).seq)
-			} else {
-				delete(this.waitResp, r.(*reqContext).seq)
-				timeout = append(timeout, r.(*reqContext))
-				kendynet.Infof("timeout context:%d\n", r.(*reqContext).seq)
-			}
-		} else {
-			break
-		}
-	}
-	this.mtx.Unlock()
-
-	for _, v := range timeout {
-		v.callResponseCB(nil, ErrCallTimeout)
-	}
+	timerMgr *timer.TimerMgr
 }
 
 func (this *contextGroup) onResponse(resp *RPCResponse) {
-	var (
-		ctx *reqContext
-		ok  bool
-	)
-
-	seq := resp.GetSeq()
-
-	this.mtx.Lock()
-	if ctx, ok = this.waitResp[seq]; ok {
-		delete(this.waitResp, seq)
-		this.minheap.Remove(ctx)
-	}
-	this.mtx.Unlock()
-
-	if nil != ctx {
-		ctx.callResponseCB(resp.Ret, resp.Err)
+	if t := this.timerMgr.GetTimerByIndex(resp.GetSeq()); nil != t {
+		if t.Cancel() {
+			ctx := t.GetCTX().(*reqContext)
+			ctx.callResponseCB(resp.Ret, resp.Err)
+		}
 	} else {
-		kendynet.Debugf("on response,but missing reqContext:%d\n", seq)
+		kendynet.Infoln("onResponse with no reqContext", resp.GetSeq())
 	}
 }
 
 type reqContext struct {
-	heapIdx      uint32
 	seq          uint64
 	onResponse   RPCResponseHandler
-	deadline     time.Time
 	cbEventQueue *event.EventQueue
-}
-
-func (this *reqContext) Less(o util.HeapElement) bool {
-	return o.(*reqContext).deadline.After(this.deadline)
-}
-
-func (this *reqContext) GetIndex() uint32 {
-	return this.heapIdx
-}
-
-func (this *reqContext) SetIndex(idx uint32) {
-	this.heapIdx = idx
 }
 
 func (this *reqContext) callResponseCB(ret interface{}, err error) {
@@ -110,6 +56,11 @@ func (this *reqContext) callResponseCB_(ret interface{}, err error) {
 	this.onResponse(ret, err)
 }
 
+func (this *reqContext) onTimeout(_ *timer.Timer, _ interface{}) {
+	kendynet.Infoln("req timeout", this.seq)
+	this.callResponseCB(nil, ErrCallTimeout)
+}
+
 type RPCClient struct {
 	encoder      RPCMessageEncoder
 	decoder      RPCMessageDecoder
@@ -118,19 +69,15 @@ type RPCClient struct {
 
 //收到RPC消息后调用
 func (this *RPCClient) OnRPCMessage(message interface{}) {
-	msg, err := this.decoder.Decode(message)
-	if nil != err {
+	if msg, err := this.decoder.Decode(message); nil != err {
 		kendynet.Errorf(util.FormatFileLine("RPCClient rpc message decode err:%s\n", err.Error()))
-		return
+	} else {
+		if resp, ok := msg.(*RPCResponse); ok {
+			contextGroups[msg.GetSeq()%uint64(len(contextGroups))].onResponse(resp)
+		} else {
+			panic("RPCClient.OnRPCMessage() invaild msg type")
+		}
 	}
-
-	switch msg.(type) {
-	case *RPCResponse:
-		break
-	default:
-		panic("RPCClient.OnRPCMessage() invaild msg type")
-	}
-	contextGroups[msg.GetSeq()%uint64(len(contextGroups))].onResponse(msg.(*RPCResponse))
 }
 
 //投递，不关心响应和是否失败
@@ -143,16 +90,15 @@ func (this *RPCClient) Post(channel RPCChannel, method string, arg interface{}) 
 		NeedResp: false,
 	}
 
-	request, err := this.encoder.Encode(req)
-	if err != nil {
+	if request, err := this.encoder.Encode(req); nil != err {
 		return fmt.Errorf("encode error:%s\n", err.Error())
+	} else {
+		if err = channel.SendRequest(request); nil != err {
+			return err
+		} else {
+			return nil
+		}
 	}
-
-	err = channel.SendRequest(request)
-	if nil != err {
-		return err
-	}
-	return nil
 }
 
 /*
@@ -178,20 +124,12 @@ func (this *RPCClient) AsynCall(channel RPCChannel, method string, arg interface
 		cbEventQueue: this.cbEventQueue,
 	}
 
-	request, err := this.encoder.Encode(req)
-	if err != nil {
+	if request, err := this.encoder.Encode(req); err != nil {
 		return err
 	} else {
-		context.deadline = time.Now().Add(timeout)
-
 		group := contextGroups[req.Seq%uint64(len(contextGroups))]
-
-		group.mtx.Lock()
-		defer group.mtx.Unlock()
-		err := channel.SendRequest(request)
-		if err == nil {
-			group.waitResp[context.seq] = context
-			group.minheap.Insert(context)
+		if err = channel.SendRequest(request); err == nil {
+			group.timerMgr.OnceWithIndex(timeout, nil, context.onTimeout, context, context.seq)
 			return nil
 		} else {
 			return err
@@ -207,32 +145,12 @@ func (this *RPCClient) Call(channel RPCChannel, method string, arg interface{}, 
 		err = err_
 		respChan <- nil
 	}
-	err = this.AsynCall(channel, method, arg, timeout, f)
-	if nil == err {
+
+	if err = this.AsynCall(channel, method, arg, timeout, f); nil == err {
 		_ = <-respChan
 	}
+
 	return
-}
-
-func onceRoutine() {
-
-	client_once.Do(func() {
-		for i := uint64(0); i < groupCount; i++ {
-			contextGroups[i] = &contextGroup{
-				minheap:  util.NewMinHeap(128),
-				waitResp: map[uint64]*reqContext{},
-			}
-		}
-
-		go func() {
-			for {
-				time.Sleep(time.Duration(10) * time.Millisecond)
-				for _, v := range contextGroups {
-					v.checkTimeout()
-				}
-			}
-		}()
-	})
 }
 
 func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder, cbEventQueue ...*event.EventQueue) *RPCClient {
@@ -250,7 +168,13 @@ func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder, cbEventQueu
 		q = cbEventQueue[0]
 	}
 
-	onceRoutine()
+	client_once.Do(func() {
+		for i := uint64(0); i < groupCount; i++ {
+			contextGroups[i] = &contextGroup{
+				timerMgr: timer.NewTimerMgr(),
+			}
+		}
+	})
 
 	return &RPCClient{
 		encoder:      encoder,

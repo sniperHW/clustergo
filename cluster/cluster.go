@@ -1,35 +1,48 @@
 package cluster
 
 import (
-	"fmt"
-	"github.com/sniperHW/sanguo/cluster/addr"
-	"github.com/sniperHW/sanguo/codec/pb"
-	"github.com/sniperHW/sanguo/codec/ss"
-	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
-	"reflect"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/rpc"
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/codec/ss"
+	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
+	"github.com/sniperHW/sanguo/util"
+	"reflect"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var selfAddr addr.Addr
 var started int32
+var stoped int32
+
 var mtx sync.Mutex
-var queue *event.EventQueue = event.NewEventQueue()
-var idEndPointMap map[addr.LogicAddr]*endPoint = map[addr.LogicAddr]*endPoint{}
-var ttEndPointMap map[uint32]*typeEndPointMap = map[uint32]*typeEndPointMap{}
+var queue = event.NewEventQueue()
+var idEndPointMap = map[addr.LogicAddr]*endPoint{}
+var ttEndPointMap = map[uint32]*typeEndPointMap{}
 
 type rpcCall struct {
 	arg      interface{}
 	deadline time.Time
 	to       addr.LogicAddr
 	cb       rpc.RPCResponseHandler
+}
+
+func Stop() {
+	if !atomic.CompareAndSwapInt32(&stoped, 0, 1) {
+		util.WaitCondition(nil, func() bool {
+			return atomic.LoadInt32(&pendingRPCReqCount) == 0
+		})
+	}
+}
+
+func IsStoped() bool {
+	return atomic.LoadInt32(&stoped) == 1
 }
 
 //向类型为tt的本cluster节点广播
@@ -69,8 +82,8 @@ func postToEndPoint(end *endPoint, msg proto.Message) {
 
 	//Infoln("postToEndPoint", end.addr.Logic.String())
 
-	if nil != end.conn {
-		err := end.conn.session.Send(msg)
+	if nil != end.session {
+		err := end.session.Send(msg)
 		if nil != err {
 			//记录日志
 			Errorln("Send error:", err.Error(), reflect.TypeOf(msg).String())
@@ -107,7 +120,7 @@ func PostMessage(peer addr.LogicAddr, msg proto.Message) {
 				return
 			} else {
 				endPoint = harbor
-				msg_ = ss.NewMessage("", msg, peer, selfAddr.Logic)
+				msg_ = ss.NewMessage(msg, peer, selfAddr.Logic)
 			}
 		}
 	} else {
@@ -119,8 +132,8 @@ func PostMessage(peer addr.LogicAddr, msg proto.Message) {
 
 	//Infoln("PostMessage", peer.String(), endPoint.conn)
 
-	if nil != endPoint.conn {
-		err := endPoint.conn.session.Send(msg_)
+	if nil != endPoint.session {
+		err := endPoint.session.Send(msg_)
 		if nil != err {
 			//记录日志
 			Errorln("Send error:", err.Error(), reflect.TypeOf(msg_).String())
@@ -139,10 +152,10 @@ func SelfAddr() addr.Addr {
 /*
 *  启动服务
  */
-func Start(center_addr []string, selfAddr_ addr.Addr, export ...uint32) error {
+func Start(center_addr []string, selfAddr_ addr.Addr, export ...bool) error {
 
 	if !atomic.CompareAndSwapInt32(&started, 0, 1) {
-		return fmt.Errorf("service already started")
+		return ERR_STARTED
 	}
 
 	selfAddr = selfAddr_
@@ -154,13 +167,16 @@ func Start(center_addr []string, selfAddr_ addr.Addr, export ...uint32) error {
 
 		go func() {
 			err := server.Serve(func(session kendynet.StreamSession) {
+				Infoln("on new client", session.LocalAddr(), session.RemoteAddr())
 				go func() {
 					nodeInfo, err := auth(session)
 					if nil != err {
+						Infoln("auth error", err.Error())
 						session.Close(err.Error(), 0)
 					} else {
 						err = onEstablishServer(nodeInfo, session)
 						if nil != err {
+							Infoln("onEstablishServer error", err.Error())
 							session.Close(err.Error(), 0)
 						}
 					}
@@ -189,6 +205,26 @@ func PostTask(function interface{}, args ...interface{}) {
 	queue.PostNoWait(function, args...)
 }
 
+func Mod(tt uint32, num int) (addr.LogicAddr, error) {
+	defer mtx.Unlock()
+	mtx.Lock()
+
+	//优先从本集群查找
+	if ttmap, ok := ttEndPointMap[tt]; ok {
+		addr_, err := ttmap.mod(num)
+		if nil == err {
+			return addr_, err
+		}
+	}
+
+	//从forginService查找
+	if smap, ok := ttForignServiceMap[tt]; ok {
+		return smap.mod(num)
+	}
+
+	return addr.LogicAddr(0), ERR_NO_AVAILABLE_SERVICE
+}
+
 //随机获取一个类型为tt的节点id
 func Random(tt uint32) (addr.LogicAddr, error) {
 	defer mtx.Unlock()
@@ -207,7 +243,21 @@ func Random(tt uint32) (addr.LogicAddr, error) {
 		return smap.random()
 	}
 
-	return addr.LogicAddr(0), fmt.Errorf("invaild tt")
+	return addr.LogicAddr(0), ERR_NO_AVAILABLE_SERVICE
+}
+
+// 获取为tt，server的节点
+func TTServer(tt, server uint32) (addr.LogicAddr, error) {
+	defer mtx.Unlock()
+	mtx.Lock()
+
+	if ttmap, ok := ttEndPointMap[tt]; ok {
+		return ttmap.server(server)
+	}
+
+	// todo 从forginService查找
+
+	return addr.LogicAddr(0), ERR_NO_AVAILABLE_SERVICE
 }
 
 func init() {

@@ -5,7 +5,9 @@
 package cluster
 
 import (
-	"fmt"
+	//"fmt"
+	//"github.com/kr/pretty"
+	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"math/rand"
 	"sort"
@@ -51,13 +53,23 @@ func (this *typeForignServiceMap) add(addr_ addr.LogicAddr) {
 	}
 }
 
+func (this *typeForignServiceMap) mod(num int) (addr.LogicAddr, error) {
+	size := len(this.services)
+	if size > 0 {
+		i := num % size
+		return this.services[i], nil
+	} else {
+		return addr.LogicAddr(0), ERR_NO_AVAILABLE_SERVICE
+	}
+}
+
 func (this *typeForignServiceMap) random() (addr.LogicAddr, error) {
 	size := len(this.services)
 	if size > 0 {
 		i := rand.Int() % size
 		return this.services[i], nil
 	} else {
-		return addr.LogicAddr(0), fmt.Errorf("no available service")
+		return addr.LogicAddr(0), ERR_NO_AVAILABLE_SERVICE
 	}
 }
 
@@ -76,7 +88,11 @@ func addForginService(addr_ addr.LogicAddr) {
 
 	m.add(addr_)
 
-	Infoln("addForginService", addr_.String())
+	if isSelfHarbor() {
+		Infoln("harbor", selfAddr.Logic.String(), "addForginService", addr_.String())
+	} else {
+		Infoln(selfAddr.Logic.String(), "addForginService", addr_.String())
+	}
 }
 
 func removeForginService(addr_ addr.LogicAddr) {
@@ -85,25 +101,59 @@ func removeForginService(addr_ addr.LogicAddr) {
 
 	m, ok := ttForignServiceMap[addr_.Type()]
 	if ok {
+		//Infoln("removeForginService", addr_.String())
 		m.remove(addr_)
 	}
 }
 
-//非harbor节点执行
-func onAddForginServicesH2S(msg *AddForginServicesH2S) {
-	if !isSelfHarbor() {
-		Infoln("onAddForginServicesH2S", msg.GetNodes())
-		for _, v := range msg.GetNodes() {
-			addForginService(addr.LogicAddr(v))
-		}
-	}
-}
+func init() {
 
-//非harbor节点执行
-func onRemForginServicesH2S(msg *RemForginServicesH2S) {
-	if !isSelfHarbor() {
-		for _, v := range msg.GetNodes() {
-			removeForginService(addr.LogicAddr(v))
+	RegisterMethod(&NotifyForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+		//Infoln("NotifyForginServicesH2SReq") //, pretty.Sprint(req))
+		if !isSelfHarbor() {
+			msg := req.(*NotifyForginServicesH2SReq)
+			mtx.Lock()
+			current := []uint32{}
+			for _, v1 := range ttForignServiceMap {
+				for _, v2 := range v1.services {
+					current = append(current, uint32(v2))
+				}
+			}
+			mtx.Unlock()
+
+			add, remove := diff2(msg.GetNodes(), current)
+
+			for _, v := range add {
+				addForginService(addr.LogicAddr(v))
+			}
+
+			for _, v := range remove {
+				removeForginService(addr.LogicAddr(v))
+			}
+
 		}
-	}
+		replyer.Reply(&AddForginServicesH2SResp{}, nil)
+	})
+
+	RegisterMethod(&AddForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+		//Infoln("AddForginServicesH2SReq")
+		if !isSelfHarbor() {
+			msg := req.(*AddForginServicesH2SReq)
+			for _, v := range msg.GetNodes() {
+				addForginService(addr.LogicAddr(v))
+			}
+		}
+		replyer.Reply(&AddForginServicesH2SResp{}, nil)
+	})
+
+	RegisterMethod(&RemForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+		//Infoln("RemForginServicesH2SReq")
+		if !isSelfHarbor() {
+			msg := req.(*RemForginServicesH2SReq)
+			for _, v := range msg.GetNodes() {
+				removeForginService(addr.LogicAddr(v))
+			}
+		}
+		replyer.Reply(&RemForginServicesH2SResp{}, nil)
+	})
 }

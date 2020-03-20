@@ -1,15 +1,13 @@
 package ss
 
 import (
-	"fmt"
+	"github.com/sniperHW/kendynet/socket/connector/tcp"
 	codess "github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
-	ss_proto "github.com/sniperHW/sanguo/protocol/ss/message"
 	"time"
 
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 	"github.com/sniperHW/kendynet/util"
 )
 
@@ -19,7 +17,7 @@ var (
 )
 
 func DialTcp(peerAddr string, timeout time.Duration, dispatcher ClientDispatcher) {
-	connector, _ := tcp.NewConnector("tcp", peerAddr)
+	connector, _ := tcp.New("tcp", peerAddr)
 	go func() {
 		session, err := connector.Dial(timeout)
 		if nil != err {
@@ -43,9 +41,9 @@ func DialTcp(peerAddr string, timeout time.Duration, dispatcher ClientDispatcher
 					} else {
 						msg := event.Data.(*codess.Message)
 						switch msg.GetData().(type) {
-						case *ss_proto.Heartbeat:
-							fmt.Printf("on HeartbeatToC\n")
-							break
+						//case *ss_proto.Heartbeat:
+						//	fmt.Printf("on HeartbeatToC\n")
+						//	break
 						default:
 							dispatcher.Dispatch(session, msg)
 							break
@@ -70,7 +68,7 @@ func init() {
 		}
 	}()
 
-	go func() {
+	/*go func() {
 		for {
 			queue.Add(func() {
 				now := time.Now().Unix()
@@ -85,4 +83,5 @@ func init() {
 			time.Sleep(time.Millisecond * 1000)
 		}
 	}()
+	*/
 }

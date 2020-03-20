@@ -12,6 +12,7 @@ import (
 	"github.com/sniperHW/sanguo/codec/pb"
 	//"time"
 
+	"encoding/binary"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 )
@@ -26,12 +27,20 @@ type Receiver struct {
 	r         uint64
 	namespace string
 	zipBuff   bytes.Buffer
+	unpackMsg map[uint16]bool
 }
 
-func NewReceiver(namespace string) *Receiver {
+/*
+ * 不设置 unpackMag 时，全部拆包
+ * 设置时，遇到 unpackMag 注册的消息，拆包。其他消息拆分为字节消息
+ */
+func NewReceiver(namespace string, unpackMsg ...map[uint16]bool) *Receiver {
 	receiver := &Receiver{}
 	receiver.namespace = namespace
 	receiver.buffer = make([]byte, MaxPacketSize*2)
+	if len(unpackMsg) > 0 {
+		receiver.unpackMsg = unpackMsg[0]
+	}
 	return receiver
 }
 
@@ -41,11 +50,12 @@ func isCompress(flag uint16) bool {
 
 func (this *Receiver) unPack() (interface{}, error) {
 	unpackSize := uint64(this.w - this.r)
-	if unpackSize >= 6 { //sizeLen + sizeFlag + sizeCmd
+	if unpackSize >= HeadSize {
 
 		var payload uint16
 		var flag uint16
 		var cmd uint16
+		var errCode uint16
 		var err error
 		var buff []byte
 		var msg proto.Message
@@ -75,9 +85,22 @@ func (this *Receiver) unPack() (interface{}, error) {
 				return nil, err
 			}
 
-			size := payload - (SizeCmd + SizeFlag)
+			if errCode, err = reader.GetUint16(); err != nil {
+				return nil, err
+			}
+
+			size := payload - (SizeCmd + SizeFlag + SizeErr)
 			if buff, err = reader.GetBytes(uint64(size)); err != nil {
 				return nil, err
+			}
+
+			if this.unpackMsg != nil {
+				if _, ok := this.unpackMsg[cmd]; !ok {
+					//透传消息
+					message := NewBytesMassage(this.buffer[this.r : this.r+fullSize])
+					this.r += fullSize
+					return message, nil
+				}
 			}
 
 			if isCompress(flag) {
@@ -98,16 +121,20 @@ func (this *Receiver) unPack() (interface{}, error) {
 				}
 			}
 
-			if msg, err = pb.Unmarshal(this.namespace, uint32(cmd), buff); err != nil {
-				return nil, err
+			if errCode == 0 {
+				if msg, err = pb.Unmarshal(this.namespace, uint32(cmd), buff); err != nil {
+					return nil, err
+				}
 			}
 
 			this.r += fullSize
 
 			message := &Message{
-				name:   pb.GetNameByID(this.namespace, uint32(cmd)),
-				seriNO: (flag & 0x3FFF),
-				data:   msg,
+				//name:    pb.GetNameByID(this.namespace, uint32(cmd)),
+				seriNO:  (flag & 0x3FFF),
+				data:    msg,
+				cmd:     cmd,
+				errCode: errCode,
 			}
 			return message, nil
 		} else {
@@ -158,4 +185,15 @@ func (this *Receiver) DirectUnpack(buff []byte) (interface{}, error) {
 	this.w = uint64(len(buff))
 	this.r = 0
 	return this.unPack()
+}
+
+//SizeLen  = 2
+//SizeFlag = 2
+//SizeCmd  = 2
+//SizeErr  = 2
+func FetchSeqCmdCode(buff []byte) (uint16, uint16, uint16) {
+	seqno := binary.BigEndian.Uint16(buff[2:2+2]) & 0x3FFF
+	cmd := binary.BigEndian.Uint16(buff[4 : 4+2])
+	code := binary.BigEndian.Uint16(buff[6 : 6+2])
+	return seqno, cmd, code
 }

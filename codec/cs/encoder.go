@@ -14,6 +14,8 @@ const (
 	SizeLen  = 2
 	SizeFlag = 2
 	SizeCmd  = 2
+	SizeErr  = 2
+	HeadSize = SizeLen + SizeFlag + SizeCmd + SizeErr
 )
 
 /*
@@ -45,11 +47,16 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 		var err error
 
 		msg := o.(*Message)
-
+		data := msg.GetData()
 		flag := uint16(msg.GetSeriNo())
 
-		if pbbytes, cmd, err = pb.Marshal(this.namespace, msg.GetData()); err != nil {
-			return nil, err
+		if data == nil {
+			cmd = uint32(msg.GetCmd())
+			pbbytes = make([]byte, 0)
+		} else {
+			if pbbytes, cmd, err = pb.Marshal(this.namespace, msg.GetData()); err != nil {
+				return nil, err
+			}
 		}
 
 		if msg.IsCompress() {
@@ -67,14 +74,14 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 			pbbytes = this.zipBuff.Bytes()
 		}
 
-		totalLen := len(pbbytes) + SizeLen + SizeFlag + SizeCmd
+		totalLen := len(pbbytes) + SizeLen + SizeFlag + SizeCmd + SizeErr
 		//fmt.Println("------------------>", totalLen)
 
 		if uint64(totalLen) > MaxPacketSize {
 			return nil, fmt.Errorf("packet too large totalLen:%d", totalLen)
 		}
 
-		//len + flag + cmd + pbbytes
+		//len + flag + cmd + errCode + pbbytes
 		buff := kendynet.NewByteBuffer(totalLen)
 		//写payload大小
 		buff.AppendUint16(uint16(totalLen - SizeLen))
@@ -82,9 +89,16 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 		buff.AppendUint16(flag)
 		//写cmd
 		buff.AppendUint16(uint16(cmd))
+		//errCode
+		buff.AppendUint16(msg.GetErrCode())
 		//写数据
 		buff.AppendBytes(pbbytes)
 		return buff, nil
+		break
+	case []byte:
+		//透传消息
+		bytes := o.([]byte)
+		return kendynet.NewByteBuffer(bytes, len(bytes)), nil
 		break
 	default:
 		break

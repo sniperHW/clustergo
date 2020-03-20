@@ -64,6 +64,12 @@ func (this *WebSocket) sendMessage(msg kendynet.Message) error {
 }
 
 func (this *WebSocket) sendThreadFunc() {
+
+	defer func() {
+		close(this.sendCloseChan)
+	}()
+
+	timeout := this.sendTimeout
 	for {
 		closed, localList := this.sendQue.Get()
 		size := len(localList)
@@ -74,7 +80,6 @@ func (this *WebSocket) sendThreadFunc() {
 		for i := 0; i < size; i++ {
 			var err error
 			msg := localList[i].(*message.WSMessage)
-			timeout := this.sendTimeout
 			if msg.Type() == message.WSBinaryMessage || msg.Type() == message.WSTextMessage {
 				if timeout > 0 {
 					this.conn.SetWriteDeadline(time.Now().Add(timeout))
@@ -111,7 +116,6 @@ func (this *WebSocket) sendThreadFunc() {
 			}
 		}
 	}
-	this.sendCloseChan <- 1
 }
 
 func (this *WebSocket) Close(reason string, delay time.Duration) {
@@ -167,8 +171,8 @@ func NewWSSocket(conn *gorilla.Conn) kendynet.StreamSession {
 			conn: conn,
 		}
 		s.SocketBase = &SocketBase{
-			sendQue:       util.NewBlockQueue(8192),
-			sendCloseChan: make(chan int, 1),
+			sendQue:       util.NewBlockQueue(1024),
+			sendCloseChan: make(chan struct{}),
 			imp:           s,
 		}
 		return s

@@ -12,19 +12,17 @@ import (
 	"time"
 )
 
-//this.selfAddr.Net.String()
 func login(end *endPoint, session kendynet.StreamSession) {
 	go func() {
 		conn := session.GetUnderConn().(*net.TCPConn)
 		logicAddr := selfAddr.Logic
 		buffer := kendynet.NewByteBuffer(64)
-		buffer.AppendUint32(uint32(exportService))
 		buffer.AppendUint32(uint32(logicAddr))
 		netAddr := selfAddr.Net.String()
 		netAddrSize := len(netAddr)
 		buffer.AppendUint16(uint16(netAddrSize))
 		buffer.AppendString(netAddr)
-		pad := make([]byte, 64-4-4-2-netAddrSize)
+		pad := make([]byte, 64-4-2-netAddrSize)
 		buffer.AppendBytes(pad)
 
 		conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
@@ -83,15 +81,13 @@ func auth(session kendynet.StreamSession) (*center_proto.NodeInfo, error) {
 	} else {
 		conn.SetWriteDeadline(time.Time{})
 		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer, 64))
-		export, _ := reader.GetUint32()
 		logicAddr, _ := reader.GetUint32()
 		strLen, _ := reader.GetUint16()
 		netAddr, _ := reader.GetString(uint64(strLen))
 
 		return &center_proto.NodeInfo{
-			LogicAddr:     proto.Uint32(logicAddr),
-			NetAddr:       proto.String(netAddr),
-			ExportService: proto.Uint32(export),
+			LogicAddr: proto.Uint32(logicAddr),
+			NetAddr:   proto.String(netAddr),
 		}, nil
 	}
 }

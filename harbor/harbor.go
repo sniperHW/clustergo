@@ -28,6 +28,8 @@ func main() {
 
 	selfAddr, err := addr.MakeHarborAddr(selfLogic, selfNet)
 
+	cluster.Infoln("self addr", selfLogic)
+
 	if nil != err {
 		fmt.Println(err)
 	} else {

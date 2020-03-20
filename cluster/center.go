@@ -1,156 +1,128 @@
 package cluster
 
 import (
+	"github.com/golang/protobuf/proto"
+	"github.com/kr/pretty"
+	"github.com/sniperHW/kendynet"
+	center "github.com/sniperHW/sanguo/center"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
-	"github.com/sniperHW/sanguo/codec/ss"
-	"github.com/sniperHW/sanguo/common"
-	"reflect"
-	"time"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	"sort"
 )
 
-var exportService uint32 //本节点是否暴露到服务器组外面
+const EXPORT bool = true
 
-type centerHandler func(kendynet.StreamSession, proto.Message)
+func connectCenter(centerAddrs []string, selfAddr addr.Addr, export ...bool) {
 
-var centerHandlers map[string]centerHandler = map[string]centerHandler{}
+	exportService := uint32(0)
 
-func RegisterCenterMsgHandler(msg proto.Message, handler centerHandler) {
-	msgName := reflect.TypeOf(msg).String()
-	if nil == handler {
-		//记录日志
-		Errorf("Register %s failed: handler is nil\n", msgName)
-		return
-	}
-
-	_, ok := centerHandlers[msgName]
-	if ok {
-		//记录日志
-		Errorf("Register %s failed: duplicate handler\n", msgName)
-		return
-	}
-
-	centerHandlers[msgName] = handler
-}
-
-func dispatchCenterMsg(args []interface{}) {
-	session := args[0].(kendynet.StreamSession)
-	msg := args[1].(*ss.Message)
-	name := msg.GetName()
-	handler, ok := centerHandlers[name]
-	if ok {
-		handler(session, msg.GetData().(proto.Message))
-	} else {
-		//记录日志
-		Errorf("unknow msg:%s\n", name)
-	}
-}
-
-type center struct {
-	addr     string
-	selfAddr addr.Addr
-}
-
-func (this *center) connect() {
-	c, err := connector.New("tcp4", this.addr)
-	if nil == err {
-		go func() {
-			for {
-				session, err := c.Dial(time.Second * 3)
-				if err != nil {
-					time.Sleep(time.Millisecond * 1000)
-				} else {
-					session.SetReceiver(center_proto.NewReceiver())
-					session.SetEncoder(center_proto.NewEncoder())
-
-					done := make(chan struct{}, 1)
-
-					session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-						Infof("center disconnected %s self:%s\n", reason, this.selfAddr.Logic.String())
-						done <- struct{}{}
-						this.connect()
-					})
-					session.Start(func(event *kendynet.Event) {
-						if event.EventType == kendynet.EventTypeError {
-							event.Session.Close(event.Data.(error).Error(), 0)
-						} else {
-							msg := event.Data.(*ss.Message)
-							queue.PostNoWait(dispatchCenterMsg, session, msg)
-						}
-					})
-					//发送login
-					session.Send(&center_proto.Login{
-						LogicAddr:     proto.Uint32(uint32(this.selfAddr.Logic)),
-						NetAddr:       proto.String(this.selfAddr.Net.String()),
-						ExportService: proto.Uint32(exportService),
-					})
-
-					ticker := time.NewTicker(time.Second * (common.HeartBeat_Timeout / 2))
-					for {
-						select {
-						case <-done:
-							ticker.Stop()
-							return
-						case <-ticker.C:
-							//发送心跳
-							session.Send(&center_proto.HeartbeatToCenter{
-								Timestamp: proto.Int64(time.Now().UnixNano()),
-							})
-						}
-					}
-				}
-			}
-		}()
-	} else {
-		Errorf("NewConnector failed:%s\n", err.Error())
-	}
-}
-
-func connectCenter(centerAddrs []string, selfAddr addr.Addr, export ...uint32) {
-
-	if len(export) > 0 {
+	if len(export) > 0 && export[0] {
 		exportService = 1
 	}
 
-	centers := map[string]bool{}
-	for _, v := range centerAddrs {
-		if _, ok := centers[v]; !ok {
-			centers[v] = true
-			c := &center{
-				addr:     v,
-				selfAddr: selfAddr,
-			}
-			c.connect()
+	center.ClientInit(GetEventQueue(), logger, exportService)
+
+	center.ConnectCenter(centerAddrs, selfAddr)
+}
+
+func diff(a, b []*center_proto.NodeInfo) ([]*center_proto.NodeInfo, []*center_proto.NodeInfo) {
+
+	if len(a) == 0 {
+		return nil, b
+	}
+
+	if len(b) == 0 {
+		return a, nil
+	}
+
+	sort.Slice(a, func(i, j int) bool {
+		return a[i].GetLogicAddr() < a[j].GetLogicAddr()
+	})
+
+	sort.Slice(b, func(i, j int) bool {
+		return b[i].GetLogicAddr() < b[j].GetLogicAddr()
+	})
+
+	add := []*center_proto.NodeInfo{}
+	remove := []*center_proto.NodeInfo{}
+
+	i := 0
+	j := 0
+
+	for i < len(a) && j < len(b) {
+		if a[i].GetLogicAddr() == b[j].GetLogicAddr() {
+			add = append(add, a[i])
+			i++
+			j++
+		} else if a[i].GetLogicAddr() > b[j].GetLogicAddr() {
+			remove = append(remove, b[j])
+			j++
+		} else {
+			add = append(add, a[i])
+			i++
 		}
 	}
+
+	if len(a[i:]) > 0 {
+		add = append(add, a[i:]...)
+	}
+
+	if len(b[j:]) > 0 {
+		remove = append(remove, b[j:]...)
+	}
+
+	return add, remove
 }
 
 func centerInit() {
-	RegisterCenterMsgHandler(&center_proto.HeartbeatToNode{}, func(session kendynet.StreamSession, msg proto.Message) {
+	center.RegisterCenterMsgHandler(center_proto.CENTER_HeartbeatToNode, func(session kendynet.StreamSession, msg proto.Message) {
 		//心跳响应暂时不处理
 		//kendynet.Infof("HeartbeatToNode\n")
 	})
 
-	RegisterCenterMsgHandler(&center_proto.NotifyNodeInfo{}, func(session kendynet.StreamSession, msg proto.Message) {
-		NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
-		for _, v := range NotifyNodeInfo.Nodes {
-			addEndPoint(v)
+	center.RegisterCenterMsgHandler(center_proto.CENTER_NotifyNodeAdd, func(session kendynet.StreamSession, msg proto.Message) {
+		Infoln("CENTER_NotifyNodeAdd", pretty.Sprint(msg))
+
+		NodeAdd := msg.(*center_proto.NodeAdd)
+
+		for _, v := range NodeAdd.Nodes {
+			addEndPoint(session.RemoteAddr(), v)
 		}
+
 	})
 
-	RegisterCenterMsgHandler(&center_proto.NodeLeave{}, func(session kendynet.StreamSession, msg proto.Message) {
+	center.RegisterCenterMsgHandler(center_proto.CENTER_NotifyNodeInfo, func(session kendynet.StreamSession, msg proto.Message) {
+		Infoln("CENTER_NotifyNodeInfo", pretty.Sprint(msg))
+		mtx.Lock()
+
+		currentEndPoints := []*center_proto.NodeInfo{}
+
+		for k, _ := range idEndPointMap {
+			currentEndPoints = append(currentEndPoints, &center_proto.NodeInfo{
+				LogicAddr: proto.Uint32(uint32(k)),
+			})
+		}
+
+		mtx.Unlock()
+
+		NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
+
+		add, remove := diff(NotifyNodeInfo.Nodes, currentEndPoints)
+
+		for _, v := range add {
+			addEndPoint(session.RemoteAddr(), v)
+		}
+
+		for _, v := range remove {
+			removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v.GetLogicAddr()))
+		}
+
+	})
+
+	center.RegisterCenterMsgHandler(center_proto.CENTER_NodeLeave, func(session kendynet.StreamSession, msg proto.Message) {
 		NodeLeave := msg.(*center_proto.NodeLeave)
 		for _, v := range NodeLeave.Nodes {
-			removeEndPoint(addr.LogicAddr(v))
+			removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v))
 		}
-	})
-
-	RegisterCenterMsgHandler(&center_proto.LoginFailed{}, func(session kendynet.StreamSession, msg proto.Message) {
-		LoginFailed := msg.(*center_proto.LoginFailed)
-		Errorf("login center failed:%s", LoginFailed.GetMsg())
 	})
 }

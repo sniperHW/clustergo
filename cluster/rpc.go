@@ -15,32 +15,35 @@ import (
 var rpcServer *rpc.RPCServer
 var rpcClient *rpc.RPCClient
 
+var pendingRPCReqCount int32
+
 type RPCChannel struct {
 	to   addr.LogicAddr
 	peer *endPoint
 }
 
 func (this *RPCChannel) SendRequest(message interface{}) error {
-	if this.peer.conn != nil {
+	if this.peer.session != nil {
 		if this.to != this.peer.addr.Logic {
-			return this.peer.conn.session.Send(ss.NewMessage("rpc", message, this.to, selfAddr.Logic))
+			return this.peer.session.Send(ss.NewMessage(message, this.to, selfAddr.Logic))
 		} else {
-			return this.peer.conn.session.Send(message)
+			return this.peer.session.Send(message)
 		}
 	} else {
-		return fmt.Errorf("no connection")
+		return ERR_RPC_NO_CONN
 	}
 }
 
 func (this *RPCChannel) SendResponse(message interface{}) error {
-	if this.peer.conn != nil {
+	atomic.AddInt32(&pendingRPCReqCount, -1)
+	if this.peer.session != nil {
 		if this.to != this.peer.addr.Logic {
-			return this.peer.conn.session.Send(ss.NewMessage("rpc", message, this.to, selfAddr.Logic))
+			return this.peer.session.Send(ss.NewMessage(message, this.to, selfAddr.Logic))
 		} else {
-			return this.peer.conn.session.Send(message)
+			return this.peer.session.Send(message)
 		}
 	} else {
-		return fmt.Errorf("no connection")
+		return ERR_RPC_NO_CONN
 	}
 }
 
@@ -73,21 +76,43 @@ func RegisterMethod(arg proto.Message, handler rpc.RPCMethodHandler) {
 	rpcServer.RegisterMethod(reflect.TypeOf(arg).String(), handler)
 }
 
-func onRPCMessage(peer *endPoint, from addr.LogicAddr, msg interface{}) {
-	switch msg.(type) {
-	case *rpc.RPCRequest:
+func onRPCRequest(peer *endPoint, from addr.LogicAddr, msg *rpc.RPCRequest) {
+	if !IsStoped() {
+		atomic.AddInt32(&pendingRPCReqCount, 1)
 		rpcchan := &RPCChannel{
 			peer: peer,
 			to:   from,
 		}
-		rpcServer.OnRPCMessage(rpcchan, msg.(*rpc.RPCRequest))
-		break
-	case *rpc.RPCResponse:
-		rpcClient.OnRPCMessage(msg.(*rpc.RPCResponse))
-		break
-	default:
-		Errorf("invaild message type\n")
-		break
+		rpcServer.OnRPCMessage(rpcchan, msg)
+	}
+}
+
+func onRPCResponse(msg *rpc.RPCResponse) {
+	rpcClient.OnRPCMessage(msg)
+}
+
+func asynCall(end *endPoint, arg proto.Message, timeout uint32, cb rpc.RPCResponseHandler) {
+	end.mtx.Lock()
+	defer end.mtx.Unlock()
+
+	if nil != end.session {
+		if err := rpcClient.AsynCall(&RPCChannel{
+			to:   end.addr.Logic,
+			peer: end,
+		}, "call", arg, time.Duration(timeout)*time.Millisecond, cb); nil != err {
+			//记录日志
+			Errorf("Call %s:%s error:%s\n", end.addr.Logic.String(), reflect.TypeOf(arg).String(), err.Error())
+			queue.PostNoWait(func() { cb(nil, err) })
+		}
+	} else {
+		end.pendingCall = append(end.pendingCall, &rpcCall{
+			arg:      arg,
+			cb:       cb,
+			deadline: time.Now().Add(time.Duration(timeout) * time.Millisecond),
+			to:       end.addr.Logic,
+		})
+		//尝试与对端建立连接
+		dial(end)
 	}
 }
 
@@ -124,7 +149,7 @@ func AsynCall(peer addr.LogicAddr, arg proto.Message, timeout uint32, cb rpc.RPC
 	endPoint.mtx.Lock()
 	defer endPoint.mtx.Unlock()
 
-	if nil != endPoint.conn {
+	if nil != endPoint.session {
 		if err := rpcClient.AsynCall(&RPCChannel{
 			to:   peer,
 			peer: endPoint,

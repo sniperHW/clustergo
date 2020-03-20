@@ -1,7 +1,0 @@
-syntax = "proto2";
-package ssmessage;
-
-message ssToGate {
-	repeated uint32 gateUsers = 1;
-	repeated bytes message = 2;
-}

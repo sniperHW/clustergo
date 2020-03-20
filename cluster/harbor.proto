@@ -4,20 +4,50 @@ package cluster;
 
 //harbor向cluster的节点发送
 
-message addForginServicesH2S {
+message notifyForginServicesH2S_req {
 	repeated uint32 nodes = 1;
 }
 
-message remForginServicesH2S {
+message notifyForginServicesH2S_resp {
+
+}
+
+
+message addForginServicesH2S_req {
 	repeated uint32 nodes = 1;
+}
+
+message addForginServicesH2S_resp {
+}
+
+message remForginServicesH2S_req {
+	repeated uint32 nodes = 1;
+}
+
+message remForginServicesH2S_resp {
+
 }
 
 
 //harbor之间发送
-message addForginServicesH2H {
+message notifyForginServicesH2H_req {
 	repeated uint32 nodes = 1;
 }
 
-message remForginServicesH2H {
+message notifyForginServicesH2H_resp {
 	repeated uint32 nodes = 1;
+}
+
+message addForginServicesH2H_req {
+	repeated uint32 nodes = 1;
+}
+
+message addForginServicesH2H_resp {
+}
+
+message remForginServicesH2H_req {
+	repeated uint32 nodes = 1;
+}
+
+message remForginServicesH2H_resp {
 }

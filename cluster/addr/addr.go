@@ -7,15 +7,15 @@ import (
 	"strings"
 )
 
-const GroupMask uint32 = 0xFFF00000
-const TypeMask uint32 = 0x000FF000
-const ServerMask uint32 = 0x00000FFF
+const GroupMask uint32 = 0xFFFC0000  //高14
+const TypeMask uint32 = 0x0003FC00   //中8
+const ServerMask uint32 = 0x000003FF //低10
 
 var ErrInvaildAddrFmt error = fmt.Errorf("invaild addr format")
 var ErrHarborType error = fmt.Errorf("type should be 255")
 var ErrInvaildType error = fmt.Errorf("type should between(1,254)")
-var ErrInvaildGroup error = fmt.Errorf("group should between(1,4095)")
-var ErrInvaildServer error = fmt.Errorf("server should between(1,4095)")
+var ErrInvaildGroup error = fmt.Errorf("group should between(1,16383)")
+var ErrInvaildServer error = fmt.Errorf("server should between(1,1023)")
 
 type LogicAddr uint32
 
@@ -59,11 +59,11 @@ func MakeHarborAddr(logic string, tcpAddr string) (Addr, error) {
 }
 
 func (this LogicAddr) Group() uint32 {
-	return (uint32(this) & GroupMask) >> 20
+	return (uint32(this) & GroupMask) >> 18
 }
 
 func (this LogicAddr) Type() uint32 {
-	return (uint32(this) & TypeMask) >> 12
+	return (uint32(this) & TypeMask) >> 10
 }
 
 func (this LogicAddr) Server() uint32 {
@@ -95,7 +95,7 @@ func MakeLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildGroup
 	}
 
-	if 0 == group || uint32(group) > (GroupMask>>20) {
+	if 0 == group || uint32(group) > (GroupMask>>18) {
 		return LogicAddr(0), ErrInvaildGroup
 	}
 
@@ -104,7 +104,7 @@ func MakeLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildType
 	}
 
-	if 0 == tt || uint32(tt) > ((TypeMask>>12)-1) {
+	if 0 == tt || uint32(tt) > ((TypeMask>>10)-1) {
 		return LogicAddr(0), ErrInvaildType
 	}
 
@@ -117,7 +117,7 @@ func MakeLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildServer
 	}
 
-	return LogicAddr(0 | (uint32(tt) << 12) | (uint32(group) << 20) | (uint32(server))), nil
+	return LogicAddr(0 | (uint32(tt) << 10) | (uint32(group) << 18) | (uint32(server))), nil
 }
 
 func MakeHarborLogicAddr(addr string) (LogicAddr, error) {
@@ -134,7 +134,7 @@ func MakeHarborLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildGroup
 	}
 
-	if 0 == group || uint32(group) > (GroupMask>>20) {
+	if 0 == group || uint32(group) > (GroupMask>>18) {
 		return LogicAddr(0), ErrInvaildGroup
 	}
 
@@ -156,5 +156,5 @@ func MakeHarborLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildServer
 	}
 
-	return LogicAddr(0 | (uint32(tt) << 12) | (uint32(group) << 20) | (uint32(server))), nil
+	return LogicAddr(0 | (uint32(tt) << 10) | (uint32(group) << 18) | (uint32(server))), nil
 }

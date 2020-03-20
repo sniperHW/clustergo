@@ -43,10 +43,10 @@ func (self *BlockQueue) AddNoWait(item interface{}, fullReturn ...bool) error {
 
 	self.list = append(self.list, item)
 
-	needSignal := self.emptyWaited > 0 && n == 0
+	needSignal := self.emptyWaited > 0
 	self.listGuard.Unlock()
 	if needSignal {
-		self.emptyCond.Broadcast()
+		self.emptyCond.Signal()
 	}
 	return nil
 }
@@ -71,13 +71,12 @@ func (self *BlockQueue) Add(item interface{}) error {
 		}
 	}
 
-	n := len(self.list)
 	self.list = append(self.list, item)
 
-	needSignal := self.emptyWaited > 0 && n == 0
+	needSignal := self.emptyWaited > 0
 	self.listGuard.Unlock()
 	if needSignal {
-		self.emptyCond.Broadcast()
+		self.emptyCond.Signal()
 	}
 	return nil
 }
@@ -98,6 +97,21 @@ func (self *BlockQueue) Get() (closed bool, datas []interface{}) {
 		self.emptyCond.Wait()
 		self.emptyWaited--
 	}
+	if len(self.list) > 0 {
+		datas = self.list
+		self.list = make([]interface{}, 0, initCap)
+	}
+	needSignal := self.fullWaited > 0
+	closed = self.closed
+	self.listGuard.Unlock()
+	if needSignal {
+		self.fullCond.Broadcast()
+	}
+	return
+}
+
+func (self *BlockQueue) GetNoWait() (closed bool, datas []interface{}) {
+	self.listGuard.Lock()
 	if len(self.list) > 0 {
 		datas = self.list
 		self.list = make([]interface{}, 0, initCap)
@@ -141,7 +155,7 @@ func (self *BlockQueue) Close() {
 
 	self.closed = true
 	self.listGuard.Unlock()
-	self.emptyCond.Signal()
+	self.emptyCond.Broadcast()
 	self.fullCond.Broadcast()
 }
 
@@ -151,16 +165,32 @@ func (self *BlockQueue) Len() int {
 	return len(self.list)
 }
 
+func (self *BlockQueue) Full() bool {
+	self.listGuard.Lock()
+	defer self.listGuard.Unlock()
+	return len(self.list) >= self.fullSize
+}
+
 func (self *BlockQueue) Clear() {
 	self.listGuard.Lock()
 	defer self.listGuard.Unlock()
 	self.list = self.list[0:0]
 }
 
-func (self *BlockQueue) SetFullSize(fullSize int) {
-	self.listGuard.Lock()
-	defer self.listGuard.Unlock()
-	self.fullSize = fullSize
+func (self *BlockQueue) SetFullSize(newSize int) {
+	if newSize > 0 {
+		needSignal := false
+		self.listGuard.Lock()
+		oldSize := self.fullSize
+		self.fullSize = newSize
+		if oldSize < newSize && self.fullWaited > 0 {
+			needSignal = true
+		}
+		self.listGuard.Unlock()
+		if needSignal {
+			self.fullCond.Broadcast()
+		}
+	}
 }
 
 func NewBlockQueueWithName(name string, fullSize ...int) *BlockQueue {

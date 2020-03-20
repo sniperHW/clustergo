@@ -1,7 +1,0 @@
-syntax = "proto2";
-package ssmessage;
-
-message gateUserDestroy {
-	required string userID = 1;		
-	required uint32 gateUserID = 2;
-}

@@ -1,21 +1,20 @@
-package main
+package center
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/event"
+	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/kendynet/rpc"
+	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 	"github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
 	"net"
-	"os"
 	"reflect"
-	"sync"
 	"time"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
-	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 )
 
 type MsgHandler func(kendynet.StreamSession, proto.Message)
@@ -24,27 +23,53 @@ type node struct {
 	addr          addr.Addr
 	session       kendynet.StreamSession
 	exportService uint32
+	heartBeatTime time.Time
 }
 
 var (
-	mtx      sync.Mutex
-	handlers map[string]MsgHandler
-	nodes    map[addr.LogicAddr]*node
+	queue            *event.EventQueue
+	handlers         map[uint16]MsgHandler
+	nodes            map[addr.LogicAddr]*node
+	heartBeatTimeout int64 = 5
 )
 
-func brocast(msg proto.Message, exclude *map[kendynet.StreamSession]bool) {
-	mtx.Lock()
-	defer mtx.Unlock()
-	brocastNoLock(msg, exclude)
+var (
+	LoginOK     = int32(0)
+	LoginFailed = int32(1)
+)
+
+func tick() {
+	ticker := time.NewTicker(time.Second)
+	for {
+		now := <-ticker.C
+		queue.PostNoWait(func() {
+			for logicAddr, node := range nodes {
+				now = time.Now()
+				if now.Unix()-node.heartBeatTime.Unix() > heartBeatTimeout {
+					removeNode(logicAddr)
+				}
+			}
+		})
+	}
 }
 
-func brocastNoLock(msg proto.Message, exclude *map[kendynet.StreamSession]bool) {
+func removeNode(logicAddr addr.LogicAddr) {
+	msg := &protocol.NodeLeave{
+		Nodes: []uint32{uint32(logicAddr)},
+	}
+	delete(nodes, logicAddr)
+	brocast(msg, nil)
+}
+
+func brocast(msg proto.Message, exclude *map[kendynet.StreamSession]bool) {
 	for _, v := range nodes {
 		if v.session != nil {
 			if nil == exclude {
+				kendynet.Infoln("brocast notify to", v.addr.Logic, msg)
 				v.session.Send(msg)
 			} else {
 				if _, ok := (*exclude)[v.session]; !ok {
+					kendynet.Infoln("brocast notify to", v.addr.Logic, msg)
 					v.session.Send(msg)
 				}
 			}
@@ -56,21 +81,22 @@ func onSessionClose(session kendynet.StreamSession, reason string) {
 	ud := session.GetUserData()
 	if nil != ud {
 		n := ud.(*node)
+		//removeNode(n.addr.Logic)
 		kendynet.Infof("node lose connection %s reason:%s\n", n.addr.Logic.String(), reason)
 		n.session = nil
 	}
 }
 
-func onLogin(session kendynet.StreamSession, msg proto.Message) {
-	mtx.Lock()
-	defer mtx.Unlock()
-	kendynet.Infoln("onLogin\n")
+func onLogin(replyer *rpc.RPCReplyer, req interface{}) {
+	channel := replyer.GetChannel().(*RPCChannel)
+	session := channel.session
+
 	ud := session.GetUserData()
 	if nil != ud {
 		return
 	}
 
-	login := msg.(*protocol.Login)
+	login := req.(*protocol.Login)
 
 	var n *node
 
@@ -79,10 +105,12 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 	netAddr, err := net.ResolveTCPAddr("tcp4", login.GetNetAddr())
 
 	if nil != err {
-		LoginFailed := &protocol.LoginFailed{}
-		LoginFailed.Msg = proto.String("invaild netAddr:" + login.GetNetAddr())
-		kendynet.Infoln(LoginFailed.GetMsg())
-		session.Send(LoginFailed)
+		loginRet := &protocol.LoginRet{
+			ErrCode: proto.Int32(LoginFailed),
+			Msg:     proto.String("invaild netAddr:" + login.GetNetAddr()),
+		}
+		replyer.Reply(loginRet, nil)
+		kendynet.Infoln(loginRet.GetMsg())
 		session.Close("invaild netAddr", 1)
 		return
 	}
@@ -102,23 +130,33 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 
 	if n.session != nil {
 		//重复登录
-		LoginFailed := &protocol.LoginFailed{}
-		LoginFailed.Msg = proto.String("duplicate node:" + logicAddr.String())
-
-		kendynet.Infoln(LoginFailed.GetMsg())
-
-		session.Send(LoginFailed)
+		loginRet := &protocol.LoginRet{
+			ErrCode: proto.Int32(LoginFailed),
+			Msg:     proto.String("duplicate node:" + logicAddr.String()),
+		}
+		replyer.Reply(loginRet, nil)
+		kendynet.Infoln(loginRet.GetMsg())
 		session.Close("duplicate node", 1)
 		return
 	}
 
 	n.session = session
+	n.addr.Net = netAddr //更新网络地址
+	n.heartBeatTime = time.Now()
 	session.SetUserData(n)
 
-	//记录日志
-	notify := &protocol.NotifyNodeInfo{}
+	kendynet.Infoln("onLogin", logicAddr.String(), n.exportService)
 
-	notify.Nodes = append(notify.Nodes, &protocol.NodeInfo{
+	loginRet := &protocol.LoginRet{
+		ErrCode: proto.Int32(LoginOK),
+	}
+
+	replyer.Reply(loginRet, nil)
+
+	//记录日志
+	nodeAdd := &protocol.NodeAdd{}
+
+	nodeAdd.Nodes = append(nodeAdd.Nodes, &protocol.NodeInfo{
 		LogicAddr:     proto.Uint32(uint32(n.addr.Logic)),
 		NetAddr:       proto.String(n.addr.Net.String()),
 		ExportService: proto.Uint32(n.exportService),
@@ -127,8 +165,11 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 	//将新节点的信息通告给除自己以外的其它节点
 	exclude := map[kendynet.StreamSession]bool{}
 	exclude[session] = true
-	brocastNoLock(notify, &exclude)
-	notify.Reset()
+	brocast(nodeAdd, &exclude)
+
+	//将所有节点信息(包括自己)发给新到节点
+
+	notify := &protocol.NotifyNodeInfo{}
 
 	for _, v := range nodes {
 		notify.Nodes = append(notify.Nodes, &protocol.NodeInfo{
@@ -138,18 +179,24 @@ func onLogin(session kendynet.StreamSession, msg proto.Message) {
 		})
 	}
 
-	//将所有节点信息发给新到节点
 	err = session.Send(notify)
 	if nil != err {
 		kendynet.Errorln(err)
 	} else {
-		kendynet.Infoln("send notify to ", logicAddr.String())
+		kendynet.Infoln("send notify to ", logicAddr.String(), notify)
 	}
 
 }
 
 func onHeartBeat(session kendynet.StreamSession, msg proto.Message) {
-	//kendynet.Infof("onHeartBeat\n")
+	ud := session.GetUserData()
+	if nil == ud {
+		kendynet.Infof("onHeartBeat,session is not login")
+		return
+	}
+	node := ud.(*node)
+	node.heartBeatTime = time.Now()
+
 	heartbeat := msg.(*protocol.HeartbeatToCenter)
 	resp := &protocol.HeartbeatToNode{}
 	resp.TimestampBack = proto.Int64(heartbeat.GetTimestamp())
@@ -162,44 +209,59 @@ func onHeartBeat(session kendynet.StreamSession, msg proto.Message) {
 
 func dispatchMsg(session kendynet.StreamSession, msg *ss.Message) {
 	if nil != msg {
-		name := msg.GetName()
-		handler, ok := handlers[name]
-		if ok {
-			handler(session, msg.GetData().(proto.Message))
-		} else {
-			//记录日志
-			kendynet.Errorf("unkonw msg:%s\n", name)
+		data := msg.GetData()
+		switch data.(type) {
+		case *rpc.RPCRequest:
+			onRPCRequest(session, data.(*rpc.RPCRequest))
+		case *rpc.RPCResponse:
+			onRPCResponse(data.(*rpc.RPCResponse))
+		case proto.Message:
+			cmd := msg.GetCmd()
+			handler, ok := handlers[cmd]
+			if ok {
+				handler(session, msg.GetData().(proto.Message))
+			} else {
+				//记录日志
+				kendynet.Errorf("unknow cmd:%s\n", cmd)
+			}
+		default:
+			kendynet.Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
 		}
 	}
 }
 
-func registerHandler(msg proto.Message, handler MsgHandler) {
-	msgName := reflect.TypeOf(msg).String()
+func registerHandler(cmd uint16, handler MsgHandler) {
 	if nil == handler {
 		//记录日志
-		kendynet.Errorf("Register %s failed: handler is nil\n", msgName)
+		kendynet.Errorf("Register %d failed: handler is nil\n", cmd)
 		return
 	}
-	_, ok := handlers[msgName]
+	_, ok := handlers[cmd]
 	if ok {
 		//记录日志
-		kendynet.Errorf("Register %s failed: duplicate handler\n", msgName)
+		kendynet.Errorf("Register %d failed: duplicate handler\n", cmd)
 		return
 	}
-	handlers[msgName] = handler
+	handlers[cmd] = handler
 }
 
-func main() {
+func Start(service string) {
 	outLogger := golog.NewOutputLogger("log", "center", 1024*1024*1000)
 	kendynet.InitLogger(golog.New("center", outLogger))
 
-	handlers = map[string]MsgHandler{}
+	handlers = map[uint16]MsgHandler{}
 	nodes = map[addr.LogicAddr]*node{}
+	go tick()
 
-	registerHandler(&protocol.Login{}, onLogin)
-	registerHandler(&protocol.HeartbeatToCenter{}, onHeartBeat)
+	registerMethod(&protocol.Login{}, onLogin)
 
-	service := os.Args[1]
+	registerHandler(protocol.CENTER_HeartbeatToCenter, onHeartBeat)
+
+	queue = event.NewEventQueue()
+
+	go func() {
+		queue.Run()
+	}()
 
 	//启动本地监听
 	server, err := listener.New("tcp4", service)
@@ -211,14 +273,18 @@ func main() {
 			session.SetReceiver(protocol.NewReceiver())
 			session.SetEncoder(protocol.NewEncoder())
 			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-				onSessionClose(sess, reason)
+				queue.PostNoWait(func() {
+					onSessionClose(sess, reason)
+				})
 			})
 			session.Start(func(event *kendynet.Event) {
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
 					msg := event.Data.(*ss.Message)
-					dispatchMsg(session, msg)
+					queue.PostNoWait(func() {
+						dispatchMsg(session, msg)
+					})
 				}
 			})
 		})

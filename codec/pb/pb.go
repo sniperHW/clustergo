@@ -18,6 +18,7 @@ type pbMeta struct {
 }
 
 var nameSpace = map[string]pbMeta{}
+var nameToCmd = map[string]uint32{}
 
 func newMessage(namespace string, id uint32) (msg proto.Message, err error) {
 	if ns, ok := nameSpace[namespace]; ok {
@@ -46,6 +47,10 @@ func GetNameByID(namespace string, id uint32) string {
 	}
 }
 
+func GetCmdByName(name string) uint32 {
+	return nameToCmd[name]
+}
+
 //根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
 func Register(namespace string, msg proto.Message, id uint32) error {
 
@@ -66,6 +71,8 @@ func Register(namespace string, msg proto.Message, id uint32) error {
 
 	ns.nameToID[name] = id
 	ns.idToMeta[id] = reflectInfo{tt: tt, name: name}
+
+	nameToCmd[name] = id
 	return nil
 }
 

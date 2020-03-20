@@ -122,7 +122,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 					}
 					this.r += totalSize
 					//kendynet.Debugln(to.String(), from.String(), this.selfAddr.String())
-					return NewMessage(pb.GetNameByID(this.ns_msg, uint32(cmd)), msg, to, from), nil
+					return NewMessage(msg, to, from), nil
 				} else {
 					var seqNO uint64
 					if seqNO, err = reader.GetUint64(); err != nil {
@@ -136,7 +136,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 							return nil, err
 						}
 						this.r += totalSize
-						return NewMessage("rpc", &rpc.RPCResponse{Seq: seqNO, Err: fmt.Errorf(errStr)}, to, from), nil
+						return NewMessage(&rpc.RPCResponse{Seq: seqNO, Err: fmt.Errorf(errStr)}, to, from), nil
 					} else if tt == RPCRESP {
 						//RPC响应
 						if buff, err = reader.GetBytes(uint64(size)); err != nil {
@@ -146,7 +146,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 							return nil, err
 						}
 						this.r += totalSize
-						return NewMessage("rpc", &rpc.RPCResponse{Seq: seqNO, Ret: msg}, to, from), nil
+						return NewMessage(&rpc.RPCResponse{Seq: seqNO, Ret: msg}, to, from), nil
 					} else if tt == RPCREQ {
 						//RPC请求
 						if buff, err = reader.GetBytes(uint64(size)); err != nil {
@@ -156,7 +156,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 							return nil, err
 						}
 						this.r += totalSize
-						return NewMessage("rpc", &rpc.RPCRequest{
+						return NewMessage(&rpc.RPCRequest{
 							Seq:      seqNO,
 							Method:   pb.GetNameByID(this.ns_req, uint32(cmd)),
 							NeedResp: getNeedRPCResp(flag),
@@ -199,6 +199,8 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 			conn := sess.GetUnderConn().(*net.TCPConn)
 			n, err := conn.Read(this.buffer[this.w:])
 			this.recvCount++
+
+			//fmt.Println("recv", n)
 
 			if n > 0 {
 				this.w += uint64(n) //增加待解包数据

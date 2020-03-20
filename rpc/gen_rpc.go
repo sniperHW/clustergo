@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
 	"github.com/sniperHW/sanguo/protocol/ss/proto_def"
 	"os"
 	"strings"
+
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
 )
 
 var template string = `

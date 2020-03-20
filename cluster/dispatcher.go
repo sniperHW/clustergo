@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"github.com/sniperHW/sanguo/cluster/addr"
-	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -14,7 +13,7 @@ import (
 type MsgHandler func(addr.LogicAddr, proto.Message)
 
 var mtxHandler sync.Mutex
-var handlers map[string]MsgHandler = map[string]MsgHandler{}
+var handlers = map[uint16]MsgHandler{}
 var onPeerDisconnected func(addr.LogicAddr, error)
 
 func RegisterPeerDisconnected(cb func(addr.LogicAddr, error)) {
@@ -23,47 +22,46 @@ func RegisterPeerDisconnected(cb func(addr.LogicAddr, error)) {
 	onPeerDisconnected = cb
 }
 
-func Register(msg proto.Message, handler MsgHandler) {
+func Register(cmd uint16, handler MsgHandler) {
 	defer mtxHandler.Unlock()
 	mtxHandler.Lock()
 
-	msgName := reflect.TypeOf(msg).String()
 	if nil == handler {
 		//记录日志
-		Errorf("Register %s failed: handler is nil\n", msgName)
+		Errorf("Register %d failed: handler is nil\n", cmd)
 		return
 	}
-	_, ok := handlers[msgName]
+	_, ok := handlers[cmd]
 	if ok {
 		//记录日志
-		Errorf("Register %s failed: duplicate handler\n", msgName)
+		Errorf("Register %d failed: duplicate handler\n", cmd)
 		return
 	}
 
-	handlers[msgName] = handler
+	handlers[cmd] = handler
 }
 
-func pcall(handler MsgHandler, from addr.LogicAddr, name string, msg proto.Message) {
+func pcall(handler MsgHandler, from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
 			l := runtime.Stack(buf, false)
-			Errorf("error on Dispatch:%s\nstack:%v,%s\n", name, r, buf[:l])
+			Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
 		}
 	}()
 	handler(from, msg)
 }
 
-func dispatch(from addr.LogicAddr, name string, msg proto.Message) {
+func dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	if nil != msg {
 		mtxHandler.Lock()
-		handler, ok := handlers[name]
+		handler, ok := handlers[cmd]
 		mtxHandler.Unlock()
 		if ok {
-			pcall(handler, from, name, msg)
+			pcall(handler, from, cmd, msg)
 		} else {
 			//记录日志
-			Errorf("unkonw msg:%s\n", name)
+			Errorf("unkonw cmd:%d\n", cmd)
 		}
 	}
 }
@@ -78,7 +76,12 @@ func dispatchPeerDisconnected(peer addr.LogicAddr, err error) {
 	}
 }
 
-func dispatch_(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message, server bool) {
+func dispatch_(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message, server bool) {
+
+	if IsStoped() {
+		return
+	}
+
 	if nil != msg {
 		switch msg.(type) {
 		case *Heartbeat:
@@ -90,29 +93,17 @@ func dispatch_(from addr.LogicAddr, session kendynet.StreamSession, name string,
 				session.Send(heartbeat_resp)
 			}
 			break
-		case *AddForginServicesH2S:
-			onAddForginServicesH2S(msg.(*AddForginServicesH2S))
-			break
-		case *RemForginServicesH2S:
-			onRemForginServicesH2S(msg.(*RemForginServicesH2S))
-			break
-		case *AddForginServicesH2H:
-			onAddForginServicesH2H(msg.(*AddForginServicesH2H))
-			break
-		case *RemForginServicesH2H:
-			onRemForginServicesH2H(msg.(*RemForginServicesH2H))
-			break
 		default:
-			dispatch(from, name, msg)
+			dispatch(from, cmd, msg)
 			break
 		}
 	}
 }
 
-func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
-	dispatch_(from, session, name, msg, true)
+func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) {
+	dispatch_(from, session, cmd, msg, true)
 }
 
-func dispatchClient(from addr.LogicAddr, session kendynet.StreamSession, name string, msg proto.Message) {
-	dispatch_(from, session, name, msg, false)
+func dispatchClient(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) {
+	dispatch_(from, session, cmd, msg, false)
 }

@@ -1,14 +1,10 @@
 package cluster
 
 import (
-	"fmt"
-	"time"
-
 	"github.com/sniperHW/kendynet"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	"time"
 )
-
-var ErrDial error = fmt.Errorf("dail failed")
 
 func dialError(end *endPoint, session kendynet.StreamSession, err error) {
 
@@ -19,17 +15,23 @@ func dialError(end *endPoint, session kendynet.StreamSession, err error) {
 	}
 
 	/*
-	 * 如果end.conn != nil 表示两端同时请求建立连接，本端已经作为服务端成功接受了对端的连接
+	 * 如果end.session != nil 表示两端同时请求建立连接，本端已经作为服务端成功接受了对端的连接
 	 */
-	if nil == end.conn {
+	if nil == end.session {
 		//记录日志
 		Errorf("%s dial error:%s\n", end.addr.Logic.String(), err.Error())
 		end.pendingMsg = end.pendingMsg[0:0]
 		pendingCall := end.pendingCall
 		end.pendingCall = end.pendingCall[0:0]
+
+		rpcError := ERR_DIAL
+		if err == ERR_INVAILD_ENDPOINT {
+			rpcError = err
+		}
+
 		queue.PostNoWait(func() {
 			for _, r := range pendingCall {
-				r.cb(nil, ErrDial)
+				r.cb(nil, rpcError)
 			}
 		})
 	}
@@ -37,10 +39,15 @@ func dialError(end *endPoint, session kendynet.StreamSession, err error) {
 }
 
 func dialOK(end *endPoint, session kendynet.StreamSession) {
-	end.mtx.Lock()
-	defer end.mtx.Unlock()
-	onEstablishClient(end, session)
-	end.dialing = false
+	if end == getEndPoint(end.addr.Logic) {
+		end.mtx.Lock()
+		defer end.mtx.Unlock()
+		onEstablishClient(end, session)
+		end.dialing = false
+	} else {
+		//不再是合法的end
+		dialError(end, session, ERR_INVAILD_ENDPOINT)
+	}
 }
 
 func dialRet(end *endPoint, session kendynet.StreamSession, err error) {
@@ -60,7 +67,7 @@ func dial(end *endPoint) {
 
 		end.dialing = true
 
-		Infof("dial %s\n", end.addr.Logic.String())
+		Infof("dial %s %v\n", end.addr.Logic.String(), end.addr.Net)
 
 		go func() {
 			client, err := connector.New("tcp4", end.addr.Net.String())

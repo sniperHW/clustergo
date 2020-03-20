@@ -45,6 +45,10 @@ func (this *EventQueue) preparePost(fn interface{}, args ...interface{}) *elemen
 	return e
 }
 
+func (this *EventQueue) PostFullReturn(fn interface{}, args ...interface{}) error {
+	return this.eventQueue.AddNoWait(this.preparePost(fn, args...), true)
+}
+
 func (this *EventQueue) PostNoWait(fn interface{}, args ...interface{}) error {
 	return this.eventQueue.AddNoWait(this.preparePost(fn, args...))
 }

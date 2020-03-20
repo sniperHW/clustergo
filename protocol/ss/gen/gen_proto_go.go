@@ -166,8 +166,6 @@ func main() {
 	outLogger := golog.NewOutputLogger("log", "proto_gen_ss", 1024*1024*1000)
 	kendynet.InitLogger(golog.New("proto_gen_ss", outLogger))
 
-	os.MkdirAll("../proto/rpc", os.ModePerm)
-	os.MkdirAll("../proto/ssmessage", os.ModePerm)
 	os.MkdirAll("../ssmessage", os.ModePerm)
 	os.MkdirAll("../rpc", os.ModePerm)
 	gen_proto(message, proto_def.SS_message, "../proto/ssmessage")

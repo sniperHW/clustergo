@@ -1,6 +1,0 @@
-syntax = "proto2";
-package message;
-
-message heartbeat_toS {}
-
-message heartbeat_toC {}

@@ -2,15 +2,11 @@ package ss
 
 import (
 	"fmt"
-	codess "github.com/sniperHW/sanguo/codec/ss"
-	"github.com/sniperHW/sanguo/common"
-	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
-	ss_proto "github.com/sniperHW/sanguo/protocol/ss/message"
-	"sync/atomic"
-	"time"
-
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
+	"github.com/sniperHW/kendynet/socket/listener/tcp"
+	codess "github.com/sniperHW/sanguo/codec/ss"
+	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
+	"sync/atomic"
 )
 
 var (
@@ -31,7 +27,7 @@ type tcpListener struct {
 func newTcpListener(nettype, service string) (*tcpListener, error) {
 	var err error
 	l := &tcpListener{}
-	l.l, err = tcp.NewListener(nettype, service)
+	l.l, err = tcp.New(nettype, service)
 
 	if nil == err {
 		return l, nil
@@ -48,7 +44,7 @@ func (this *tcpListener) Start() error {
 	if nil == this.l {
 		return fmt.Errorf("invaild listener")
 	}
-	return this.l.Start(func(session kendynet.StreamSession) {
+	return this.l.Serve(func(session kendynet.StreamSession) {
 		//session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
 		session.SetReceiver(codess.NewReceiver("ss", "rpc_req", "rpc_resp"))
 		session.SetEncoder(codess.NewEncoder("ss", "rpc_req", "rpc_resp"))
@@ -58,15 +54,15 @@ func (this *tcpListener) Start() error {
 
 		dispatcher.OnNewClient(session)
 
-		session.Start(func(event *kendynet.Event) {
+		_ = session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
 				msg := event.Data.(*codess.Message)
 				switch msg.GetData().(type) {
-				case *ss_proto.Heartbeat:
-					session.Send(&ss_proto.Heartbeat{})
-					break
+				//case *ss_proto.:
+				//	session.Send(&ss_proto.Heartbeat{})
+				//	break
 				default:
 					dispatcher.Dispatch(session, msg)
 					break

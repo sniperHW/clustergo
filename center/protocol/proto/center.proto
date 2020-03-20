@@ -4,11 +4,12 @@ package protocol;
 message login {
 	required uint32 logicAddr   = 1;
 	required string netAddr     = 2;
-	optional uint32   exportService = 3;//是否对本组以外暴露服务,1是，2否
+	optional uint32 exportService = 3;//是否对本组以外暴露服务,1是，2否
 }
 
-message loginFailed {
-	required string msg  = 1;
+message loginRet {
+	required int32  errCode = 1;
+	optional string msg     = 2;
 }
 
 message heartbeatToCenter {
@@ -24,6 +25,10 @@ message nodeInfo {
 	required uint32 logicAddr     = 1;
 	required string netAddr       = 2;
 	optional uint32  exportService = 3;	
+}
+
+message nodeAdd {
+	repeated nodeInfo nodes = 1;
 }
 
 message notifyNodeInfo {

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
-	"unsafe"
+	//"unsafe"
 )
 
 func IsPow2(size uint64) bool {
@@ -274,6 +274,10 @@ func (this *ByteBuffer) PutUint16(idx uint64, value uint16) error {
 	return nil
 }
 
+func (this *ByteBuffer) PutInt16(idx uint64, value int16) error {
+	return this.PutUint16(idx, uint16(value))
+}
+
 func (this *ByteBuffer) PutUint32(idx uint64, value uint32) error {
 	sizeneed := (uint64)(4)
 	err := this.checkCapacity(idx, sizeneed)
@@ -285,6 +289,10 @@ func (this *ByteBuffer) PutUint32(idx uint64, value uint32) error {
 		this.datasize = idx + sizeneed
 	}
 	return nil
+}
+
+func (this *ByteBuffer) PutInt32(idx uint64, value int32) error {
+	return this.PutUint32(idx, uint32(value))
 }
 
 func (this *ByteBuffer) PutUint64(idx uint64, value uint64) error {
@@ -300,11 +308,16 @@ func (this *ByteBuffer) PutUint64(idx uint64, value uint64) error {
 	return nil
 }
 
+func (this *ByteBuffer) PutInt64(idx uint64, value int64) error {
+	return this.PutUint64(idx, uint64(value))
+}
+
 func (this *ByteBuffer) GetString(idx uint64, size uint64) (ret string, err error) {
 	var bytes []byte
 	bytes, err = this.GetBytes(idx, size)
 	if bytes != nil {
-		ret = *(*string)(unsafe.Pointer(&bytes))
+		ret = string(bytes)
+		//ret = *(*string)(unsafe.Pointer(&bytes))
 	}
 	return
 }
@@ -354,6 +367,14 @@ func (this *ByteBuffer) GetUint16(idx uint64) (ret uint16, err error) {
 	return
 }
 
+func (this *ByteBuffer) GetInt16(idx uint64) (ret int16, err error) {
+	u16, err := this.GetUint16(idx)
+	if nil == err {
+		ret = int16(u16)
+	}
+	return
+}
+
 func (this *ByteBuffer) GetUint32(idx uint64) (ret uint32, err error) {
 	err = nil
 	size := (uint64)(4)
@@ -369,6 +390,14 @@ func (this *ByteBuffer) GetUint32(idx uint64) (ret uint32, err error) {
 	return
 }
 
+func (this *ByteBuffer) GetInt32(idx uint64) (ret int32, err error) {
+	u32, err := this.GetUint32(idx)
+	if nil == err {
+		ret = int32(u32)
+	}
+	return
+}
+
 func (this *ByteBuffer) GetUint64(idx uint64) (ret uint64, err error) {
 	err = nil
 	size := (uint64)(8)
@@ -381,6 +410,14 @@ func (this *ByteBuffer) GetUint64(idx uint64) (ret uint64, err error) {
 		return
 	}
 	ret = binary.BigEndian.Uint64(this.buffer[idx : idx+size])
+	return
+}
+
+func (this *ByteBuffer) GetInt64(idx uint64) (ret int64, err error) {
+	u64, err := this.GetUint64(idx)
+	if nil == err {
+		ret = int64(u64)
+	}
 	return
 }
 
@@ -400,12 +437,24 @@ func (this *ByteBuffer) AppendUint16(value uint16) error {
 	return this.PutUint16(this.datasize, value)
 }
 
+func (this *ByteBuffer) AppendInt16(value int16) error {
+	return this.PutUint16(this.datasize, uint16(value))
+}
+
 func (this *ByteBuffer) AppendUint32(value uint32) error {
 	return this.PutUint32(this.datasize, value)
 }
 
+func (this *ByteBuffer) AppendInt32(value int32) error {
+	return this.PutUint32(this.datasize, uint32(value))
+}
+
 func (this *ByteBuffer) AppendUint64(value uint64) error {
 	return this.PutUint64(this.datasize, value)
+}
+
+func (this *ByteBuffer) AppendInt64(value int64) error {
+	return this.PutUint64(this.datasize, uint64(value))
 }
 
 func (this *ByteBuffer) Bytes() []byte {
@@ -437,6 +486,13 @@ func (this *BufferReader) GetUint16() (ret uint16, err error) {
 	return
 }
 
+func (this *BufferReader) GetInt16() (ret int16, err error) {
+	r, e := this.GetUint16()
+	ret = int16(r)
+	err = e
+	return
+}
+
 func (this *BufferReader) GetUint32() (ret uint32, err error) {
 	ret, err = this.buffer.GetUint32(this.offset)
 	if nil == err {
@@ -445,11 +501,25 @@ func (this *BufferReader) GetUint32() (ret uint32, err error) {
 	return
 }
 
+func (this *BufferReader) GetInt32() (ret int32, err error) {
+	r, e := this.GetUint32()
+	ret = int32(r)
+	err = e
+	return
+}
+
 func (this *BufferReader) GetUint64() (ret uint64, err error) {
 	ret, err = this.buffer.GetUint64(this.offset)
 	if nil == err {
 		this.offset += 8
 	}
+	return
+}
+
+func (this *BufferReader) GetInt64() (ret int64, err error) {
+	r, e := this.GetUint64()
+	ret = int64(r)
+	err = e
 	return
 }
 

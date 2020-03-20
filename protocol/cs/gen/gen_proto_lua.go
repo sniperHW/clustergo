@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
 	"github.com/sniperHW/sanguo/protocol/cs/proto_def"
 	"os"
+
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
 	//"strings"
 )
 
