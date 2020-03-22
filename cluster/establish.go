@@ -5,7 +5,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
-	"github.com/sniperHW/kendynet/timer"
+	//"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
@@ -24,7 +24,20 @@ func onEstablishClient(end *endPoint, session kendynet.StreamSession) {
 		session.Close("duplicate endPoint connection", 0)
 		return
 	}
-	onEstablish(end, session, true)
+
+	//不主动触发心跳，超时回收连接
+	/*
+		RegisterTimer(time.Second*(common.HeartBeat_Timeout/2), func(t *timer.Timer, _ interface{}) {
+			heartbeat := &Heartbeat{}
+			heartbeat.Timestamp1 = proto.Int64(time.Now().UnixNano())
+			heartbeat.OriginSender = proto.Uint32(uint32(selfAddr.Logic))
+			if kendynet.ErrSocketClose == session.Send(heartbeat) {
+				t.Cancel()
+			}
+		}, nil)
+	*/
+
+	onEstablish(end, session)
 
 }
 
@@ -48,7 +61,7 @@ func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamS
 			return ERR_DUP_CONN
 		}
 
-		onEstablish(end, session, false)
+		onEstablish(end, session)
 
 	} else {
 
@@ -68,7 +81,7 @@ func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamS
 			case *rpc.RPCResponse:
 				onRPCResponse(data.(*rpc.RPCResponse))
 			case proto.Message:
-				dispatchServer(from, session, msg.GetCmd(), data.(proto.Message))
+				dispatch(from, session, msg.GetCmd(), data.(proto.Message))
 			default:
 				Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
 			}
@@ -93,20 +106,9 @@ func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamS
 	return nil
 }
 
-func onEstablish(end *endPoint, session kendynet.StreamSession, isClient bool) {
+func onEstablish(end *endPoint, session kendynet.StreamSession) {
 
 	Infoln("onEstablish", end.addr.Logic.String(), session.LocalAddr(), session.RemoteAddr())
-
-	heartbeat := &Heartbeat{}
-
-	if isClient {
-		RegisterTimer(time.Second*(common.HeartBeat_Timeout/2), func(t *timer.Timer, _ interface{}) {
-			heartbeat.Timestamp1 = proto.Int64(time.Now().UnixNano())
-			if kendynet.ErrSocketClose == session.Send(heartbeat) {
-				t.Cancel()
-			}
-		}, nil)
-	}
 
 	session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
 	session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", selfAddr.Logic))
@@ -135,11 +137,7 @@ func onEstablish(end *endPoint, session kendynet.StreamSession, isClient bool) {
 		case *rpc.RPCResponse:
 			onRPCResponse(data.(*rpc.RPCResponse))
 		case proto.Message:
-			if isClient {
-				dispatchClient(from, session, msg.GetCmd(), data.(proto.Message))
-			} else {
-				dispatchServer(from, session, msg.GetCmd(), data.(proto.Message))
-			}
+			dispatch(from, session, msg.GetCmd(), data.(proto.Message))
 		default:
 			Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
 		}
