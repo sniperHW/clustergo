@@ -1,98 +1,86 @@
 package timer
 
 import (
+	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 var (
-	once      sync.Once
-	globalMgr *TimerMgr
+	globalMgr *TimerMgr = NewTimerMgr(runtime.NumCPU() * 4)
 )
 
-type TimerMgr struct {
+const (
+	waitting int32 = 0
+	firing   int32 = 1
+	removed  int32 = 2
+)
+
+type Timer struct {
+	eventQue *event.EventQueue
+	duration time.Duration
+	repeat   bool //是否重复定时器
+	status   int32
+	callback func(*Timer, interface{})
+	p        *p
+	ctx      interface{}
+	index    uint64
+	t        atomic.Value
+}
+
+type p struct {
 	sync.Mutex
-	notiChan    *util.Notifyer
-	minheap     util.MinHeap
 	index2Timer map[uint64]*Timer
 }
 
-func NewTimerMgr() *TimerMgr {
-	mgr := &TimerMgr{
-		notiChan:    util.NewNotifyer(),
-		minheap:     util.NewMinHeap(4096),
-		index2Timer: map[uint64]*Timer{},
-	}
-	go mgr.loop()
-	return mgr
+func (this *Timer) GetCTX() interface{} {
+	return this.ctx
 }
 
-func (this *TimerMgr) setTimer(t *Timer, inloop bool) {
-	t.expired = time.Now().Add(t.timeout)
-	this.Lock()
-	if t.index > 0 {
-		this.index2Timer[t.index] = t
-	}
-	this.minheap.Insert(t)
-	min := this.minheap.Min().(*Timer)
-	if (min == t || min.expired.After(t.expired)) && !inloop {
-		this.notiChan.Notify()
-	}
-	this.Unlock()
-}
-
-func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
-	this.Lock()
-	if t, ok := this.index2Timer[index]; ok {
-		this.Unlock()
-		return t
-	} else {
-		this.Unlock()
-		return nil
-	}
-}
-
-func (this *TimerMgr) loop() {
-	defaultSleepTime := 10 * time.Second
-	var tt *time.Timer
-	var min util.HeapElement
-	for {
-		now := time.Now()
-		for {
-			this.Lock()
-			min = this.minheap.Min()
-			if nil != min && now.After(min.(*Timer).expired) {
-				t := min.(*Timer)
-				this.minheap.PopMin()
-				if t.index > 0 {
-					delete(this.index2Timer, t.index)
-				}
-				this.Unlock()
-				t.call()
+func (this *Timer) call_() {
+	if atomic.CompareAndSwapInt32(&this.status, waitting, firing) {
+		if _, err := util.ProtectCall(this.callback, this, this.ctx); nil != err {
+			logger := kendynet.GetLogger()
+			if nil != logger {
+				logger.Errorln("error on timer:", err.Error())
 			} else {
-				this.Unlock()
-				break
+				fmt.Println("error on timer:", err.Error())
 			}
 		}
 
-		sleepTime := defaultSleepTime
-		if nil != min {
-			sleepTime = min.(*Timer).expired.Sub(now)
-		}
-		if nil != tt {
-			tt.Reset(sleepTime)
+		if this.repeat {
+			this.p.resetTicker(this)
 		} else {
-			tt = time.AfterFunc(sleepTime, func() {
-				this.notiChan.Notify()
-			})
+			atomic.StoreInt32(&this.status, removed)
+			if this.index != 0 {
+				this.p.Lock()
+				delete(this.p.index2Timer, this.index)
+				this.p.Unlock()
+			}
 		}
-
-		this.notiChan.Wait()
-		tt.Stop()
 	}
+}
+
+func (this *Timer) call() {
+	if nil == this.eventQue {
+		this.call_()
+	} else {
+		this.eventQue.PostNoWait(func() {
+			this.call_()
+		})
+	}
+}
+
+func newp() *p {
+	mgr := &p{
+		index2Timer: map[uint64]*Timer{},
+	}
+	return mgr
 }
 
 /*
@@ -101,30 +89,133 @@ func (this *TimerMgr) loop() {
  *  eventQue:   如果非nil,callback会被投递到eventQue，否则在定时器主循环中执行
  */
 
-func (this *TimerMgr) newTimer(timeout time.Duration, repeat bool, eventQue *event.EventQueue, fn func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+func (this *p) newTimer(timeout time.Duration, repeat bool, eventQue *event.EventQueue, fn func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
 	if nil != fn {
 		t := &Timer{
-			timeout:  timeout,
+			duration: timeout,
 			repeat:   repeat,
 			callback: fn,
 			eventQue: eventQue,
-			mgr:      this,
+			p:        this,
 			ctx:      ctx,
 			index:    index,
 		}
-		this.setTimer(t, false)
+		if this.addTimer(t, index) {
+			return t
+		} else {
+			return nil
+		}
+	} else {
+		return nil
+	}
+}
+
+func (this *p) addTimer(t *Timer, index uint64) bool {
+	if index > 0 {
+		this.Lock()
+		defer this.Unlock()
+		if _, ok := this.index2Timer[index]; ok {
+			return false
+		} else {
+			this.index2Timer[index] = t
+			t.t.Store(time.AfterFunc(t.duration, func() {
+				t.call()
+			}))
+		}
+	} else {
+		t.t.Store(time.AfterFunc(t.duration, func() {
+			t.call()
+		}))
+	}
+	return true
+}
+
+func (this *p) GetTimerByIndex(index uint64) *Timer {
+	this.Lock()
+	defer this.Unlock()
+	if t, ok := this.index2Timer[index]; ok {
 		return t
 	} else {
 		return nil
 	}
 }
 
+func (this *p) resetTicker(t *Timer) {
+	if atomic.CompareAndSwapInt32(&t.status, firing, waitting) {
+		duration := time.Duration(atomic.LoadInt64((*int64)(&t.duration)))
+		t.t.Store(time.AfterFunc(duration, func() {
+			t.call()
+		}))
+		if atomic.LoadInt32(&t.status) == removed {
+			t.t.Load().(*time.Timer).Stop()
+		}
+	}
+}
+
+func (this *p) resetFireTime(t *Timer, timeout time.Duration) bool {
+	if t.repeat || atomic.LoadInt32(&t.status) != waitting {
+		return false
+	}
+	return t.t.Load().(*time.Timer).Reset(timeout)
+}
+
+func (this *p) resetDuration(t *Timer, duration time.Duration) bool {
+	if !t.repeat {
+		return false
+	} else {
+		atomic.StoreInt64((*int64)(&t.duration), int64(duration))
+		for {
+			if atomic.LoadInt32(&t.status) == removed {
+				return false
+			} else {
+				if t.t.Load().(*time.Timer).Reset(duration) {
+					break
+				}
+			}
+		}
+		return true
+	}
+}
+
+func (this *p) remove(t *Timer) bool {
+	if atomic.CompareAndSwapInt32(&t.status, waitting, removed) {
+		t.t.Load().(*time.Timer).Stop()
+		if t.index > 0 {
+			this.Lock()
+			delete(this.index2Timer, t.index)
+			this.Unlock()
+		}
+		return true
+	} else {
+		atomic.StoreInt32(&t.status, removed)
+		return false
+	}
+}
+
+func (this *p) removeByIndex(index uint64) (bool, interface{}) {
+	this.Lock()
+	defer this.Unlock()
+	t, ok := this.index2Timer[index]
+	if ok {
+		if atomic.CompareAndSwapInt32(&t.status, waitting, removed) {
+			t.t.Load().(*time.Timer).Stop()
+			delete(this.index2Timer, t.index)
+			return true, t.ctx
+		} else {
+			atomic.StoreInt32(&t.status, removed)
+			return false, t.ctx
+		}
+	} else {
+		return false, nil
+	}
+}
+
 //一次性定时器
-func (this *TimerMgr) Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+func (this *p) Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
 	return this.newTimer(timeout, false, eventQue, callback, ctx, 0)
 }
 
-func (this *TimerMgr) OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+func (this *p) OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
 	if index > 0 {
 		return this.newTimer(timeout, false, eventQue, callback, ctx, index)
 	} else {
@@ -133,97 +224,54 @@ func (this *TimerMgr) OnceWithIndex(timeout time.Duration, eventQue *event.Event
 }
 
 //重复定时器
-func (this *TimerMgr) Repeat(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.newTimer(timeout, true, eventQue, callback, ctx, 0)
+func (this *p) Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.newTimer(duration, true, eventQue, callback, ctx, 0)
 }
 
-func (this *TimerMgr) remove(t *Timer) {
-	this.Lock()
-	defer this.Unlock()
-	if t.index > 0 {
-		delete(this.index2Timer, t.index)
+type TimerMgr struct {
+	slots []*p
+}
+
+func NewTimerMgr(num int) *TimerMgr {
+
+	m := &TimerMgr{
+		slots: make([]*p, num),
 	}
-	this.minheap.Remove(t)
+
+	for i, _ := range m.slots {
+		m.slots[i] = newp()
+	}
+
+	return m
 }
 
-type Timer struct {
-	sync.Mutex
-	heapIdx  int
-	expired  time.Time //到期时间
-	eventQue *event.EventQueue
-	timeout  time.Duration
-	repeat   bool //是否重复定时器
-	firing   bool
-	canceled bool
-	callback func(*Timer, interface{})
-	mgr      *TimerMgr
-	ctx      interface{}
-	index    uint64
+//一次性定时器
+func (this *TimerMgr) Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.slots[0].newTimer(timeout, false, eventQue, callback, ctx, 0)
 }
 
-func (this *Timer) Less(o util.HeapElement) bool {
-	return o.(*Timer).expired.After(this.expired)
-}
-
-func (this *Timer) GetIndex() int {
-	return this.heapIdx
-}
-
-func (this *Timer) SetIndex(idx int) {
-	this.heapIdx = idx
-}
-
-func (this *Timer) GetCTX() interface{} {
-	return this.ctx
-}
-
-func pcall(callback func(*Timer, interface{}), t *Timer) {
-	defer util.Recover(kendynet.GetLogger())
-	callback(t, t.ctx)
-}
-
-func (this *Timer) preCall() bool {
-	this.Lock()
-	if this.canceled {
-		this.Unlock()
-		return false
+func (this *TimerMgr) OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+	if index > 0 {
+		slot := int(index) % len(this.slots)
+		return this.slots[slot].newTimer(timeout, false, eventQue, callback, ctx, index)
 	} else {
-		this.firing = true
-		this.Unlock()
-		return true
+		return nil
 	}
 }
 
-func (this *Timer) call_(inloop bool) {
-
-	this.Lock()
-	if this.canceled {
-		this.Unlock()
-		return
-	} else {
-		this.firing = true
-		this.Unlock()
-	}
-
-	pcall(this.callback, this)
-	if this.repeat {
-		this.Lock()
-		defer this.Unlock()
-		if !this.canceled {
-			this.firing = false
-			this.mgr.setTimer(this, inloop)
-		}
-	}
+//重复定时器
+func (this *TimerMgr) Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.slots[0].newTimer(duration, true, eventQue, callback, ctx, 0)
 }
 
-func (this *Timer) call() {
-	if nil == this.eventQue {
-		this.call_(true)
-	} else {
-		this.eventQue.PostNoWait(func() {
-			this.call_(false)
-		})
-	}
+func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
+	slot := int(index) % len(this.slots)
+	return this.slots[slot].GetTimerByIndex(index)
+}
+
+func (this *TimerMgr) CancelByIndex(index uint64) (bool, interface{}) {
+	slot := int(index) % len(this.slots)
+	return this.slots[slot].removeByIndex(index)
 }
 
 /*
@@ -232,32 +280,37 @@ func (this *Timer) call() {
  *        一个go程中调用Cancel），对于重复定时器，可以保证定时器最多在执行一次之后终止。
  */
 func (this *Timer) Cancel() bool {
-	this.Lock()
-	if this.canceled {
-		this.Unlock()
-		return false
-	}
-	this.canceled = true
-	if !this.firing {
-		this.mgr.remove(this)
-	}
-	firing := this.firing
-	this.Unlock()
-	return firing == false
+	return this.p.remove(this)
+}
+
+//只对一次性定时器有效
+func (this *Timer) ResetFireTime(timeout time.Duration) bool {
+	return this.p.resetFireTime(this, timeout)
+}
+
+//只对重复定时器有效
+func (this *Timer) ResetDuration(duration time.Duration) bool {
+	return this.p.resetDuration(this, duration)
 }
 
 //一次性定时器
 func Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	once.Do(func() {
-		globalMgr = NewTimerMgr()
-	})
 	return globalMgr.Once(timeout, eventQue, callback, ctx)
 }
 
 //重复定时器
-func Repeat(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	once.Do(func() {
-		globalMgr = NewTimerMgr()
-	})
-	return globalMgr.Repeat(timeout, eventQue, callback, ctx)
+func Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return globalMgr.Repeat(duration, eventQue, callback, ctx)
+}
+
+func OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+	return globalMgr.OnceWithIndex(timeout, eventQue, callback, ctx, index)
+}
+
+func GetTimerByIndex(index uint64) *Timer {
+	return globalMgr.GetTimerByIndex(index)
+}
+
+func CancelByIndex(index uint64) (bool, interface{}) {
+	return globalMgr.CancelByIndex(index)
 }

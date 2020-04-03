@@ -74,40 +74,46 @@
 			"revisionTime": "2020-02-25T22:51:02Z"
 		},
 		{
-			"checksumSHA1": "/cAk43d5LtWNJX26OvCo0YauWl0=",
+			"checksumSHA1": "ATFdRK8S44hAfAEvPx0pW9fmsjo=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
-			"checksumSHA1": "eFvDkPB3uNfjyUcjgTO9ocrhF0Y=",
+			"checksumSHA1": "Xvsz2KvjiDOT0uFJwjHzVkm+7lg=",
+			"path": "github.com/sniperHW/kendynet/asyn",
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
+		},
+		{
+			"checksumSHA1": "Jo99p/leW8Z9hMLv0KH7lfwNS0Y=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
-			"checksumSHA1": "GbOwtuKtJMXAx8osvZ1jwbFTZs8=",
+			"checksumSHA1": "WKTN99w3LqRkic8uDQ1oBiiUurg=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
 			"checksumSHA1": "fQ6WtEsUGFzMSfbchZFYbL8fBBw=",
 			"path": "github.com/sniperHW/kendynet/message",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
-			"checksumSHA1": "MaESRpu/ST+0Uo8JfxvdpkQf20E=",
+			"checksumSHA1": "6789pI3x+ea+/047o3UlLZuU6P0=",
 			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
-			"checksumSHA1": "9EjbiK36+unGYu/ufJBeKg9hYzc=",
+			"checksumSHA1": "MGksytxwKshg6pBMdNfqTiM/blo=",
 			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
@@ -122,16 +128,16 @@
 			"revisionTime": "2020-02-11T06:44:43Z"
 		},
 		{
-			"checksumSHA1": "21UKpDwWb1PM2lsNMw1/NktApgU=",
+			"checksumSHA1": "fGniK7Nv7jnQKWjaETjLIRXsvcQ=",
 			"path": "github.com/sniperHW/kendynet/timer",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
-			"checksumSHA1": "3ZUXcOyFAV9n+fTF7nANcT57y30=",
+			"checksumSHA1": "ri0RtQ4DXK5nJVWeJGErnD1SOPE=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
+			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
 			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",

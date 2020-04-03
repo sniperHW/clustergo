@@ -145,9 +145,6 @@ func (this *SocketBase) SetCloseCallBack(cb func(kendynet.StreamSession, string)
 }
 
 func (this *SocketBase) SetEncoder(encoder kendynet.EnCoder) {
-	//this.mutex.Lock()
-	//defer this.mutex.Unlock()
-	//this.encoder = encoder
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.encoder)), unsafe.Pointer(&encoder))
 }
 
@@ -230,7 +227,7 @@ func (this *SocketBase) recvThreadFunc() {
 				} else if kendynet.IsNetTimeout(err) {
 					event.Data = kendynet.ErrRecvTimeout
 				} else {
-					kendynet.Errorf("ReceiveAndUnpack error:%s\n", err.Error())
+					kendynet.GetLogger().Errorf("ReceiveAndUnpack error:%s\n", err.Error())
 					this.flag |= (rclosed | wclosed)
 				}
 				this.mutex.Unlock()
