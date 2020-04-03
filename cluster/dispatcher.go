@@ -52,16 +52,34 @@ func pcall(handler MsgHandler, from addr.LogicAddr, cmd uint16, msg proto.Messag
 	handler(from, msg)
 }
 
-func dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message) {
+func dispatch(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) { //from addr.LogicAddr, cmd uint16, msg proto.Message) {
+	if IsStoped() {
+		return
+	}
+
 	if nil != msg {
-		mtxHandler.Lock()
-		handler, ok := handlers[cmd]
-		mtxHandler.Unlock()
-		if ok {
-			pcall(handler, from, cmd, msg)
-		} else {
-			//记录日志
-			Errorf("unkonw cmd:%d\n", cmd)
+		switch msg.(type) {
+		case *Heartbeat:
+			if msg.(*Heartbeat).GetOriginSender() != uint32(selfAddr.Logic) {
+				heartbeat := msg.(*Heartbeat)
+				heartbeat_resp := &Heartbeat{}
+				heartbeat_resp.OriginSender = proto.Uint32(msg.(*Heartbeat).GetOriginSender())
+				heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
+				heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
+				session.Send(heartbeat_resp)
+			}
+			break
+		default:
+			mtxHandler.Lock()
+			handler, ok := handlers[cmd]
+			mtxHandler.Unlock()
+			if ok {
+				pcall(handler, from, cmd, msg)
+			} else {
+				//记录日志
+				Errorf("unkonw cmd:%d\n", cmd)
+			}
+			break
 		}
 	}
 }
@@ -74,36 +92,4 @@ func dispatchPeerDisconnected(peer addr.LogicAddr, err error) {
 	if nil != h {
 		h(peer, err)
 	}
-}
-
-func dispatch_(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message, server bool) {
-
-	if IsStoped() {
-		return
-	}
-
-	if nil != msg {
-		switch msg.(type) {
-		case *Heartbeat:
-			if server {
-				heartbeat := msg.(*Heartbeat)
-				heartbeat_resp := &Heartbeat{}
-				heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
-				heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
-				session.Send(heartbeat_resp)
-			}
-			break
-		default:
-			dispatch(from, cmd, msg)
-			break
-		}
-	}
-}
-
-func dispatchServer(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) {
-	dispatch_(from, session, cmd, msg, true)
-}
-
-func dispatchClient(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) {
-	dispatch_(from, session, cmd, msg, false)
 }
