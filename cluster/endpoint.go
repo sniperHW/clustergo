@@ -23,9 +23,10 @@ type endPoint struct {
 	dialing       bool
 	session       kendynet.StreamSession
 	exportService uint32
-	centers       map[net.Addr]bool
+	centers       map[net.Addr]time.Time
 	timer         *timer.Timer
 	lastActive    time.Time //上次与endPotin通信的时间（收发均可）
+	//timestamp     time.Time
 }
 
 func (e *endPoint) isHarbor() bool {
@@ -165,7 +166,7 @@ func (this *serviceManager) addEndPoint(centerAddr net.Addr, peer *center_proto.
 
 	defer func() {
 		if nil != end {
-			end.centers[centerAddr] = true
+			end.centers[centerAddr] = time.Now()
 			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "addEndPoint", peerAddr.Logic.String(), "from", centerAddr.String(), "exportService", 1 == end.exportService)
 			this.onEndPointJoin(end)
 		}
@@ -179,14 +180,13 @@ func (this *serviceManager) addEndPoint(centerAddr net.Addr, peer *center_proto.
 			end.addr.Net = netAddr
 			end.Unlock()
 		}
-
 		return end
 	}
 
 	end = &endPoint{
 		addr:          peerAddr,
 		exportService: peer.GetExportService(),
-		centers:       map[net.Addr]bool{},
+		centers:       map[net.Addr]time.Time{},
 	}
 
 	ttMap := this.ttEndPointMap[peerAddr.Logic.Type()]
@@ -208,10 +208,26 @@ func (this *serviceManager) addEndPoint(centerAddr net.Addr, peer *center_proto.
 	return end
 }
 
-func (this *serviceManager) removeEndPoint(centerAddr net.Addr, peer addr.LogicAddr) {
+func (this *serviceManager) delayRemove(centerAddr net.Addr, remove []*center_proto.NodeInfo) {
+	timestamp := time.Now()
+	this.cluster.RegisterTimerOnce(timestamp.Add(time.Second*60), func(_ *timer.Timer, _ interface{}) {
+		for _, v := range remove {
+			this.removeEndPoint(centerAddr, addr.LogicAddr(v.GetLogicAddr()))
+		}
+	}, nil)
+}
+
+func (this *serviceManager) removeEndPoint(centerAddr net.Addr, peer addr.LogicAddr, ts ...time.Time) {
+	var timestamp time.Time
+	if len(ts) > 0 {
+		timestamp = ts[0]
+	} else {
+		timestamp = time.Now()
+	}
+
 	this.Lock()
 	defer this.Unlock()
-	if end, ok := this.idEndPointMap[peer]; ok {
+	if end, ok := this.idEndPointMap[peer]; ok && timestamp.After(end.centers[centerAddr]) {
 		delete(end.centers, centerAddr)
 		if 0 == len(end.centers) {
 			logger.Infoln("remove endPoint", peer.String())

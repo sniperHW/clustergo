@@ -114,9 +114,20 @@ func (this *Cluster) centerInit(export ...bool) {
 			this.serviceMgr.addEndPoint(session.RemoteAddr(), v)
 		}
 
-		for _, v := range remove {
-			this.serviceMgr.removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v.GetLogicAddr()))
-		}
+		/*
+		 *  在单一center的配置下，如果center crash之后重启，节点重新连接center,此时原集群中可能尚有部分节点未连接上center
+		 *  此时，NotifyNodeInfo将只包含部分节点。例如集群中原有1,2,3,4,4个节点,center崩溃重启后,1先连上center,此时收到的NotifyNodeInfo只有1。
+		 *  diff将把2,3,4计算到remove中。
+		 *
+		 *  如果直接将2,3,4删除，将导致到1与这些节点的通信暂时中断，直到2,3,4连上center并把信息发送到1。
+		 *
+		 *  为了避免这个中断，endpoint中添加了timestamp,当调用addEndPoint将更新timestamp。
+		 *  然后调用delayRemove,把本次要remove的end和时间记录下来，延迟到一定时间之后再执行。如果在延迟执行之前，2，3，4连上center并通告到1，1中对应的
+		 *  end将会更新timestamp，延迟执行时会比较end.timestamp和记录下的timestamp,如果end.timestamp更新将放弃删除。
+		 *
+		 */
+
+		this.serviceMgr.delayRemove(session.RemoteAddr(), remove)
 
 	})
 
