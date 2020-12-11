@@ -74,10 +74,16 @@
 			"revisionTime": "2020-02-25T22:51:02Z"
 		},
 		{
-			"checksumSHA1": "ATFdRK8S44hAfAEvPx0pW9fmsjo=",
+			"checksumSHA1": "rUt2jfzGZ4nPnSoDQncL6al3YMM=",
+			"path": "github.com/sniperHW/aiogo",
+			"revision": "47e75189fcf3661497a2f6a3047a0f23b4db4b84",
+			"revisionTime": "2020-04-17T02:42:34Z"
+		},
+		{
+			"checksumSHA1": "AKP8mk/n9wTKxBYhPZmKqtb1UNY=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
-			"revisionTime": "2020-04-03T01:30:55Z"
+			"revision": "7ef10f59a3da7c729596da4ff99816c1467052ce",
+			"revisionTime": "2020-12-11T02:20:01Z"
 		},
 		{
 			"checksumSHA1": "Xvsz2KvjiDOT0uFJwjHzVkm+7lg=",
@@ -104,16 +110,16 @@
 			"revisionTime": "2020-04-03T01:30:55Z"
 		},
 		{
-			"checksumSHA1": "6789pI3x+ea+/047o3UlLZuU6P0=",
+			"checksumSHA1": "itbMZlmYLpQv9ZmYJsO/XBqknD4=",
 			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
-			"revisionTime": "2020-04-03T01:30:55Z"
+			"revision": "7ef10f59a3da7c729596da4ff99816c1467052ce",
+			"revisionTime": "2020-12-11T02:20:01Z"
 		},
 		{
-			"checksumSHA1": "MGksytxwKshg6pBMdNfqTiM/blo=",
+			"checksumSHA1": "NykbUWe5TiKEQXruoH1puaD2Wxw=",
 			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "43192988f4bc9a930dc7c03e7f4a38cdeb7f5aa4",
-			"revisionTime": "2020-04-03T01:30:55Z"
+			"revision": "7ef10f59a3da7c729596da4ff99816c1467052ce",
+			"revisionTime": "2020-12-11T02:20:01Z"
 		},
 		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
@@ -122,10 +128,10 @@
 			"revisionTime": "2020-02-11T06:44:43Z"
 		},
 		{
-			"checksumSHA1": "HgHQCz6QFA+7P0rC+DT/9ECLzIs=",
+			"checksumSHA1": "7ZvMikiIlLJ0YEt+GzTd0ezIhDo=",
 			"path": "github.com/sniperHW/kendynet/socket/listener/tcp",
-			"revision": "7bdf70101da0c4a0cdb710567d1e5ba215e4bbfb",
-			"revisionTime": "2020-02-11T06:44:43Z"
+			"revision": "7ef10f59a3da7c729596da4ff99816c1467052ce",
+			"revisionTime": "2020-12-11T02:20:01Z"
 		},
 		{
 			"checksumSHA1": "fGniK7Nv7jnQKWjaETjLIRXsvcQ=",

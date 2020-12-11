@@ -5,58 +5,55 @@ import (
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"sort"
+	"strings"
 	"time"
 )
 
-const harbarType uint32 = 255
-
-var harborsByGroup map[uint32][]*endPoint = map[uint32][]*endPoint{}
-
-func isSelfHarbor() bool {
-	return selfAddr.Logic.Type() == harbarType
+func (this *serviceManager) isSelfHarbor() bool {
+	return this.cluster.serverState.selfAddr.Logic.Type() == harbarType
 }
 
-func getHarbor() *endPoint {
-	return getHarborByGroup(selfAddr.Logic.Group())
+func (this *serviceManager) getHarbor(m addr.LogicAddr) *endPoint {
+	return this.getHarborByGroup(this.cluster.serverState.selfAddr.Logic.Group(), m)
 }
 
-func getHarborByGroup(group uint32) *endPoint {
-	mtx.Lock()
-	defer mtx.Unlock()
-	harborGroup, ok := harborsByGroup[group]
+func (this *serviceManager) getHarborByGroup(group uint32, m addr.LogicAddr) *endPoint {
+	this.RLock()
+	defer this.RUnlock()
+	harborGroup, ok := this.harborsByGroup[group]
 	if ok && len(harborGroup) > 0 {
-		return harborGroup[0]
+		return harborGroup[int(m)%len(harborGroup)]
 	} else {
 		return nil
 	}
 }
 
-func addHarbor(harbor *endPoint) {
+func (this *serviceManager) addHarbor(harbor *endPoint) {
 
 	group := harbor.addr.Logic.Group()
 
-	harborGroup, ok := harborsByGroup[group]
+	harborGroup, ok := this.harborsByGroup[group]
 	if !ok {
-		harborsByGroup[group] = []*endPoint{harbor}
+		this.harborsByGroup[group] = []*endPoint{harbor}
 	} else {
-		for _, v := range harborsByGroup[group] {
+		for _, v := range this.harborsByGroup[group] {
 			if v.addr.Logic == harbor.addr.Logic {
 				return
 			}
 		}
-		harborsByGroup[group] = append(harborGroup, harbor)
+		this.harborsByGroup[group] = append(harborGroup, harbor)
 	}
 
-	Infoln("addHarbor", harbor.addr.Logic.String())
+	logger.Infoln("addHarbor", harbor.addr.Logic.String())
 
 }
 
-func removeHarbor(harbor *endPoint) {
+func (this *serviceManager) removeHarbor(harbor *endPoint) {
 	if nil != harbor.session {
 		harbor.session.Close("remove harbor", 0)
 	}
 	group := harbor.addr.Logic.Group()
-	harborGroup, ok := harborsByGroup[group]
+	harborGroup, ok := this.harborsByGroup[group]
 	if ok && len(harborGroup) > 0 {
 		i := 0
 		for ; i < len(harborGroup); i++ {
@@ -66,103 +63,34 @@ func removeHarbor(harbor *endPoint) {
 		}
 		if i != len(harborGroup) {
 			harborGroup[i], harborGroup[len(harborGroup)-1] = harborGroup[len(harborGroup)-1], harborGroup[i]
-			harborsByGroup[group] = harborGroup[:len(harborGroup)-1]
+			this.harborsByGroup[group] = harborGroup[:len(harborGroup)-1]
 		}
 	}
 }
 
-func postRelayError(peer addr.LogicAddr, msg *ss.RCPRelayErrorMessage) {
-
-	endPoint := getEndPoint(peer)
-	if nil == endPoint {
-		endPoint = getHarborByGroup(peer.Group())
-		if nil != endPoint && endPoint.addr.Logic == selfAddr.Logic {
-			Errorln("postRelayError ring!!!")
-			return
-		}
-	}
-
-	if nil != endPoint {
-		endPoint.mtx.Lock()
-		defer endPoint.mtx.Unlock()
-		if nil != endPoint.session {
-			endPoint.session.Send(msg)
-		} else {
-			endPoint.pendingMsg = append(endPoint.pendingMsg, msg)
-			//尝试与对端建立连接
-			dial(endPoint)
-		}
-	} else {
-		Errorf("postRelayError %s not found", peer.String())
-	}
-}
-
-func onRelayError(message *ss.RelayMessage, err string) {
-	if message.IsRPCReq() {
-		//通告请求端消息无法送达到目的地
-		msg := &ss.RCPRelayErrorMessage{
-			To:     message.From,
-			From:   selfAddr.Logic,
-			Seqno:  message.GetSeqno(),
-			ErrMsg: err,
-		}
-
-		Errorln("onRelayError", err)
-
-		postRelayError(message.From, msg)
-	}
-}
-
-func onRelayMessage(message *ss.RelayMessage) {
-	endPoint := getEndPoint(message.To)
-	if nil == endPoint {
-		endPoint = getHarborByGroup(message.To.Group())
-		if nil != endPoint && endPoint.addr.Logic == selfAddr.Logic {
-			Errorln("onRelayMessage ring!!!")
-			return
-		}
-	}
-
-	if nil != endPoint {
-		endPoint.mtx.Lock()
-		defer endPoint.mtx.Unlock()
-
-		if nil != endPoint.session {
-			endPoint.session.Send(message)
-		} else {
-			endPoint.pendingMsg = append(endPoint.pendingMsg, message)
-			//尝试与对端建立连接
-			dial(endPoint)
-		}
-	} else {
-		Infoln("unable route to target", message.To)
-		onRelayError(message, "unable route to target")
-	}
-}
-
-func onEndPointJoin(end *endPoint) {
-	if isSelfHarbor() {
+func (this *serviceManager) onEndPointJoin(end *endPoint) {
+	if this.isSelfHarbor() {
 		if end.addr.Logic.Type() == harbarType {
-			if end.addr.Logic.Group() != selfAddr.Logic.Group() {
+			if end.addr.Logic.Group() != this.cluster.serverState.selfAddr.Logic.Group() {
 				//新节点不是本组内的harbor,将本组内非harbor节点通告给它
 				forgins := []uint32{}
 
-				for k, v := range idEndPointMap {
+				for k, v := range this.idEndPointMap {
 					if v.exportService == 1 {
 						forgins = append(forgins, uint32(k))
 					}
 				}
 
-				NotifyForginServicesH2H(end, forgins)
+				this.NotifyForginServicesH2H(end, forgins)
 			}
 		} else {
 			if end.exportService == 1 {
-				Infoln("exportService", end.addr.Logic.String(), "join")
+				logger.Infoln("exportService", end.addr.Logic.String(), "join")
 				//通告非本group的其它harbor,有新节点加入,需要添加forginService
-				for g, v := range harborsByGroup {
-					if g != selfAddr.Logic.Group() {
+				for g, v := range this.harborsByGroup {
+					if g != this.cluster.serverState.selfAddr.Logic.Group() {
 						for _, vv := range v {
-							AddForginServicesH2H(vv, []uint32{uint32(end.addr.Logic)})
+							this.AddForginServicesH2H(vv, []uint32{uint32(end.addr.Logic)})
 						}
 					}
 				}
@@ -171,7 +99,7 @@ func onEndPointJoin(end *endPoint) {
 			//向新节点发送已知的forginService
 			forgins := []uint32{}
 
-			for tt, v := range ttForignServiceMap {
+			for tt, v := range this.ttForignServiceMap {
 				if tt != harbarType {
 					for _, vv := range v.services {
 						forgins = append(forgins, uint32(vv))
@@ -179,124 +107,146 @@ func onEndPointJoin(end *endPoint) {
 				}
 			}
 
-			NotifyForginServicesH2S(end, forgins)
+			this.NotifyForginServicesH2S(end, forgins)
 		}
 	}
 }
 
-func onEndPointLeave(end *endPoint) {
-	if isSelfHarbor() && end.addr.Logic.Type() != harbarType {
+func (this *serviceManager) onEndPointLeave(end *endPoint) {
+	if this.isSelfHarbor() && end.addr.Logic.Type() != harbarType {
 		//通告非本group的其它harbor,有节点离开,需要移除forginService
-		for g, v := range harborsByGroup {
-			if g != selfAddr.Logic.Group() {
+		for g, v := range this.harborsByGroup {
+			if g != this.cluster.serverState.selfAddr.Logic.Group() {
 				for _, vv := range v {
-					RemForginServicesH2H(vv, []uint32{uint32(end.addr.Logic)})
+					this.RemForginServicesH2H(vv, []uint32{uint32(end.addr.Logic)})
 				}
 			}
 		}
 	}
 }
 
-func NotifyForginServicesH2H(end *endPoint, nodes []uint32) {
+func nodes2Str(nodes []uint32) string {
+	s := []string{}
+	for _, v := range nodes {
+		t := addr.LogicAddr(v)
+		s = append(s, t.String())
+	}
+
+	return strings.Join(s, ",")
+}
+
+func (this *serviceManager) NotifyForginServicesH2H(end *endPoint, nodes []uint32) {
 	req := &NotifyForginServicesH2HReq{Nodes: nodes}
-	asynCall(end, req, 1000, func(_ interface{}, err error) {
+	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
 		if nil == err {
-			Infoln("NotifyForginServicesH2H to ", end.addr.Logic, "ok")
+			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "NotifyForginServicesH2H to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
 			go func() {
 				time.Sleep(time.Second)
-				if end == getEndPoint(end.addr.Logic) {
-					Infoln("NotifyForginServicesH2H to ", end.addr.Logic, "error", err, "try again")
-					NotifyForginServicesH2H(end, nodes)
+				if end == this.getEndPoint(end.addr.Logic) {
+					logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "NotifyForginServicesH2H to ", end.addr.Logic, "error", err, "try again", nodes2Str(nodes))
+					this.NotifyForginServicesH2H(end, nodes)
 				}
 			}()
 		}
 	})
 }
 
-func AddForginServicesH2H(end *endPoint, nodes []uint32) {
+func (this *serviceManager) AddForginServicesH2H(end *endPoint, nodes []uint32) {
 	req := &AddForginServicesH2HReq{Nodes: nodes}
-	asynCall(end, req, 1000, func(_ interface{}, err error) {
+	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
 		if nil == err {
-			Infoln("AddForginServicesH2H to ", end.addr.Logic, "ok")
+			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "AddForginServicesH2H to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
 			go func() {
 				time.Sleep(time.Second)
-				if end == getEndPoint(end.addr.Logic) {
-					Infoln("AddForginServicesH2H to ", end.addr.Logic, "error", err, "try again")
-					AddForginServicesH2H(end, nodes)
+				if end == this.getEndPoint(end.addr.Logic) {
+					logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "AddForginServicesH2H to ", end.addr.Logic, "error", err, "try again", nodes2Str(nodes))
+					this.AddForginServicesH2H(end, nodes)
 				}
 			}()
 		}
 	})
 }
 
-func NotifyForginServicesH2S(end *endPoint, nodes []uint32) {
+func (this *serviceManager) NotifyForginServicesH2S(end *endPoint, nodes []uint32) {
 	req := &NotifyForginServicesH2SReq{Nodes: nodes}
-	asynCall(end, req, 1000, func(_ interface{}, err error) {
+	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
 		if nil == err {
-			Infoln("NotifyForginServicesH2S to ", end.addr.Logic, "ok")
+			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "NotifyForginServicesH2S to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
 			go func() {
 				time.Sleep(time.Second)
-				if end == getEndPoint(end.addr.Logic) {
-					Infoln("NotifyForginServicesH2S to ", end.addr.Logic, "error", err, "try again")
-					NotifyForginServicesH2S(end, nodes)
+				if end == this.getEndPoint(end.addr.Logic) {
+					logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "NotifyForginServicesH2S to ", end.addr.Logic, "error", err, "try again", nodes2Str(nodes))
+					this.NotifyForginServicesH2S(end, nodes)
 				}
 			}()
 		}
 	})
 }
 
-func AddForginServicesH2S(end *endPoint, nodes []uint32) {
+func (this *serviceManager) AddForginServicesH2S(end *endPoint, nodes []uint32) {
 	req := &AddForginServicesH2SReq{Nodes: nodes}
-	asynCall(end, req, 1000, func(_ interface{}, err error) {
+	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
 		if nil == err {
-			Infoln("AddForginServicesH2S to ", end.addr.Logic, "ok")
+			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "AddForginServicesH2S to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
 			go func() {
 				time.Sleep(time.Second)
-				if end == getEndPoint(end.addr.Logic) {
-					Infoln("AddForginServicesH2S to ", end.addr.Logic, "error", err, "try again")
-					AddForginServicesH2S(end, nodes)
+				if end == this.getEndPoint(end.addr.Logic) {
+					logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "AddForginServicesH2S to ", end.addr.Logic, "error", err, "try again", nodes2Str(nodes))
+					this.AddForginServicesH2S(end, nodes)
 				}
 			}()
 		}
 	})
 }
 
-func RemForginServicesH2H(end *endPoint, nodes []uint32) {
+func (this *serviceManager) RemForginServicesH2H(end *endPoint, nodes []uint32) {
 	req := &RemForginServicesH2HReq{Nodes: nodes}
-	asynCall(end, req, 1000, func(_ interface{}, err error) {
+	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
 		if nil == err {
-			Infoln("RemForginServicesH2H to ", end.addr.Logic, "ok")
+			logger.Infoln("RemForginServicesH2H to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
 			go func() {
 				time.Sleep(time.Second)
-				if end == getEndPoint(end.addr.Logic) {
-					Infoln("RemForginServicesH2H to ", end.addr.Logic, "error", err, "try again")
-					RemForginServicesH2H(end, nodes)
+				if end == this.getEndPoint(end.addr.Logic) {
+					logger.Infoln("RemForginServicesH2H to ", end.addr.Logic, "error", err, "try again", nodes2Str(nodes))
+					this.RemForginServicesH2H(end, nodes)
 				}
 			}()
 		}
 	})
 }
 
-func RemForginServicesH2S(end *endPoint, nodes []uint32) {
+func (this *serviceManager) RemForginServicesH2S(end *endPoint, nodes []uint32) {
 	req := &RemForginServicesH2SReq{Nodes: nodes}
-	asynCall(end, req, 1000, func(_ interface{}, err error) {
+	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
 		if nil == err {
-			Infoln("RemForginServicesH2S to ", end.addr.Logic, "ok")
+			logger.Infoln("RemForginServicesH2S to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
 			go func() {
 				time.Sleep(time.Second)
-				if end == getEndPoint(end.addr.Logic) {
-					Infoln("RemForginServicesH2S to ", end.addr.Logic, "error", err, "try again")
-					RemForginServicesH2S(end, nodes)
+				if end == this.getEndPoint(end.addr.Logic) {
+					logger.Infoln("RemForginServicesH2S to ", end.addr.Logic, "error", err, "try again", nodes2Str(nodes))
+					this.RemForginServicesH2S(end, nodes)
 				}
 			}()
 		}
 	})
+}
+
+func (this *serviceManager) brocastH2S(fn func(*endPoint, []uint32), nodes []uint32) {
+	this.RLock()
+	defer this.RUnlock()
+	for tt, v := range this.ttEndPointMap {
+		if tt != harbarType {
+			for _, vv := range v.endPoints {
+				fn(vv, nodes)
+			}
+		}
+	}
 }
 
 func diff2(a, b []uint32) ([]uint32, []uint32) {
@@ -348,57 +298,39 @@ func diff2(a, b []uint32) ([]uint32, []uint32) {
 	return add, remove
 }
 
-func init() {
+func (this *serviceManager) initHarbor() {
 
-	RegisterMethod(&NotifyForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&NotifyForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("NotifyForginServicesH2HReq")
-		if isSelfHarbor() {
+		if this.isSelfHarbor() {
 
 			msg := req.(*NotifyForginServicesH2HReq)
 
-			current := []uint32{}
+			current := this.getAllForginService()
 
-			endPoints := []*endPoint{}
+			endPoints := this.getAllEndpoints()
 
-			Infoln("NotifyForginServicesH2HReq", msg.GetNodes())
-
-			mtx.Lock()
-			for _, v1 := range ttForignServiceMap {
-				for _, v2 := range v1.services {
-					current = append(current, uint32(v2))
-				}
-			}
-
-			for tt, v := range ttEndPointMap {
-				if tt != harbarType {
-					for _, vv := range v.endPoints {
-						endPoints = append(endPoints, vv)
-					}
-				}
-			}
-
-			mtx.Unlock()
+			//logger.Infoln("NotifyForginServicesH2HReq", msg.GetNodes())
 
 			add, remove := diff2(msg.GetNodes(), current)
 
 			for _, v := range add {
-				addForginService(addr.LogicAddr(v))
+				this.addForginService(addr.LogicAddr(v))
 			}
 
 			for _, v := range remove {
-				removeForginService(addr.LogicAddr(v))
+				this.removeForginService(addr.LogicAddr(v))
 			}
 
 			for _, v := range endPoints {
 
 				if len(add) != 0 {
-					AddForginServicesH2S(v, add)
+					this.AddForginServicesH2S(v, add)
 				}
 
 				if len(remove) != 0 {
-					RemForginServicesH2S(v, remove)
+					this.RemForginServicesH2S(v, remove)
 				}
-
 			}
 
 		}
@@ -406,47 +338,118 @@ func init() {
 		replyer.Reply(&NotifyForginServicesH2HResp{}, nil)
 	})
 
-	RegisterMethod(&AddForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&AddForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("AddForginServicesH2HReq")
-		if isSelfHarbor() {
+		if this.isSelfHarbor() {
 			msg := req.(*AddForginServicesH2HReq)
 			for _, v := range msg.GetNodes() {
-				addForginService(addr.LogicAddr(v))
+				this.addForginService(addr.LogicAddr(v))
 			}
 			//向所有非harbor节点通告
-			mtx.Lock()
-			for tt, v := range ttEndPointMap {
-				if tt != harbarType {
-					for _, vv := range v.endPoints {
-						AddForginServicesH2S(vv, msg.GetNodes())
-					}
-				}
-			}
-			mtx.Unlock()
+			this.brocastH2S(this.AddForginServicesH2S, msg.GetNodes())
 		}
 		replyer.Reply(&AddForginServicesH2HResp{}, nil)
 	})
 
-	RegisterMethod(&RemForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&RemForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("RemForginServicesH2HReq")
-		if isSelfHarbor() {
+		if this.isSelfHarbor() {
 			msg := req.(*RemForginServicesH2HReq)
 			for _, v := range msg.GetNodes() {
-				removeForginService(addr.LogicAddr(v))
+				this.removeForginService(addr.LogicAddr(v))
 			}
-
 			//向所有非harbor节点通告
-			mtx.Lock()
-			for tt, v := range ttEndPointMap {
-				if tt != harbarType {
-					for _, vv := range v.endPoints {
-						RemForginServicesH2S(vv, msg.GetNodes())
-					}
-				}
-			}
-			mtx.Unlock()
+			this.brocastH2S(this.RemForginServicesH2S, msg.GetNodes())
 		}
 		replyer.Reply(&RemForginServicesH2HResp{}, nil)
 
 	})
+}
+
+func (this *Cluster) postRelayError(peer addr.LogicAddr, msg *ss.RCPRelayErrorMessage) {
+
+	endPoint := this.serviceMgr.getEndPoint(peer)
+	if nil == endPoint {
+		endPoint = this.serviceMgr.getHarborByGroup(peer.Group(), peer)
+		if nil != endPoint && endPoint.addr.Logic == this.serverState.selfAddr.Logic {
+			logger.Errorln("postRelayError ring!!!")
+			return
+		}
+	}
+
+	if nil != endPoint {
+		endPoint.Lock()
+		defer endPoint.Unlock()
+		if nil != endPoint.session {
+			endPoint.session.Send(msg)
+		} else {
+			endPoint.pendingMsg = append(endPoint.pendingMsg, msg)
+			//尝试与对端建立连接
+			this.dial(endPoint, 0)
+		}
+	} else {
+		logger.Errorf("postRelayError %s not found", peer.String())
+	}
+}
+
+func (this *Cluster) onRelayError(message *ss.RelayMessage, err string) {
+	if message.IsRPCReq() {
+		//通告请求端消息无法送达到目的地
+		msg := &ss.RCPRelayErrorMessage{
+			To:     message.From,
+			From:   this.serverState.selfAddr.Logic,
+			Seqno:  message.GetSeqno(),
+			ErrMsg: err,
+		}
+
+		logger.Errorln("onRelayError", err)
+
+		this.postRelayError(message.From, msg)
+	}
+}
+
+func (this *Cluster) onRelayMessage(message *ss.RelayMessage) {
+
+	logger.Debugln(this.serverState.selfAddr.Logic.String(), "onRelayMessage target:", message.To, "from", message.From)
+
+	endPoint := this.serviceMgr.getEndPoint(message.To)
+	if nil == endPoint {
+		if message.To.Group() != this.serverState.selfAddr.Logic.Group() {
+			//不同group要求harbor转发
+			endPoint = this.serviceMgr.getHarborByGroup(message.To.Group(), message.To)
+			if nil != endPoint && endPoint.addr.Logic == this.serverState.selfAddr.Logic {
+				logger.Errorln("onRelayMessage ring!!!")
+				return
+			}
+		} else {
+			//同group,server为0,则从本地随机选择一个符合type的server
+			if message.To.Server() == 0 {
+				if addr, err := this.Random(message.To.Type()); nil == err {
+					endPoint = this.serviceMgr.getEndPoint(addr)
+					//需要将to设置为正确的地址，否则无法转发
+					message.ResetTo(addr)
+				}
+			}
+		}
+	}
+
+	if nil != endPoint {
+		endPoint.Lock()
+		defer endPoint.Unlock()
+
+		if nil != endPoint.session {
+			err := endPoint.session.Send(message)
+			if nil != err {
+				logger.Debugln(err)
+			}
+
+		} else {
+			endPoint.pendingMsg = append(endPoint.pendingMsg, message)
+			//尝试与对端建立连接
+			this.dial(endPoint, 0)
+		}
+	} else {
+		logger.Infoln("unable route to target", message.To)
+		this.onRelayError(message, "unable route to target")
+	}
 }

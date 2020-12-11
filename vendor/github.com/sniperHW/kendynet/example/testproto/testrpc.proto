@@ -1,0 +1,33 @@
+syntax = "proto2";
+package testproto;
+
+message RPCRequest {
+	required uint64 seq = 1;
+	required string method = 2;
+	optional bytes  arg = 3;
+	optional bool   needResp = 4;
+}
+
+message RPCResponse {
+	required uint64 seq = 1;
+	optional string err = 2;
+	optional bytes  ret = 3;	
+}
+
+message RPCPing {
+	required uint64 seq = 1;
+	required int64  timestamp = 2;	
+}
+
+message RPCPong {
+	required uint64 seq = 1;
+	required int64  timestamp = 2;	
+}
+
+message hello {
+	required string hello = 1;
+}
+
+message world {
+	required string world = 1;
+}

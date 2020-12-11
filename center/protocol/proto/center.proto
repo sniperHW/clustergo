@@ -39,3 +39,7 @@ message nodeLeave {
 	repeated uint32 nodes = 1;
 }
 
+message removeNode {
+	repeated uint32 nodes = 2;
+}
+

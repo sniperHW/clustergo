@@ -3,22 +3,21 @@ package cluster
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	center_proto "github.com/sniperHW/sanguo/center/protocol"
+	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/common"
 	"io"
 	"net"
 	"time"
 )
 
-func login(end *endPoint, session kendynet.StreamSession) {
+func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counter int) {
 	go func() {
 		conn := session.GetUnderConn().(*net.TCPConn)
-		logicAddr := selfAddr.Logic
+		logicAddr := this.serverState.selfAddr.Logic
 		buffer := kendynet.NewByteBuffer(64)
 		buffer.AppendUint32(uint32(logicAddr))
-		netAddr := selfAddr.Net.String()
+		netAddr := this.serverState.selfAddr.Net.String()
 		netAddrSize := len(netAddr)
 		buffer.AppendUint16(uint16(netAddrSize))
 		buffer.AppendString(netAddr)
@@ -30,7 +29,7 @@ func login(end *endPoint, session kendynet.StreamSession) {
 		conn.SetWriteDeadline(time.Time{})
 
 		if nil != err {
-			dialError(end, session, err)
+			this.dialError(end, session, err, counter)
 		} else {
 			var err error
 			buffer := make([]byte, 4)
@@ -40,6 +39,7 @@ func login(end *endPoint, session kendynet.StreamSession) {
 				if nil != err {
 					break
 				}
+				conn.SetReadDeadline(time.Time{})
 
 				ret := binary.BigEndian.Uint32(buffer)
 
@@ -50,15 +50,15 @@ func login(end *endPoint, session kendynet.StreamSession) {
 			}
 
 			if nil != err {
-				dialError(end, session, err)
+				this.dialError(end, session, err, counter)
 			} else {
-				dialOK(end, session)
+				this.dialOK(end, session)
 			}
 		}
 	}()
 }
 
-func auth(session kendynet.StreamSession) (*center_proto.NodeInfo, error) {
+func (this *Cluster) auth(session kendynet.StreamSession) (*endPoint, error) {
 	buffer := make([]byte, 64)
 	var err error
 	conn := session.GetUnderConn().(*net.TCPConn)
@@ -66,28 +66,53 @@ func auth(session kendynet.StreamSession) (*center_proto.NodeInfo, error) {
 	conn.SetReadDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
 	_, err = io.ReadFull(conn, buffer)
 	if nil != err {
-		session.Close(err.Error(), 0)
 		return nil, err
 	}
+	conn.SetReadDeadline(time.Time{})
 
+	reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer, 64))
+	logicAddr, _ := reader.GetUint32()
+
+	end, err := func() (*endPoint, error) {
+		end := this.serviceMgr.getEndPoint(addr.LogicAddr(logicAddr))
+		if nil == end {
+			return nil, ERR_INVAILD_ENDPOINT
+		}
+
+		end.Lock()
+		defer end.Unlock()
+
+		if end.session != nil {
+			/*
+			 *如果end.session != nil 表示两端同时请求建立连接，本端已经作为客户端成功与对端建立连接
+			 */
+			logger.Infoln("auth dup", end.addr.Logic.String())
+			return nil, ERR_DUP_CONN
+		}
+
+		return end, nil
+	}()
+
+	//send resp
 	resp := kendynet.NewByteBuffer(4)
-	resp.PutUint32(0, 0)
-	conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
-	_, err = conn.Write(resp.Bytes())
-
-	if nil != err {
-		session.Close(err.Error(), 0)
-		return nil, err
+	if nil == err {
+		resp.PutUint32(0, 0)
 	} else {
-		conn.SetWriteDeadline(time.Time{})
-		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer, 64))
-		logicAddr, _ := reader.GetUint32()
-		strLen, _ := reader.GetUint16()
-		netAddr, _ := reader.GetString(uint64(strLen))
-
-		return &center_proto.NodeInfo{
-			LogicAddr: proto.Uint32(logicAddr),
-			NetAddr:   proto.String(netAddr),
-		}, nil
+		resp.PutUint32(0, 1)
 	}
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+	_, sendErr := conn.Write(resp.Bytes())
+	conn.SetWriteDeadline(time.Time{})
+
+	if nil == sendErr {
+		return end, err
+	} else {
+		if nil == err {
+			return nil, err
+		} else {
+			return nil, sendErr
+		}
+	}
+
 }

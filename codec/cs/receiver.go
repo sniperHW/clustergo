@@ -53,6 +53,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 	if unpackSize >= HeadSize {
 
 		var payload uint16
+		var seqNo uint32
 		var flag uint16
 		var cmd uint16
 		var errCode uint16
@@ -77,6 +78,10 @@ func (this *Receiver) unPack() (interface{}, error) {
 		}
 
 		if fullSize <= unpackSize {
+			if seqNo, err = reader.GetUint32(); err != nil {
+				return nil, err
+			}
+
 			if flag, err = reader.GetUint16(); err != nil {
 				return nil, err
 			}
@@ -89,7 +94,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 				return nil, err
 			}
 
-			size := payload - (SizeCmd + SizeFlag + SizeErr)
+			size := payload - (HeadSize - SizeLen)
 			if buff, err = reader.GetBytes(uint64(size)); err != nil {
 				return nil, err
 			}
@@ -131,7 +136,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 
 			message := &Message{
 				//name:    pb.GetNameByID(this.namespace, uint32(cmd)),
-				seriNO:  (flag & 0x3FFF),
+				seriNO:  seqNo,
 				data:    msg,
 				cmd:     cmd,
 				errCode: errCode,
@@ -188,12 +193,13 @@ func (this *Receiver) DirectUnpack(buff []byte) (interface{}, error) {
 }
 
 //SizeLen  = 2
+//SizeSeqNo  = 4
 //SizeFlag = 2
 //SizeCmd  = 2
 //SizeErr  = 2
-func FetchSeqCmdCode(buff []byte) (uint16, uint16, uint16) {
-	seqno := binary.BigEndian.Uint16(buff[2:2+2]) & 0x3FFF
-	cmd := binary.BigEndian.Uint16(buff[4 : 4+2])
-	code := binary.BigEndian.Uint16(buff[6 : 6+2])
+func FetchSeqCmdCode(buff []byte) (uint32, uint16, uint16) {
+	seqno := binary.BigEndian.Uint32(buff[2 : 2+4])
+	cmd := binary.BigEndian.Uint16(buff[8 : 8+2])
+	code := binary.BigEndian.Uint16(buff[10 : 10+2])
 	return seqno, cmd, code
 }

@@ -126,7 +126,7 @@ func (this *Encoder) encode(o interface{}, relayInfo []addr.LogicAddr) (kendynet
 		buff.AppendBytes(pbbytes)
 
 		if totalLen != len(buff.Bytes()) {
-			kendynet.Errorf("totalLen error %d %d\n", totalLen, len(buff.Bytes()))
+			kendynet.GetLogger().Errorf("totalLen error %d %d\n", totalLen, len(buff.Bytes()))
 			os.Exit(0)
 		}
 

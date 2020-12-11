@@ -4,13 +4,12 @@ import (
 	"github.com/sniperHW/kendynet/golog"
 )
 
-var logger golog.LoggerI
-
 func InitLogger(l golog.LoggerI) {
 	logger = l
 
 }
 
+/*
 func Debugf(format string, v ...interface{}) {
 	if nil != logger {
 		logger.Debugf(format, v...)
@@ -70,3 +69,4 @@ func Fatalln(v ...interface{}) {
 		logger.Fatalln(v...)
 	}
 }
+*/

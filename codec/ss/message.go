@@ -60,6 +60,11 @@ func (this *RelayMessage) GetSeqno() uint64 {
 	return binary.BigEndian.Uint64(this.data[beg:end])
 }
 
+func (this *RelayMessage) ResetTo(to addr.LogicAddr) {
+	this.To = to
+	binary.BigEndian.PutUint32(this.data[5:5+4], uint32(to))
+}
+
 func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, data []byte) *RelayMessage {
 	m := &RelayMessage{
 		To:   to,

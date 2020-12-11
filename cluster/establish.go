@@ -7,7 +7,6 @@ import (
 	"github.com/sniperHW/kendynet/rpc"
 	//"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
-	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
@@ -15,12 +14,17 @@ import (
 	"time"
 )
 
-func onEstablishClient(end *endPoint, session kendynet.StreamSession) {
+func (this *Cluster) onEstablishClient(end *endPoint, session kendynet.StreamSession) {
+
+	end.Lock()
+	defer end.Unlock()
+	end.dialing = false
+
 	if nil != end.session {
 		/*
 		 * 如果end.conn != nil 表示两端同时请求建立连接，本端已经作为服务端成功接受了对端的连接
 		 */
-		Infof("endPoint:%s already have connection\n", end.addr.Logic.String())
+		logger.Infof("endPoint:%s already have connection\n", end.addr.Logic.String())
 		session.Close("duplicate endPoint connection", 0)
 		return
 	}
@@ -37,22 +41,20 @@ func onEstablishClient(end *endPoint, session kendynet.StreamSession) {
 		}, nil)
 	*/
 
-	onEstablish(end, session)
+	this.onEstablish(end, session)
 
 }
 
-func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamSession) error {
+func (this *Cluster) onEstablishServer(end *endPoint, session kendynet.StreamSession) error {
 
-	if nodeInfo.GetLogicAddr() != uint32(selfAddr.Logic) {
+	if end.addr.Logic != this.serverState.selfAddr.Logic {
 
-		end := getEndPoint(addr.LogicAddr(nodeInfo.GetLogicAddr()))
-
-		if nil == end {
+		if end != this.serviceMgr.getEndPoint(addr.LogicAddr(end.addr.Logic)) {
 			return ERR_INVAILD_ENDPOINT
 		}
 
-		end.mtx.Lock()
-		defer end.mtx.Unlock()
+		end.Lock()
+		defer end.Unlock()
 
 		if end.session != nil {
 			/*
@@ -61,43 +63,40 @@ func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamS
 			return ERR_DUP_CONN
 		}
 
-		onEstablish(end, session)
-
+		this.onEstablish(end, session)
 	} else {
 
-		//自连接
+		//自连接server
 
 		f := func(args []interface{}) {
 			msg := args[0].(*ss.Message)
 			from := msg.From()
 			if addr.LogicAddr(0) == from {
-				from = addr.LogicAddr(nodeInfo.GetLogicAddr())
+				from = end.addr.Logic
 			}
 
 			data := msg.GetData()
 			switch data.(type) {
 			case *rpc.RPCRequest:
-				onRPCRequest(getEndPoint(selfAddr.Logic), from, data.(*rpc.RPCRequest))
+				this.rpcMgr.onRPCRequest(end, from, data.(*rpc.RPCRequest))
 			case *rpc.RPCResponse:
-				onRPCResponse(data.(*rpc.RPCResponse))
+				this.rpcMgr.onRPCResponse(data.(*rpc.RPCResponse))
 			case proto.Message:
-				dispatch(from, session, msg.GetCmd(), data.(proto.Message))
+				this.dispatch(from, session, msg.GetCmd(), data.(proto.Message))
 			default:
-				Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
+				logger.Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
 			}
 		}
 
-		//自连接不需要建立endpoint
-		session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
-		session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", selfAddr.Logic))
+		session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
 		session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
 		session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
-				err := queue.PostFullReturn(f, event.Data.(*ss.Message))
+				err := this.queue.PostFullReturn(f, event.Data.(*ss.Message))
 				if err == util.ErrQueueFull {
-					Errorln("event queue full discard message")
+					logger.Errorln("event queue full discard message")
 				}
 			}
 		})
@@ -106,21 +105,20 @@ func onEstablishServer(nodeInfo *center_proto.NodeInfo, session kendynet.StreamS
 	return nil
 }
 
-func onEstablish(end *endPoint, session kendynet.StreamSession) {
+func (this *Cluster) onEstablish(end *endPoint, session kendynet.StreamSession) {
 
-	Infoln("onEstablish", end.addr.Logic.String(), session.LocalAddr(), session.RemoteAddr())
+	logger.Infoln("onEstablish", end, this.serverState.selfAddr.Logic.String(), "<--->", end.addr.Logic.String(), session.LocalAddr(), session.RemoteAddr())
 
-	session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
-	session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", selfAddr.Logic))
+	session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
 	session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
 	session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-		end.mtx.Lock()
-		defer end.mtx.Unlock()
-		end.session = nil
-		Infoln("disconnected error:", end.addr.Logic.String(), reason, sess.LocalAddr(), sess.RemoteAddr())
+		logger.Infoln("disconnected error:", end.addr.Logic.String(), reason, sess.LocalAddr(), sess.RemoteAddr())
 		err := fmt.Errorf(reason)
-		queue.PostNoWait(func() { dispatchPeerDisconnected(end.addr.Logic, err) })
+		this.queue.PostNoWait(func() {
+			this.onPeerDisconnected(end.addr.Logic, err)
+		})
 	})
+
 	end.session = session
 
 	f := func(args []interface{}) {
@@ -133,65 +131,77 @@ func onEstablish(end *endPoint, session kendynet.StreamSession) {
 		data := msg.GetData()
 		switch data.(type) {
 		case *rpc.RPCRequest:
-			onRPCRequest(end, from, data.(*rpc.RPCRequest))
+			this.rpcMgr.onRPCRequest(end, from, data.(*rpc.RPCRequest))
 		case *rpc.RPCResponse:
-			onRPCResponse(data.(*rpc.RPCResponse))
+			this.rpcMgr.onRPCResponse(data.(*rpc.RPCResponse))
 		case proto.Message:
-			dispatch(from, session, msg.GetCmd(), data.(proto.Message))
+			this.dispatch(from, session, msg.GetCmd(), data.(proto.Message))
 		default:
-			Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
+			logger.Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
 		}
 	}
 
 	session.Start(func(event *kendynet.Event) {
 		if event.EventType == kendynet.EventTypeError {
-			event.Session.Close(event.Data.(error).Error(), 0)
+			end.closeSession(event.Data.(error).Error())
 		} else {
+			end.lastActive = time.Now()
 			switch event.Data.(type) {
 			case *ss.Message:
-				err := queue.PostFullReturn(f, event.Data.(*ss.Message))
+				err := this.queue.PostFullReturn(f, event.Data.(*ss.Message))
 				if err == util.ErrQueueFull {
-					Errorln("event queue full discard message")
+					logger.Errorln("event queue full discard message")
 				}
 				break
 			case *ss.RelayMessage:
-				if selfAddr.Logic.Type() == harbarType {
-					onRelayMessage(event.Data.(*ss.RelayMessage))
+				if this.serverState.selfAddr.Logic.Type() == harbarType {
+					this.onRelayMessage(event.Data.(*ss.RelayMessage))
 				}
 				break
 			default:
-				Errorf("invaild message type\n")
+				logger.Errorf("invaild message type\n")
 				break
 			}
 		}
 	})
+
+	now := time.Now()
+
+	end.lastActive = now
+
+	//自连接不需要建立timer
+	if end.addr.Logic != this.serverState.selfAddr.Logic {
+		end.timer = this.RegisterTimer(common.HeartBeat_Timeout*time.Second/2, end.onTimerTimeout, nil)
+	}
 
 	pendingMsg := end.pendingMsg
 	end.pendingMsg = []interface{}{}
 	for _, v := range pendingMsg {
 		session.Send(v)
 	}
+
 	pendingCall := end.pendingCall
 	end.pendingCall = []*rpcCall{}
 
-	now := time.Now()
-
 	for _, v := range pendingCall {
+
 		if now.After(v.deadline) {
 			//连接消费的事件已经超过请求的超时时间
-			queue.PostNoWait(func() { v.cb(nil, rpc.ErrCallTimeout) })
+			this.queue.PostNoWait(func() { v.cb(nil, rpc.ErrCallTimeout) })
 		} else {
 			remain := v.deadline.Sub(now)
 			if remain <= time.Millisecond {
 				//剩余1毫秒,几乎肯定超时，没有调用的必要
-				queue.PostNoWait(func() { v.cb(nil, rpc.ErrCallTimeout) })
+				this.queue.PostNoWait(func() { v.cb(nil, rpc.ErrCallTimeout) })
 			} else {
-				err := rpcClient.AsynCall(&RPCChannel{
-					to:   v.to,
-					peer: end,
+				err := this.rpcMgr.client.AsynCall(&RPCChannel{
+					to:      v.to,
+					peer:    end,
+					cluster: this,
 				}, "rpc", v.arg, remain, v.cb)
+
 				if nil != err {
-					queue.PostNoWait(func() { v.cb(nil, err) })
+					this.queue.PostNoWait(func() { v.cb(nil, err) })
 				}
 			}
 		}

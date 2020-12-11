@@ -7,19 +7,19 @@ import (
 )
 
 type Message struct {
-	seriNO   uint16
+	seriNO   uint32
 	data     proto.Message
 	cmd      uint16
 	compress bool   //是否压缩
 	errCode  uint16 // 错误码
 }
 
-func NewMessage(seriNO uint16, data proto.Message) *Message {
-	return &Message{seriNO: seriNO & 0x3FFF, data: data}
+func NewMessage(seriNO uint32, data proto.Message) *Message {
+	return &Message{seriNO: seriNO, data: data}
 }
 
-func ErrMessage(seriNO uint16, cmd uint16, errCode uint16) *Message {
-	return &Message{seriNO: seriNO & 0x3FFF, cmd: cmd, errCode: errCode}
+func ErrMessage(seriNO uint32, cmd uint16, errCode uint16) *Message {
+	return &Message{seriNO: seriNO, cmd: cmd, errCode: errCode}
 }
 
 func (this *Message) SetCompress() *Message {
@@ -35,7 +35,7 @@ func (this *Message) GetData() proto.Message {
 	return this.data
 }
 
-func (this *Message) GetSeriNo() uint16 {
+func (this *Message) GetSeriNo() uint32 {
 	return this.seriNO
 }
 

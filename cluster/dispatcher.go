@@ -1,44 +1,85 @@
 package cluster
 
 import (
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"runtime"
 	"sync"
 	"time"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 )
 
 type MsgHandler func(addr.LogicAddr, proto.Message)
 
-var mtxHandler sync.Mutex
-var handlers = map[uint16]MsgHandler{}
-var onPeerDisconnected func(addr.LogicAddr, error)
-
-func RegisterPeerDisconnected(cb func(addr.LogicAddr, error)) {
-	defer mtxHandler.Unlock()
-	mtxHandler.Lock()
-	onPeerDisconnected = cb
+type msgManager struct {
+	sync.RWMutex
+	cbPeerDisconnected func(addr.LogicAddr, error)
+	msgHandlers        map[uint16]MsgHandler
 }
 
-func Register(cmd uint16, handler MsgHandler) {
-	defer mtxHandler.Unlock()
-	mtxHandler.Lock()
+func (this *msgManager) register(cmd uint16, handler MsgHandler) {
+	this.Lock()
+	defer this.Unlock()
 
 	if nil == handler {
 		//记录日志
-		Errorf("Register %d failed: handler is nil\n", cmd)
+		logger.Errorf("Register %d failed: handler is nil\n", cmd)
 		return
 	}
-	_, ok := handlers[cmd]
+	_, ok := this.msgHandlers[cmd]
 	if ok {
 		//记录日志
-		Errorf("Register %d failed: duplicate handler\n", cmd)
+		logger.Errorf("Register %d failed: duplicate handler\n", cmd)
 		return
 	}
 
-	handlers[cmd] = handler
+	this.msgHandlers[cmd] = handler
+}
+
+func (this *msgManager) dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message) {
+	this.RLock()
+	handler, ok := this.msgHandlers[cmd]
+	this.RUnlock()
+	if ok {
+		pcall(handler, from, cmd, msg)
+	} else {
+		//记录日志
+		logger.Errorf("unkonw cmd:%d\n", cmd)
+	}
+}
+
+func (this *msgManager) setPeerDisconnected(cb func(addr.LogicAddr, error)) {
+	defer this.Unlock()
+	this.Lock()
+	this.cbPeerDisconnected = cb
+}
+
+func (this *msgManager) onPeerDisconnected(peer addr.LogicAddr, err error) {
+	this.RLock()
+	h := this.cbPeerDisconnected
+	this.RUnlock()
+	if nil != h {
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 65535)
+				l := runtime.Stack(buf, false)
+				logger.Errorf("error on onPeerDisconnected\nstack:%v,%s\n", r, buf[:l])
+			}
+		}()
+		h(peer, err)
+	}
+}
+
+func (this *Cluster) onPeerDisconnected(peer addr.LogicAddr, err error) {
+	this.msgMgr.onPeerDisconnected(peer, err)
+}
+
+func (this *Cluster) SetPeerDisconnected(cb func(addr.LogicAddr, error)) {
+	this.msgMgr.setPeerDisconnected(cb)
+}
+
+func (this *Cluster) Register(cmd uint16, handler MsgHandler) {
+	this.msgMgr.register(cmd, handler)
 }
 
 func pcall(handler MsgHandler, from addr.LogicAddr, cmd uint16, msg proto.Message) {
@@ -46,21 +87,21 @@ func pcall(handler MsgHandler, from addr.LogicAddr, cmd uint16, msg proto.Messag
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
 			l := runtime.Stack(buf, false)
-			Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
+			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
 		}
 	}()
 	handler(from, msg)
 }
 
-func dispatch(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) { //from addr.LogicAddr, cmd uint16, msg proto.Message) {
-	if IsStoped() {
+func (this *Cluster) dispatch(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, msg proto.Message) { //from addr.LogicAddr, cmd uint16, msg proto.Message) {
+	if this.IsStoped() {
 		return
 	}
 
 	if nil != msg {
 		switch msg.(type) {
 		case *Heartbeat:
-			if msg.(*Heartbeat).GetOriginSender() != uint32(selfAddr.Logic) {
+			if msg.(*Heartbeat).GetOriginSender() != uint32(this.serverState.selfAddr.Logic) {
 				heartbeat := msg.(*Heartbeat)
 				heartbeat_resp := &Heartbeat{}
 				heartbeat_resp.OriginSender = proto.Uint32(msg.(*Heartbeat).GetOriginSender())
@@ -70,26 +111,8 @@ func dispatch(from addr.LogicAddr, session kendynet.StreamSession, cmd uint16, m
 			}
 			break
 		default:
-			mtxHandler.Lock()
-			handler, ok := handlers[cmd]
-			mtxHandler.Unlock()
-			if ok {
-				pcall(handler, from, cmd, msg)
-			} else {
-				//记录日志
-				Errorf("unkonw cmd:%d\n", cmd)
-			}
+			this.msgMgr.dispatch(from, cmd, msg)
 			break
 		}
-	}
-}
-
-func dispatchPeerDisconnected(peer addr.LogicAddr, err error) {
-	var h func(addr.LogicAddr, error)
-	mtxHandler.Lock()
-	h = onPeerDisconnected
-	mtxHandler.Unlock()
-	if nil != h {
-		h(peer, err)
 	}
 }

@@ -2,27 +2,17 @@ package cluster
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/kr/pretty"
+	//	"github.com/kr/pretty"
 	"github.com/sniperHW/kendynet"
-	center "github.com/sniperHW/sanguo/center"
+	center_client "github.com/sniperHW/sanguo/center/client"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"sort"
+	"strings"
 )
 
-const EXPORT bool = true
-
-func connectCenter(centerAddrs []string, selfAddr addr.Addr, export ...bool) {
-
-	exportService := uint32(0)
-
-	if len(export) > 0 && export[0] {
-		exportService = 1
-	}
-
-	center.ClientInit(GetEventQueue(), logger, exportService)
-
-	center.ConnectCenter(centerAddrs, selfAddr)
+func (this *Cluster) connectCenter(centerAddrs []string) {
+	this.centerClient.ConnectCenter(centerAddrs, this.serverState.selfAddr)
 }
 
 func diff(a, b []*center_proto.NodeInfo) ([]*center_proto.NodeInfo, []*center_proto.NodeInfo) {
@@ -74,55 +64,67 @@ func diff(a, b []*center_proto.NodeInfo) ([]*center_proto.NodeInfo, []*center_pr
 	return add, remove
 }
 
-func centerInit() {
-	center.RegisterCenterMsgHandler(center_proto.CENTER_HeartbeatToNode, func(session kendynet.StreamSession, msg proto.Message) {
+func (this *Cluster) centerInit(export ...bool) {
+
+	exportService := uint32(0)
+
+	if len(export) > 0 && export[0] {
+		exportService = 1
+	}
+
+	this.centerClient = center_client.New(this.queue, logger, exportService)
+
+	this.centerClient.RegisterCenterMsgHandler(center_proto.CENTER_HeartbeatToNode, func(session kendynet.StreamSession, msg proto.Message) {
 		//心跳响应暂时不处理
 		//kendynet.Infof("HeartbeatToNode\n")
 	})
 
-	center.RegisterCenterMsgHandler(center_proto.CENTER_NotifyNodeAdd, func(session kendynet.StreamSession, msg proto.Message) {
-		Infoln("CENTER_NotifyNodeAdd", pretty.Sprint(msg))
+	nodes2Str := func(nodes []*center_proto.NodeInfo) string {
+		s := []string{}
+		for _, v := range nodes {
+			t := addr.LogicAddr(v.GetLogicAddr())
+			s = append(s, t.String())
+		}
 
+		return strings.Join(s, ",")
+	}
+
+	this.centerClient.RegisterCenterMsgHandler(center_proto.CENTER_NotifyNodeAdd, func(session kendynet.StreamSession, msg proto.Message) {
 		NodeAdd := msg.(*center_proto.NodeAdd)
 
+		logger.Infoln(this.serverState.selfAddr.Logic.String(), "CENTER_NotifyNodeAdd", nodes2Str(NodeAdd.Nodes))
+
 		for _, v := range NodeAdd.Nodes {
-			addEndPoint(session.RemoteAddr(), v)
+			this.serviceMgr.addEndPoint(session.RemoteAddr(), v)
 		}
 
 	})
 
-	center.RegisterCenterMsgHandler(center_proto.CENTER_NotifyNodeInfo, func(session kendynet.StreamSession, msg proto.Message) {
-		Infoln("CENTER_NotifyNodeInfo", pretty.Sprint(msg))
-		mtx.Lock()
+	this.centerClient.RegisterCenterMsgHandler(center_proto.CENTER_NotifyNodeInfo, func(session kendynet.StreamSession, msg proto.Message) {
 
-		currentEndPoints := []*center_proto.NodeInfo{}
-
-		for k, _ := range idEndPointMap {
-			currentEndPoints = append(currentEndPoints, &center_proto.NodeInfo{
-				LogicAddr: proto.Uint32(uint32(k)),
-			})
-		}
-
-		mtx.Unlock()
+		currentEndPoints := this.serviceMgr.getAllNodeInfo()
 
 		NotifyNodeInfo := msg.(*center_proto.NotifyNodeInfo)
+
+		logger.Infoln(this.serverState.selfAddr.Logic.String(), "CENTER_NotifyNodeInfo", nodes2Str(NotifyNodeInfo.Nodes))
 
 		add, remove := diff(NotifyNodeInfo.Nodes, currentEndPoints)
 
 		for _, v := range add {
-			addEndPoint(session.RemoteAddr(), v)
+			this.serviceMgr.addEndPoint(session.RemoteAddr(), v)
 		}
 
 		for _, v := range remove {
-			removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v.GetLogicAddr()))
+			this.serviceMgr.removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v.GetLogicAddr()))
 		}
 
 	})
 
-	center.RegisterCenterMsgHandler(center_proto.CENTER_NodeLeave, func(session kendynet.StreamSession, msg proto.Message) {
+	this.centerClient.RegisterCenterMsgHandler(center_proto.CENTER_NodeLeave, func(session kendynet.StreamSession, msg proto.Message) {
 		NodeLeave := msg.(*center_proto.NodeLeave)
+		//logger.Infoln("CENTER_NodeLeave", pretty.Sprint(msg))
 		for _, v := range NodeLeave.Nodes {
-			removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v))
+			this.serviceMgr.removeEndPoint(session.RemoteAddr(), addr.LogicAddr(v))
 		}
 	})
 }

@@ -2,28 +2,78 @@ package cluster
 
 import (
 	//"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/timer"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/common"
 	"math/rand"
 	"net"
 	"sort"
 	"sync"
+	"time"
 )
 
 type endPoint struct {
+	sync.Mutex
 	addr          addr.Addr
 	pendingMsg    []interface{} //待发送的消息
 	pendingCall   []*rpcCall    //待发起的rpc请求
 	dialing       bool
 	session       kendynet.StreamSession
-	mtx           sync.Mutex
 	exportService uint32
 	centers       map[net.Addr]bool
+	timer         *timer.Timer
+	lastActive    time.Time //上次与endPotin通信的时间（收发均可）
 }
 
 func (e *endPoint) isHarbor() bool {
 	return e.addr.Logic.Type() == harbarType
+}
+
+func (e *endPoint) closeSession(reason string) {
+	if session := func() kendynet.StreamSession {
+		e.Lock()
+		defer e.Unlock()
+
+		if nil == e.session {
+			return nil
+		}
+
+		if nil != e.timer {
+			e.timer.Cancel()
+			e.timer = nil
+		}
+
+		session := e.session
+		e.session = nil
+
+		return session
+
+	}(); nil != session {
+		session.Close(reason, 0)
+	}
+}
+
+func (e *endPoint) onTimerTimeout(t *timer.Timer, _ interface{}) {
+	if func() bool {
+		e.Lock()
+		defer e.Unlock()
+		if t != e.timer {
+			t.Cancel()
+			return false
+		}
+
+		if time.Now().Unix()-e.lastActive.Unix() > common.HeartBeat_Timeout {
+			return true
+		} else {
+			return false
+		}
+
+	}() {
+		e.closeSession("timeout")
+	}
 }
 
 type typeEndPointMap struct {
@@ -94,15 +144,15 @@ func (this *typeEndPointMap) server(serv uint32) (addr.LogicAddr, error) {
 	return addr.LogicAddr(0), ERR_NO_AVAILABLE_SERVICE
 }
 
-func addEndPoint(centerAddr net.Addr, peer *center_proto.NodeInfo) *endPoint {
-	defer mtx.Unlock()
-	mtx.Lock()
+func (this *serviceManager) addEndPoint(centerAddr net.Addr, peer *center_proto.NodeInfo) *endPoint {
+	this.Lock()
+	defer this.Unlock()
 
 	var end *endPoint
 
 	logicAddr := addr.LogicAddr(peer.GetLogicAddr())
 
-	netAddr, err := net.ResolveTCPAddr("tcp4", peer.GetNetAddr())
+	netAddr, err := net.ResolveTCPAddr("tcp", peer.GetNetAddr())
 
 	if nil != err {
 		return nil
@@ -116,24 +166,18 @@ func addEndPoint(centerAddr net.Addr, peer *center_proto.NodeInfo) *endPoint {
 	defer func() {
 		if nil != end {
 			end.centers[centerAddr] = true
-			Infoln("addEndPoint", peerAddr.Logic.String(), "from", centerAddr.String(), end.exportService)
-			onEndPointJoin(end)
+			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "addEndPoint", peerAddr.Logic.String(), "from", centerAddr.String(), "exportService", 1 == end.exportService)
+			this.onEndPointJoin(end)
 		}
 	}()
 
-	end = idEndPointMap[addr.LogicAddr(peerAddr.Logic)]
+	end = this.idEndPointMap[addr.LogicAddr(peerAddr.Logic)]
 	if nil != end {
-
 		if end.addr.Net.String() != netAddr.String() {
-			end.mtx.Lock()
-			oldSession := end.session
-			end.session = nil
-			end.addr.Net = netAddr //更新网络地址
-			end.mtx.Unlock()
-			if nil != oldSession {
-				//中断原有连接
-				oldSession.Close("addEndPoint close old connection", 0)
-			}
+			end.closeSession("addEndPoint close old connection")
+			end.Lock()
+			end.addr.Net = netAddr
+			end.Unlock()
 		}
 
 		return end
@@ -145,56 +189,84 @@ func addEndPoint(centerAddr net.Addr, peer *center_proto.NodeInfo) *endPoint {
 		centers:       map[net.Addr]bool{},
 	}
 
-	ttMap := ttEndPointMap[peerAddr.Logic.Type()]
+	ttMap := this.ttEndPointMap[peerAddr.Logic.Type()]
 	if nil == ttMap {
 		ttMap = &typeEndPointMap{
 			tt:        peerAddr.Logic.Type(),
 			endPoints: []*endPoint{},
 		}
-		ttEndPointMap[ttMap.tt] = ttMap
+		this.ttEndPointMap[ttMap.tt] = ttMap
 	}
 
-	idEndPointMap[peerAddr.Logic] = end
+	this.idEndPointMap[peerAddr.Logic] = end
 	ttMap.addEndPoint(end)
 
 	if peerAddr.Logic.Type() == harbarType {
-		addHarbor(end)
+		this.addHarbor(end)
 	}
 
 	return end
 }
 
-func removeEndPoint(centerAddr net.Addr, peer addr.LogicAddr) {
-	defer mtx.Unlock()
-	mtx.Lock()
-	if end, ok := idEndPointMap[peer]; ok {
-		Infoln("remove endPoint", peer.String(), "from", centerAddr.String())
+func (this *serviceManager) removeEndPoint(centerAddr net.Addr, peer addr.LogicAddr) {
+	this.Lock()
+	defer this.Unlock()
+	if end, ok := this.idEndPointMap[peer]; ok {
 		delete(end.centers, centerAddr)
 		if 0 == len(end.centers) {
-			Infoln("remove endPoint", peer.String())
-			delete(idEndPointMap, peer)
-			if ttMap := ttEndPointMap[end.addr.Logic.Type()]; nil != ttMap {
+			logger.Infoln("remove endPoint", peer.String())
+			delete(this.idEndPointMap, peer)
+			if ttMap := this.ttEndPointMap[end.addr.Logic.Type()]; nil != ttMap {
 				ttMap.removeEndPoint(peer)
 			}
 
 			if end.isHarbor() {
-				removeHarbor(end)
+				this.removeHarbor(end)
 			}
 
-			onEndPointLeave(end)
-
-			if nil != end.session {
-				end.session.Close("remove endPoint", 0)
-			}
+			this.onEndPointLeave(end)
+			end.closeSession("remove endPoint")
 		}
 	}
 }
 
-func getEndPoint(id addr.LogicAddr) *endPoint {
-	defer mtx.Unlock()
-	mtx.Lock()
-	if end, ok := idEndPointMap[id]; ok {
+func (this *serviceManager) getEndPoint(id addr.LogicAddr) *endPoint {
+	this.RLock()
+	defer this.RUnlock()
+
+	if end, ok := this.idEndPointMap[id]; ok {
 		return end
 	}
 	return nil
+}
+
+func (this *serviceManager) getAllNodeInfo() []*center_proto.NodeInfo {
+	this.RLock()
+	defer this.RUnlock()
+
+	currentEndPoints := []*center_proto.NodeInfo{}
+
+	for k, _ := range this.idEndPointMap {
+		currentEndPoints = append(currentEndPoints, &center_proto.NodeInfo{
+			LogicAddr: proto.Uint32(uint32(k)),
+		})
+	}
+
+	return currentEndPoints
+}
+
+func (this *serviceManager) getAllEndpoints() []*endPoint {
+	this.RLock()
+	defer this.RUnlock()
+	endPoints := []*endPoint{}
+
+	for tt, v := range this.ttEndPointMap {
+		if tt != harbarType {
+			for _, vv := range v.endPoints {
+				endPoints = append(endPoints, vv)
+			}
+		}
+	}
+
+	return endPoints
 }

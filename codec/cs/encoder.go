@@ -12,10 +12,11 @@ import (
 
 const (
 	SizeLen  = 2
+	SizeSeq  = 4
 	SizeFlag = 2
 	SizeCmd  = 2
 	SizeErr  = 2
-	HeadSize = SizeLen + SizeFlag + SizeCmd + SizeErr
+	HeadSize = SizeLen + SizeSeq + SizeFlag + SizeCmd + SizeErr
 )
 
 /*
@@ -48,7 +49,8 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 
 		msg := o.(*Message)
 		data := msg.GetData()
-		flag := uint16(msg.GetSeriNo())
+		flag := uint16(0)
+		seqNo := msg.GetSeriNo()
 
 		if data == nil {
 			cmd = uint32(msg.GetCmd())
@@ -74,7 +76,7 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 			pbbytes = this.zipBuff.Bytes()
 		}
 
-		totalLen := len(pbbytes) + SizeLen + SizeFlag + SizeCmd + SizeErr
+		totalLen := len(pbbytes) + HeadSize
 		//fmt.Println("------------------>", totalLen)
 
 		if uint64(totalLen) > MaxPacketSize {
@@ -85,6 +87,8 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 		buff := kendynet.NewByteBuffer(totalLen)
 		//写payload大小
 		buff.AppendUint16(uint16(totalLen - SizeLen))
+		//写seq
+		buff.AppendUint32(seqNo)
 		//写flag
 		buff.AppendUint16(flag)
 		//写cmd

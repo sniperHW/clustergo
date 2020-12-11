@@ -1,0 +1,15 @@
+syntax = "proto2";
+package testproto;
+
+enum FOO { X = 17; };
+
+message Test {
+	required string a = 1;
+	optional int32  b = 2;
+	repeated int64  c = 3;
+}
+
+message BrocastPingpong {
+	required int64  id = 1;
+	required string message = 2;
+}

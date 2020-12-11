@@ -17,7 +17,7 @@ type RPCReplyer struct {
 
 func (this *RPCReplyer) Reply(ret interface{}, err error) {
 	if this.req.NeedResp && atomic.CompareAndSwapInt32(&this.fired, 0, 1) {
-		response := &RPCResponse{Seq: this.req.Seq, Ret: ret}
+		response := &RPCResponse{Seq: this.req.Seq, Ret: ret, Err: err}
 		this.reply(response)
 	}
 }
@@ -46,6 +46,10 @@ type RPCServer struct {
 	decoder RPCMessageDecoder
 	methods map[string]RPCMethodHandler
 	lastSeq uint64
+}
+
+func (this *RPCServer) MakeReplyer(channel RPCChannel, req *RPCRequest) *RPCReplyer {
+	return &RPCReplyer{encoder: this.encoder, channel: channel, req: req}
 }
 
 func (this *RPCServer) RegisterMethod(name string, method RPCMethodHandler) error {

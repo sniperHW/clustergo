@@ -12,6 +12,7 @@ const (
 	CENTER_NotifyNodeInfo    uint16 = 5
 	CENTER_NotifyNodeAdd     uint16 = 6
 	CENTER_NodeLeave         uint16 = 7
+	CENTER_RemoveNode        uint16 = 8
 )
 
 func init() {
@@ -22,4 +23,5 @@ func init() {
 	pb.Register("center_msg", &NotifyNodeInfo{}, 5)
 	pb.Register("center_msg", &NodeAdd{}, 6)
 	pb.Register("center_msg", &NodeLeave{}, 7)
+	pb.Register("center_msg", &RemoveNode{}, 8)
 }

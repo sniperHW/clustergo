@@ -15,7 +15,7 @@ var ErrInvaildAddrFmt error = fmt.Errorf("invaild addr format")
 var ErrHarborType error = fmt.Errorf("type should be 255")
 var ErrInvaildType error = fmt.Errorf("type should between(1,254)")
 var ErrInvaildGroup error = fmt.Errorf("group should between(1,16383)")
-var ErrInvaildServer error = fmt.Errorf("server should between(1,1023)")
+var ErrInvaildServer error = fmt.Errorf("server should between(0,1023)")
 
 type LogicAddr uint32
 
@@ -30,7 +30,7 @@ func MakeAddr(logic string, tcpAddr string) (Addr, error) {
 		return Addr{}, err
 	}
 
-	netAddr, err := net.ResolveTCPAddr("tcp4", tcpAddr)
+	netAddr, err := net.ResolveTCPAddr("tcp", tcpAddr)
 	if nil != err {
 		return Addr{}, err
 	}
@@ -47,7 +47,7 @@ func MakeHarborAddr(logic string, tcpAddr string) (Addr, error) {
 		return Addr{}, err
 	}
 
-	netAddr, err := net.ResolveTCPAddr("tcp4", tcpAddr)
+	netAddr, err := net.ResolveTCPAddr("tcp", tcpAddr)
 	if nil != err {
 		return Addr{}, err
 	}
@@ -113,7 +113,7 @@ func MakeLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildServer
 	}
 
-	if 0 == server || uint32(server) > ServerMask {
+	if uint32(server) > ServerMask {
 		return LogicAddr(0), ErrInvaildServer
 	}
 
@@ -152,7 +152,7 @@ func MakeHarborLogicAddr(addr string) (LogicAddr, error) {
 		return LogicAddr(0), ErrInvaildServer
 	}
 
-	if 0 == server || uint32(server) > ServerMask {
+	if uint32(server) > ServerMask {
 		return LogicAddr(0), ErrInvaildServer
 	}
 

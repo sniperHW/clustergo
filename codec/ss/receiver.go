@@ -69,14 +69,14 @@ func (this *Receiver) unPack() (interface{}, error) {
 		}
 
 		if uint64(payload) == 0 {
-			kendynet.Infoln(this.lastRecved, this.r, this.w, this.buffer[this.r:this.w])
+			kendynet.GetLogger().Infoln(this.lastRecved, this.r, this.w, this.buffer[this.r:this.w])
 			return nil, fmt.Errorf("zero payload")
 		}
 
 		totalSize = uint64(payload + sizeLen)
 
 		if totalSize > maxPacketSize {
-			kendynet.Infoln(this.recvCount, this.unpackCount, this.lastRecved, this.r, this.w, this.buffer[this.r:this.w])
+			kendynet.GetLogger().Infoln(this.recvCount, this.unpackCount, this.lastRecved, this.r, this.w, this.buffer[this.r:this.w])
 			return nil, fmt.Errorf("large packet %d", totalSize)
 		}
 
