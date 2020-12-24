@@ -11,6 +11,7 @@ import (
 	center "github.com/sniperHW/sanguo/center"
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
 	"github.com/sniperHW/sanguo/protocol/cmdEnum"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
@@ -205,9 +206,9 @@ func TestPostMessage(t *testing.T) {
 
 	_ = <-cc
 
-	node1.Stop()
+	node1.Stop(nil)
 
-	node2.Stop()
+	node2.Stop(nil)
 
 	center1.Stop()
 
@@ -279,9 +280,9 @@ func TestRPC(t *testing.T) {
 
 	_ = <-cc
 
-	node1.Stop()
+	node1.Stop(nil)
 
-	node2.Stop()
+	node2.Stop(nil)
 
 	center1.Stop()
 
@@ -375,7 +376,7 @@ func TestHarbor(t *testing.T) {
 
 	_ = <-cc
 
-	node1.Stop(true)
+	node1.Stop(nil, true)
 
 	for {
 		_, err := node2.Random(1)
@@ -388,15 +389,16 @@ func TestHarbor(t *testing.T) {
 	}
 
 	node2.AsynCall(peer, &ss_rpc.EchoReq{Message: proto.String("hello")}, 10000, func(result interface{}, err error) {
-		logger.Infoln(err)
-		assert.NotEqual(t, nil, err)
+		assert.Equal(t, rpcerr.Err_RPC_RelayError, err)
 		cc <- struct{}{}
 	})
 
-	node2.Stop()
+	_ = <-cc
 
-	harbor1.Stop()
-	harbor2.Stop()
+	node2.Stop(nil)
+
+	harbor1.Stop(nil)
+	harbor2.Stop(nil)
 
 	center1.Stop()
 	center2.Stop()

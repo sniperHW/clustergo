@@ -5,6 +5,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"reflect"
 	"sync/atomic"
@@ -12,27 +13,9 @@ import (
 )
 
 type rpcManager struct {
-	cluster          *Cluster
-	server           *rpc.RPCServer
-	client           *rpc.RPCClient
-	pendingReqCount  int32 //等待处理的rpc请求数量
-	pendingRespCount int32 //等待响应的rpc请求数量
-}
-
-func (this *rpcManager) addPendingReqCount() {
-	atomic.AddInt32(&this.pendingReqCount, 1)
-}
-
-func (this *rpcManager) subPendingReqCount() {
-	atomic.AddInt32(&this.pendingReqCount, -1)
-}
-
-func (this *rpcManager) addPendingRespCount() {
-	atomic.AddInt32(&this.pendingRespCount, 1)
-}
-
-func (this *rpcManager) subPendingRespCount() {
-	atomic.AddInt32(&this.pendingRespCount, -1)
+	cluster *Cluster
+	server  *rpc.RPCServer
+	client  *rpc.RPCClient
 }
 
 func (this *rpcManager) onRPCRequest(peer *endPoint, from addr.LogicAddr, req *rpc.RPCRequest) {
@@ -41,11 +24,11 @@ func (this *rpcManager) onRPCRequest(peer *endPoint, from addr.LogicAddr, req *r
 		to:      from,
 		cluster: this.cluster,
 	}
-	this.addPendingReqCount()
+
 	if !this.cluster.IsStoped() {
 		this.server.OnRPCMessage(rpcchan, req)
 	} else {
-		this.server.MakeReplyer(rpcchan, req).Reply(nil, ERR_RPC_SERVICE_STOPED)
+		this.server.DirectReplyError(rpcchan, req, rpcerr.Err_RPC_ServiceStoped)
 	}
 }
 
@@ -86,7 +69,6 @@ func (this *RPCChannel) SendRequest(message interface{}) error {
 }
 
 func (this *RPCChannel) SendResponse(message interface{}) error {
-	this.cluster.rpcMgr.subPendingReqCount()
 
 	this.peer.Lock()
 	this.peer.Unlock()
@@ -145,19 +127,11 @@ func (this *Cluster) RegisterMethod(arg proto.Message, handler rpc.RPCMethodHand
 	this.rpcMgr.server.RegisterMethod(reflect.TypeOf(arg).String(), handler)
 }
 
-func (this *Cluster) makeRPCCallback(cb rpc.RPCResponseHandler) rpc.RPCResponseHandler {
-	this.rpcMgr.addPendingRespCount()
-	return func(v interface{}, e error) {
-		this.rpcMgr.subPendingRespCount()
-		cb(v, e)
-	}
-}
-
 func (this *Cluster) asynCall(end *endPoint, arg proto.Message, timeout uint32, callback rpc.RPCResponseHandler) {
 	end.Lock()
 	defer end.Unlock()
 
-	cb := this.makeRPCCallback(callback)
+	cb := callback
 
 	if nil != end.session {
 		if err := this.rpcMgr.asynCall(&RPCChannel{
@@ -192,7 +166,7 @@ func (this *Cluster) AsynCall(peer addr.LogicAddr, arg proto.Message, timeout ui
 		panic("cluster not started")
 	}
 
-	cb := this.makeRPCCallback(callback)
+	cb := callback
 
 	if peer.Empty() {
 		this.queue.PostNoWait(func() { cb(nil, fmt.Errorf("invaild peerAddr %s", peer.String())) })
@@ -246,4 +220,8 @@ func (this *Cluster) AsynCall(peer addr.LogicAddr, arg proto.Message, timeout ui
 		//尝试与对端建立连接
 		this.dial(endPoint, 0)
 	}
+}
+
+func onMissingRPCMethod(_ string, replyer *rpc.RPCReplyer) {
+	replyer.Reply(nil, rpcerr.Err_RPC_InvaildMethod)
 }

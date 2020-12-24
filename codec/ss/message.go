@@ -75,9 +75,10 @@ func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, data []byte) *Relay
 	return m
 }
 
-type RCPRelayErrorMessage struct {
-	To     addr.LogicAddr
-	From   addr.LogicAddr
-	Seqno  uint64
-	ErrMsg string
+type RPCRelayErrorMessage struct {
+	To    addr.LogicAddr
+	From  addr.LogicAddr
+	Seqno uint64
+	Err   error
+	//ErrMsg string
 }

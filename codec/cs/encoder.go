@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/sanguo/codec/pb"
 	_ "github.com/sniperHW/sanguo/protocol/cs"
 
@@ -108,4 +109,12 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 		break
 	}
 	return nil, fmt.Errorf("invaild object type")
+}
+
+func (this *Encoder) ProtoMarshal(msg proto.Message) ([]byte, uint32, error) {
+	return pb.Marshal(this.namespace, msg)
+}
+
+func (this *Encoder) ProtoUnmarshal(cmd uint16, data []byte) (proto.Message, error) {
+	return pb.Unmarshal(this.namespace, uint32(cmd), data)
 }

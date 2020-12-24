@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
 	//"github.com/sniperHW/kendynet/util"
 )
 
@@ -208,7 +209,7 @@ func (this *Encoder) encode(o interface{}, relayInfo []addr.LogicAddr) (kendynet
 			return buff, nil
 		} else {
 
-			errStr := response.Err.Error()
+			errStr := rpcerr.GetShortStrByError(response.Err)
 
 			payloadLen += (len(errStr) + sizeFlag + sizeCmd + sizeRPCSeqNo)
 			totalLen = (sizeLen + payloadLen)
@@ -244,7 +245,7 @@ func (this *Encoder) encode(o interface{}, relayInfo []addr.LogicAddr) (kendynet
 	return nil, nil
 }
 
-func (this *Encoder) enCodeRPCRelayError(msg *RCPRelayErrorMessage) kendynet.Message {
+func (this *Encoder) enCodeRPCRelayError(msg *RPCRelayErrorMessage) kendynet.Message {
 
 	var payloadLen int
 	var totalLen int
@@ -252,7 +253,9 @@ func (this *Encoder) enCodeRPCRelayError(msg *RCPRelayErrorMessage) kendynet.Mes
 
 	setRelay(&flag)
 
-	payloadLen += (len(msg.ErrMsg) + sizeFlag + sizeCmd + sizeRPCSeqNo + 8)
+	errMsg := rpcerr.GetShortStrByError(msg.Err)
+
+	payloadLen += (len(errMsg) + sizeFlag + sizeCmd + sizeRPCSeqNo + 8)
 	totalLen = (sizeLen + payloadLen)
 
 	buff := kendynet.NewByteBuffer(totalLen)
@@ -272,7 +275,7 @@ func (this *Encoder) enCodeRPCRelayError(msg *RCPRelayErrorMessage) kendynet.Mes
 	//写RPC序列号
 	buff.AppendUint64(msg.Seqno)
 	//写数据
-	buff.AppendString(msg.ErrMsg)
+	buff.AppendString(errMsg)
 
 	return buff
 }
@@ -294,8 +297,8 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 	case *RelayMessage:
 		return kendynet.NewByteBuffer(o.(*RelayMessage).data, len(o.(*RelayMessage).data)), nil
 		break
-	case *RCPRelayErrorMessage:
-		return this.enCodeRPCRelayError(o.(*RCPRelayErrorMessage)), nil
+	case *RPCRelayErrorMessage:
+		return this.enCodeRPCRelayError(o.(*RPCRelayErrorMessage)), nil
 		break
 	default:
 		break

@@ -2,13 +2,13 @@ package ss
 
 import (
 	"fmt"
-	"github.com/sniperHW/sanguo/cluster/addr"
-	"github.com/sniperHW/sanguo/codec/pb"
-	"net"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"net"
 )
 
 const (
@@ -136,7 +136,7 @@ func (this *Receiver) unPack() (interface{}, error) {
 							return nil, err
 						}
 						this.r += totalSize
-						return NewMessage(&rpc.RPCResponse{Seq: seqNO, Err: fmt.Errorf(errStr)}, to, from), nil
+						return NewMessage(&rpc.RPCResponse{Seq: seqNO, Err: rpcerr.GetErrorByShortStr(errStr)}, to, from), nil
 					} else if tt == RPCRESP {
 						//RPC响应
 						if buff, err = reader.GetBytes(uint64(size)); err != nil {

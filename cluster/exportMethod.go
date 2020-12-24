@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-func Stop() {
-	defaultCluster.Stop()
+func Stop(stopFunc func(), sendRemoveNode ...bool) {
+	defaultCluster.Stop(stopFunc, sendRemoveNode...)
 }
 
 func IsStoped() bool {

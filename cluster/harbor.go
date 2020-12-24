@@ -3,6 +3,7 @@ package cluster
 import (
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"sort"
 	"strings"
@@ -366,7 +367,7 @@ func (this *serviceManager) initHarbor() {
 	})
 }
 
-func (this *Cluster) postRelayError(peer addr.LogicAddr, msg *ss.RCPRelayErrorMessage) {
+func (this *Cluster) postRelayError(peer addr.LogicAddr, msg *ss.RPCRelayErrorMessage) {
 
 	endPoint := this.serviceMgr.getEndPoint(peer)
 	if nil == endPoint {
@@ -392,14 +393,14 @@ func (this *Cluster) postRelayError(peer addr.LogicAddr, msg *ss.RCPRelayErrorMe
 	}
 }
 
-func (this *Cluster) onRelayError(message *ss.RelayMessage, err string) {
+func (this *Cluster) onRelayError(message *ss.RelayMessage, err error) {
 	if message.IsRPCReq() {
 		//通告请求端消息无法送达到目的地
-		msg := &ss.RCPRelayErrorMessage{
-			To:     message.From,
-			From:   this.serverState.selfAddr.Logic,
-			Seqno:  message.GetSeqno(),
-			ErrMsg: err,
+		msg := &ss.RPCRelayErrorMessage{
+			To:    message.From,
+			From:  this.serverState.selfAddr.Logic,
+			Seqno: message.GetSeqno(),
+			Err:   err,
 		}
 
 		logger.Errorln("onRelayError", err)
@@ -450,6 +451,6 @@ func (this *Cluster) onRelayMessage(message *ss.RelayMessage) {
 		}
 	} else {
 		logger.Infoln("unable route to target", message.To)
-		this.onRelayError(message, "unable route to target")
+		this.onRelayError(message, rpcerr.Err_RPC_RelayError)
 	}
 }

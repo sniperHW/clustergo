@@ -33,10 +33,14 @@ type rpcCall struct {
  *   如果服务要下线才将用Stop(true)调用
  *   如果只是重启更新不需要带参数
  */
-func (this *Cluster) Stop(sendRemoveNode ...bool) {
+func (this *Cluster) Stop(stopFunc func(), sendRemoveNode ...bool) {
 	if atomic.CompareAndSwapInt32(&this.serverState.stoped, 0, 1) {
+		if nil != stopFunc {
+			stopFunc()
+		}
+
 		util.WaitCondition(nil, func() bool {
-			return atomic.LoadInt32(&this.rpcMgr.pendingReqCount) == 0 && atomic.LoadInt32(&this.rpcMgr.pendingRespCount) == 0
+			return this.rpcMgr.server.PendingCount() == 0 && this.rpcMgr.client.PendingCount() == 0
 		})
 		this.queue.Close()
 

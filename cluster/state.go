@@ -74,6 +74,7 @@ func NewCluster() *Cluster {
 	}
 	c.serviceMgr.cluster = c
 	c.rpcMgr.cluster = c
+	c.rpcMgr.server.SetOnMissingMethod(onMissingRPCMethod)
 	return c
 }
 

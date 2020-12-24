@@ -192,6 +192,14 @@ func (this *Receiver) DirectUnpack(buff []byte) (interface{}, error) {
 	return this.unPack()
 }
 
+func (this *Receiver) ProtoMarshal(msg proto.Message) ([]byte, uint32, error) {
+	return pb.Marshal(this.namespace, msg)
+}
+
+func (this *Receiver) ProtoUnmarshal(cmd uint16, data []byte) (proto.Message, error) {
+	return pb.Unmarshal(this.namespace, uint32(cmd), data)
+}
+
 //SizeLen  = 2
 //SizeSeqNo  = 4
 //SizeFlag = 2
