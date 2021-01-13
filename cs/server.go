@@ -5,8 +5,11 @@ import (
 	"github.com/sniperHW/kendynet"
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 	codecs "github.com/sniperHW/sanguo/codec/cs"
+	constant "github.com/sniperHW/sanguo/common"
 	_ "github.com/sniperHW/sanguo/protocol/cs" //触发pb注册
+	cs_proto "github.com/sniperHW/sanguo/protocol/cs/message"
 	"sync/atomic"
+	"time"
 )
 
 var (
@@ -45,7 +48,12 @@ func (this *tcpListener) Start() error {
 		return fmt.Errorf("invaild listener")
 	}
 	return this.l.Serve(func(session kendynet.StreamSession) {
-		//session.SetRecvTimeout(common.HeartBeat_Timeout_Client * time.Second)
+		if !dispatcher.OnAuthenticate(session) {
+			session.Close("authenticate", 0)
+			return
+		}
+
+		session.SetRecvTimeout(time.Second)
 		session.SetReceiver(codecs.NewReceiver("cs"))
 		session.SetEncoder(codecs.NewEncoder("sc"))
 		session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
@@ -53,12 +61,27 @@ func (this *tcpListener) Start() error {
 		})
 
 		dispatcher.OnNewClient(session)
+		recved := false
 
 		session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
-				dispatcher.Dispatch(session, event.Data.(*codecs.Message))
+
+				if !recved {
+					recved = true
+					session.SetRecvTimeout(constant.HeartBeat_Timeout_Client * time.Second)
+				}
+
+				msg := event.Data.(*codecs.Message)
+				switch msg.GetData().(type) {
+				case *cs_proto.HeartbeatToS:
+					dispatcher.Dispatch(session, msg)
+					break
+				default:
+					dispatcher.Dispatch(session, msg)
+					break
+				}
 			}
 		})
 	})
@@ -83,7 +106,7 @@ func startServer(l listener_, d ServerDispatcher) error {
 	go func() {
 		err := server.Start()
 		if nil != err {
-			kendynet.Errorf("server.Start() error:%s\n", err.Error())
+			kendynet.GetLogger().Errorf("server.Start() error:%s\n", err.Error())
 		}
 	}()
 

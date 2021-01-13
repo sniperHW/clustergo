@@ -7,6 +7,7 @@ package cluster
 import (
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	cluster_proto "github.com/sniperHW/sanguo/cluster/proto"
 	"math/rand"
 	"sort"
 )
@@ -116,47 +117,59 @@ func (this *serviceManager) getAllForginService() []uint32 {
 
 func (this *serviceManager) init() {
 
-	this.cluster.RegisterMethod(&NotifyForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&cluster_proto.NotifyForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("NotifyForginServicesH2SReq") //, pretty.Sprint(req))
-		if !this.isSelfHarbor() {
-			msg := req.(*NotifyForginServicesH2SReq)
+		if testRPCTimeout && rand.Int()%2 == 0 {
+			replyer.DropResponse()
+		} else {
+			if !this.isSelfHarbor() {
+				msg := req.(*cluster_proto.NotifyForginServicesH2SReq)
 
-			current := this.getAllForginService()
+				current := this.getAllForginService()
 
-			add, remove := diff2(msg.GetNodes(), current)
+				add, remove := diff2(msg.GetNodes(), current)
 
-			for _, v := range add {
-				this.addForginService(addr.LogicAddr(v))
+				for _, v := range add {
+					this.addForginService(addr.LogicAddr(v))
+				}
+
+				for _, v := range remove {
+					this.removeForginService(addr.LogicAddr(v))
+				}
+
 			}
-
-			for _, v := range remove {
-				this.removeForginService(addr.LogicAddr(v))
-			}
-
+			replyer.Reply(&cluster_proto.AddForginServicesH2SResp{}, nil)
 		}
-		replyer.Reply(&AddForginServicesH2SResp{}, nil)
 	})
 
-	this.cluster.RegisterMethod(&AddForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&cluster_proto.AddForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("AddForginServicesH2SReq")
-		if !this.isSelfHarbor() {
-			msg := req.(*AddForginServicesH2SReq)
-			for _, v := range msg.GetNodes() {
-				this.addForginService(addr.LogicAddr(v))
+		if testRPCTimeout && rand.Int()%2 == 0 {
+			replyer.DropResponse()
+		} else {
+			if !this.isSelfHarbor() {
+				msg := req.(*cluster_proto.AddForginServicesH2SReq)
+				for _, v := range msg.GetNodes() {
+					this.addForginService(addr.LogicAddr(v))
+				}
 			}
+			replyer.Reply(&cluster_proto.AddForginServicesH2SResp{}, nil)
 		}
-		replyer.Reply(&AddForginServicesH2SResp{}, nil)
 	})
 
-	this.cluster.RegisterMethod(&RemForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&cluster_proto.RemForginServicesH2SReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("RemForginServicesH2SReq")
-		if !this.isSelfHarbor() {
-			msg := req.(*RemForginServicesH2SReq)
-			for _, v := range msg.GetNodes() {
-				this.removeForginService(addr.LogicAddr(v))
+		if testRPCTimeout && rand.Int()%2 == 0 {
+			replyer.DropResponse()
+		} else {
+			if !this.isSelfHarbor() {
+				msg := req.(*cluster_proto.RemForginServicesH2SReq)
+				for _, v := range msg.GetNodes() {
+					this.removeForginService(addr.LogicAddr(v))
+				}
 			}
+			replyer.Reply(&cluster_proto.RemForginServicesH2SResp{}, nil)
 		}
-		replyer.Reply(&RemForginServicesH2SResp{}, nil)
 	})
 
 	this.initHarbor()

@@ -25,14 +25,17 @@ func GetProcs(filter ...string) ([]Proc, error) {
 		pid, err := strconv.Atoi(strings.TrimSpace(line[0:10]))
 		if err != nil {
 			log.Printf("failed to convert PID to int: %v. line: %v", err, line)
+			continue
 		}
 		cpu, err := strconv.ParseFloat(strings.TrimSpace(line[63:68]), 64)
 		if err != nil {
 			log.Printf("failed to convert CPU usage to float: %v. line: %v", err, line)
+			continue
 		}
 		mem, err := strconv.ParseFloat(strings.TrimSpace(line[69:74]), 64)
 		if err != nil {
 			log.Printf("failed to convert Mem usage to float: %v. line: %v", err, line)
+			continue
 		}
 
 		if filterFn(line[74:]) {

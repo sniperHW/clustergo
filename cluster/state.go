@@ -7,6 +7,7 @@ import (
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 	center_client "github.com/sniperHW/sanguo/center/client"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
 	"sync"
 )
 
@@ -45,14 +46,22 @@ var msgMgr = msgManager{
 	msgHandlers: map[uint16]MsgHandler{},
 }*/
 
+//确保同一逻辑地址只能被唯一进程使用
+type UniLocker interface {
+	Lock(addr.Addr) bool
+	Unlock()
+}
+
 type Cluster struct {
-	serverState  clusterState
-	queue        *event.EventQueue
-	rpcMgr       rpcManager
-	serviceMgr   serviceManager
-	msgMgr       msgManager
-	centerClient *center_client.CenterClient
-	l            *listener.Listener
+	serverState            clusterState
+	queue                  *event.EventQueue
+	rpcMgr                 rpcManager
+	serviceMgr             serviceManager
+	msgMgr                 msgManager
+	centerClient           *center_client.CenterClient
+	l                      *listener.Listener
+	uniLocker              UniLocker
+	pendingRPCRequestCount int32
 }
 
 func NewCluster() *Cluster {
@@ -74,7 +83,7 @@ func NewCluster() *Cluster {
 	}
 	c.serviceMgr.cluster = c
 	c.rpcMgr.cluster = c
-	c.rpcMgr.server.SetOnMissingMethod(onMissingRPCMethod)
+	c.rpcMgr.server.SetErrorCodeOnMissingMethod(rpcerr.Err_RPC_InvaildMethod)
 	return c
 }
 

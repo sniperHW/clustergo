@@ -13,6 +13,7 @@ import (
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -62,13 +63,9 @@ func (this *CenterClient) Close(sendRemoveNode bool) {
 	}
 }
 
-func (this *CenterClient) dispatchCenterMsg(args []interface{}) {
+func (this *CenterClient) dispatchCenterMsg(session kendynet.StreamSession, msg *ss.Message) {
 
 	if atomic.LoadInt32(&this.closed) == 0 {
-
-		session := args[0].(kendynet.StreamSession)
-		msg := args[1].(*ss.Message)
-
 		data := msg.GetData()
 		switch data.(type) {
 		case *rpc.RPCResponse:
@@ -124,10 +121,8 @@ type center struct {
 	closed       int32
 }
 
-func login(centerClient *CenterClient, session kendynet.StreamSession, req *center_proto.Login, onResp func(interface{}, error)) {
-	if err := center_rpc.AsynCall(centerClient.rpcClient, session, req, onResp); nil != err {
-		panic(err)
-	}
+func login(centerClient *CenterClient, session kendynet.StreamSession, req *center_proto.Login, onResp func(interface{}, error)) error {
+	return center_rpc.AsynCall(centerClient.rpcClient, session, req, onResp)
 }
 
 func (this *center) close(sendRemoveNode bool) {
@@ -198,7 +193,9 @@ func (this *center) connect() {
 								this.centerClient.logger.Errorln("login timeout", this.addr)
 								login(this.centerClient, session, loginReq, onResp)
 							} else {
-								panic(err)
+								//登录center中如果出现除超时以外的错误，直接退出进程
+								this.centerClient.logger.Errorln(this.addr, err)
+								os.Exit(0)
 							}
 						} else {
 							resp := r.(*center_proto.LoginRet)
@@ -224,7 +221,10 @@ func (this *center) connect() {
 							}
 						}
 					}
-					login(this.centerClient, session, loginReq, onResp)
+					if err := login(this.centerClient, session, loginReq, onResp); nil != err {
+						this.centerClient.logger.Errorln(this.addr, err)
+						os.Exit(0)
+					}
 					break
 				}
 			}

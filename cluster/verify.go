@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"encoding/binary"
-	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/common"
@@ -24,7 +23,7 @@ func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counte
 		pad := make([]byte, 64-4-2-netAddrSize)
 		buffer.AppendBytes(pad)
 
-		conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+		conn.SetWriteDeadline(time.Now().Add(common.HeartBeat_Timeout))
 		_, err := conn.Write(buffer.Bytes())
 		conn.SetWriteDeadline(time.Time{})
 
@@ -34,7 +33,7 @@ func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counte
 			var err error
 			buffer := make([]byte, 4)
 			for {
-				conn.SetReadDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+				conn.SetReadDeadline(time.Now().Add(common.HeartBeat_Timeout))
 				_, err = io.ReadFull(conn, buffer)
 				if nil != err {
 					break
@@ -44,7 +43,7 @@ func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counte
 				ret := binary.BigEndian.Uint32(buffer)
 
 				if ret != 0 {
-					err = fmt.Errorf("login failed")
+					err = ERR_AUTH
 				}
 				break
 			}
@@ -63,7 +62,7 @@ func (this *Cluster) auth(session kendynet.StreamSession) (*endPoint, error) {
 	var err error
 	conn := session.GetUnderConn().(*net.TCPConn)
 
-	conn.SetReadDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+	conn.SetReadDeadline(time.Now().Add(common.HeartBeat_Timeout))
 	_, err = io.ReadFull(conn, buffer)
 	if nil != err {
 		return nil, err
@@ -101,7 +100,7 @@ func (this *Cluster) auth(session kendynet.StreamSession) (*endPoint, error) {
 		resp.PutUint32(0, 1)
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(time.Second * common.HeartBeat_Timeout))
+	conn.SetWriteDeadline(time.Now().Add(common.HeartBeat_Timeout))
 	_, sendErr := conn.Write(resp.Bytes())
 	conn.SetWriteDeadline(time.Time{})
 

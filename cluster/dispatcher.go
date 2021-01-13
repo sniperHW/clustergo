@@ -4,6 +4,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	cluster_proto "github.com/sniperHW/sanguo/cluster/proto"
 	"runtime"
 	"sync"
 	"time"
@@ -100,11 +101,11 @@ func (this *Cluster) dispatch(from addr.LogicAddr, session kendynet.StreamSessio
 
 	if nil != msg {
 		switch msg.(type) {
-		case *Heartbeat:
-			if msg.(*Heartbeat).GetOriginSender() != uint32(this.serverState.selfAddr.Logic) {
-				heartbeat := msg.(*Heartbeat)
-				heartbeat_resp := &Heartbeat{}
-				heartbeat_resp.OriginSender = proto.Uint32(msg.(*Heartbeat).GetOriginSender())
+		case *cluster_proto.Heartbeat:
+			if msg.(*cluster_proto.Heartbeat).GetOriginSender() != uint32(this.serverState.selfAddr.Logic) {
+				heartbeat := msg.(*cluster_proto.Heartbeat)
+				heartbeat_resp := &cluster_proto.Heartbeat{}
+				heartbeat_resp.OriginSender = proto.Uint32(msg.(*cluster_proto.Heartbeat).GetOriginSender())
 				heartbeat_resp.Timestamp1 = proto.Int64(time.Now().UnixNano())
 				heartbeat_resp.Timestamp2 = proto.Int64(heartbeat.GetTimestamp1())
 				session.Send(heartbeat_resp)

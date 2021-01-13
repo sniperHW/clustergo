@@ -14,6 +14,7 @@ import (
 type processList struct {
 	ProcessInformation struct {
 		Process []struct {
+			User string `json:"user"`
 			Pid  string `json:"pid"`
 			Comm string `json:"command"`
 			Cpu  string `json:"percent-cpu" `
@@ -46,14 +47,17 @@ func GetProcs(filter ...string) ([]Proc, error) {
 		pid, err := strconv.Atoi(strings.TrimSpace(process.Pid))
 		if err != nil {
 			log.Printf("failed to convert first field to int: %v. split: %v", err, process)
+			continue
 		}
 		cpu, err := strconv.ParseFloat(utils.ConvertLocalizedString(process.Cpu), 32)
 		if err != nil {
 			log.Printf("failed to convert third field to float: %v. split: %v", err, process)
+			continue
 		}
 		mem, err := strconv.ParseFloat(utils.ConvertLocalizedString(process.Mem), 32)
 		if err != nil {
 			log.Printf("failed to convert fourth field to float: %v. split: %v", err, process)
+			continue
 		}
 
 		if filterFn(process.Args) {

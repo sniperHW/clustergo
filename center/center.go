@@ -39,6 +39,7 @@ type Center struct {
 	stoped    int32
 	started   int32
 	selfAddr  string
+	die       chan struct{}
 }
 
 func (this *Center) tick() {
@@ -265,8 +266,16 @@ func (this *Center) registerHandler(cmd uint16, handler MsgHandler) {
 
 func (this *Center) Stop() {
 	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
-		this.queue.Close()
 		this.l.Close()
+		this.queue.PostNoWait(func() {
+			for _, v := range this.nodes {
+				if nil != v.session {
+					v.session.Close("center stop", 0)
+				}
+			}
+		})
+		this.queue.Close()
+		<-this.die
 	}
 }
 
@@ -281,6 +290,7 @@ func (this *Center) Start(service string, l golog.LoggerI) {
 	this.handlers = map[uint16]MsgHandler{}
 	this.nodes = map[addr.LogicAddr]*node{}
 	this.rpcServer = center_rpc.NewServer()
+	this.die = make(chan struct{})
 	go this.tick()
 
 	center_rpc.RegisterMethod(this.rpcServer, &protocol.Login{}, this.onLogin)
@@ -293,6 +303,7 @@ func (this *Center) Start(service string, l golog.LoggerI) {
 
 	go func() {
 		this.queue.Run()
+		this.die <- struct{}{}
 	}()
 
 	//启动本地监听
@@ -308,18 +319,20 @@ func (this *Center) Start(service string, l golog.LoggerI) {
 			session.SetReceiver(protocol.NewReceiver())
 			session.SetEncoder(protocol.NewEncoder())
 			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-				this.queue.PostNoWait(func() {
+				/*this.queue.PostNoWait(func() {
 					this.onSessionClose(sess, reason)
-				})
+				})*/
+				this.queue.PostNoWait(this.onSessionClose, sess, reason)
 			})
 			session.Start(func(event *kendynet.Event) {
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
 					msg := event.Data.(*ss.Message)
-					this.queue.PostNoWait(func() {
+					/*this.queue.PostNoWait(func() {
 						this.dispatchMsg(session, msg)
-					})
+					})*/
+					this.queue.PostNoWait(this.dispatchMsg, session, msg)
 				}
 			})
 		})

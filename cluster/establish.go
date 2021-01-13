@@ -45,14 +45,55 @@ func (this *Cluster) onEstablishClient(end *endPoint, session kendynet.StreamSes
 
 }
 
+func (this *Cluster) onSessionEvent(end *endPoint, session kendynet.StreamSession, event *kendynet.Event, updateLastActive bool) {
+	if updateLastActive {
+		end.lastActive = time.Now()
+	}
+
+	switch event.Data.(type) {
+	case *ss.Message:
+
+		var err error
+
+		msg := event.Data.(*ss.Message)
+
+		from := msg.From()
+		if addr.LogicAddr(0) == from {
+			from = end.addr.Logic
+		}
+
+		data := msg.GetData()
+		switch data.(type) {
+		case *rpc.RPCRequest:
+			err = this.queue.PostFullReturn(this.rpcMgr.onRPCRequest, end, from, data.(*rpc.RPCRequest))
+		case *rpc.RPCResponse:
+			//response回调已经被hook必然在queue中调用
+			this.rpcMgr.onRPCResponse(data.(*rpc.RPCResponse))
+		case proto.Message:
+			err = this.queue.PostFullReturn(this.dispatch, from, session, msg.GetCmd(), data.(proto.Message))
+		default:
+			logger.Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
+		}
+
+		if err == util.ErrQueueFull {
+			logger.Errorln("event queue full discard message")
+		}
+
+		break
+	case *ss.RelayMessage:
+		if this.serverState.selfAddr.Logic.Type() == harbarType {
+			this.onRelayMessage(event.Data.(*ss.RelayMessage))
+		}
+		break
+	default:
+		logger.Errorf("invaild message type\n")
+		break
+	}
+}
+
 func (this *Cluster) onEstablishServer(end *endPoint, session kendynet.StreamSession) error {
 
 	if end.addr.Logic != this.serverState.selfAddr.Logic {
-
-		if end != this.serviceMgr.getEndPoint(addr.LogicAddr(end.addr.Logic)) {
-			return ERR_INVAILD_ENDPOINT
-		}
-
 		end.Lock()
 		defer end.Unlock()
 
@@ -67,37 +108,13 @@ func (this *Cluster) onEstablishServer(end *endPoint, session kendynet.StreamSes
 	} else {
 
 		//自连接server
-
-		f := func(args []interface{}) {
-			msg := args[0].(*ss.Message)
-			from := msg.From()
-			if addr.LogicAddr(0) == from {
-				from = end.addr.Logic
-			}
-
-			data := msg.GetData()
-			switch data.(type) {
-			case *rpc.RPCRequest:
-				this.rpcMgr.onRPCRequest(end, from, data.(*rpc.RPCRequest))
-			case *rpc.RPCResponse:
-				this.rpcMgr.onRPCResponse(data.(*rpc.RPCResponse))
-			case proto.Message:
-				this.dispatch(from, session, msg.GetCmd(), data.(proto.Message))
-			default:
-				logger.Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
-			}
-		}
-
 		session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
 		session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
 		session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
-				err := this.queue.PostFullReturn(f, event.Data.(*ss.Message))
-				if err == util.ErrQueueFull {
-					logger.Errorln("event queue full discard message")
-				}
+				this.onSessionEvent(end, session, event, false)
 			}
 		})
 	}
@@ -113,55 +130,17 @@ func (this *Cluster) onEstablish(end *endPoint, session kendynet.StreamSession) 
 	session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
 	session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 		logger.Infoln("disconnected error:", end.addr.Logic.String(), reason, sess.LocalAddr(), sess.RemoteAddr())
-		err := fmt.Errorf(reason)
-		this.queue.PostNoWait(func() {
-			this.onPeerDisconnected(end.addr.Logic, err)
-		})
+		this.queue.PostNoWait(this.onPeerDisconnected, end.addr.Logic, fmt.Errorf(reason))
+		this.rpcMgr.onEndDisconnected(end)
 	})
 
 	end.session = session
-
-	f := func(args []interface{}) {
-		msg := args[0].(*ss.Message)
-		from := msg.From()
-		if addr.LogicAddr(0) == from {
-			from = end.addr.Logic
-		}
-
-		data := msg.GetData()
-		switch data.(type) {
-		case *rpc.RPCRequest:
-			this.rpcMgr.onRPCRequest(end, from, data.(*rpc.RPCRequest))
-		case *rpc.RPCResponse:
-			this.rpcMgr.onRPCResponse(data.(*rpc.RPCResponse))
-		case proto.Message:
-			this.dispatch(from, session, msg.GetCmd(), data.(proto.Message))
-		default:
-			logger.Errorf("invaild message type:%s \n", reflect.TypeOf(data).String())
-		}
-	}
 
 	session.Start(func(event *kendynet.Event) {
 		if event.EventType == kendynet.EventTypeError {
 			end.closeSession(event.Data.(error).Error())
 		} else {
-			end.lastActive = time.Now()
-			switch event.Data.(type) {
-			case *ss.Message:
-				err := this.queue.PostFullReturn(f, event.Data.(*ss.Message))
-				if err == util.ErrQueueFull {
-					logger.Errorln("event queue full discard message")
-				}
-				break
-			case *ss.RelayMessage:
-				if this.serverState.selfAddr.Logic.Type() == harbarType {
-					this.onRelayMessage(event.Data.(*ss.RelayMessage))
-				}
-				break
-			default:
-				logger.Errorf("invaild message type\n")
-				break
-			}
+			this.onSessionEvent(end, session, event, true)
 		}
 	})
 
@@ -171,7 +150,7 @@ func (this *Cluster) onEstablish(end *endPoint, session kendynet.StreamSession) 
 
 	//自连接不需要建立timer
 	if end.addr.Logic != this.serverState.selfAddr.Logic {
-		end.timer = this.RegisterTimer(common.HeartBeat_Timeout*time.Second/2, end.onTimerTimeout, nil)
+		end.timer = this.RegisterTimer(common.HeartBeat_Timeout/2, end.onTimerTimeout, nil)
 	}
 
 	pendingMsg := end.pendingMsg
@@ -184,27 +163,17 @@ func (this *Cluster) onEstablish(end *endPoint, session kendynet.StreamSession) 
 	end.pendingCall = []*rpcCall{}
 
 	for _, v := range pendingCall {
-
-		if now.After(v.deadline) {
-			//连接消费的事件已经超过请求的超时时间
-			this.queue.PostNoWait(func() { v.cb(nil, rpc.ErrCallTimeout) })
-		} else {
+		if v.dialTimer.Cancel() {
 			remain := v.deadline.Sub(now)
-			if remain <= time.Millisecond {
-				//剩余1毫秒,几乎肯定超时，没有调用的必要
-				this.queue.PostNoWait(func() { v.cb(nil, rpc.ErrCallTimeout) })
-			} else {
-				err := this.rpcMgr.client.AsynCall(&RPCChannel{
-					to:      v.to,
-					peer:    end,
-					cluster: this,
-				}, "rpc", v.arg, remain, v.cb)
+			err := this.rpcMgr.client.AsynCall(&RPCChannel{
+				to:      v.to,
+				peer:    end,
+				cluster: this,
+			}, "rpc", v.arg, remain, v.cb)
 
-				if nil != err {
-					this.queue.PostNoWait(func() { v.cb(nil, err) })
-				}
+			if nil != err {
+				v.cb(nil, err)
 			}
 		}
 	}
-
 }

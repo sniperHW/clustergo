@@ -11,12 +11,17 @@ func WaitCondition(eventq *event.EventQueue, fn func() bool) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
+	donefire := int32(0)
+
 	if nil == eventq {
 		go func() {
 			for {
 				time.Sleep(time.Millisecond * 100)
 				if fn() {
-					wg.Done()
+					if atomic.LoadInt32(&donefire) == 0 {
+						atomic.StoreInt32(&donefire, 1)
+						wg.Done()
+					}
 					break
 				}
 			}
@@ -28,12 +33,16 @@ func WaitCondition(eventq *event.EventQueue, fn func() bool) {
 				time.Sleep(time.Millisecond * 100)
 				eventq.PostNoWait(func() {
 					if fn() {
-						wg.Done()
+						if atomic.LoadInt32(&donefire) == 0 {
+							atomic.StoreInt32(&donefire, 1)
+							wg.Done()
+						}
 						atomic.StoreInt32(&stoped, 1)
 					}
 				})
 			}
 		}()
 	}
+
 	wg.Wait()
 }

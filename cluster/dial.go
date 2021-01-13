@@ -29,7 +29,7 @@ func (this *Cluster) dialError(end *endPoint, session kendynet.StreamSession, er
 		logger.Errorf("%s dial error:%s\n", end.addr.Logic.String(), err.Error())
 		if isOk && counter < dialTerminateCount {
 			end.dialing = true
-			this.RegisterTimerOnce(time.Now().Add(time.Second), func(t *timer.Timer, _ interface{}) {
+			this.RegisterTimerOnce(time.Second, func(t *timer.Timer, _ interface{}) {
 				this._dial(end, counter+1)
 			}, nil)
 		} else {
@@ -38,16 +38,15 @@ func (this *Cluster) dialError(end *endPoint, session kendynet.StreamSession, er
 			pendingCall := end.pendingCall
 			end.pendingCall = end.pendingCall[0:0]
 
-			rpcError := ERR_DIAL
-			if err == ERR_INVAILD_ENDPOINT {
-				rpcError = err
+			if err != ERR_INVAILD_ENDPOINT || err != ERR_AUTH {
+				err = ERR_DIAL
 			}
 
-			this.queue.PostNoWait(func() {
-				for _, r := range pendingCall {
-					r.cb(nil, rpcError)
+			for _, r := range pendingCall {
+				if r.dialTimer.Cancel() {
+					r.cb(nil, err)
 				}
-			})
+			}
 		}
 	}
 }

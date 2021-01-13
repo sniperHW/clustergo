@@ -1,12 +1,15 @@
 package cluster
 
 import (
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/rpc"
 	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	cluster_proto "github.com/sniperHW/sanguo/cluster/proto"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
@@ -23,10 +26,11 @@ type clusterState struct {
 }
 
 type rpcCall struct {
-	arg      interface{}
-	deadline time.Time
-	to       addr.LogicAddr
-	cb       rpc.RPCResponseHandler
+	arg       interface{}
+	dialTimer *timer.Timer
+	deadline  time.Time
+	to        addr.LogicAddr
+	cb        rpc.RPCResponseHandler
 }
 
 /*
@@ -39,14 +43,19 @@ func (this *Cluster) Stop(stopFunc func(), sendRemoveNode ...bool) {
 			stopFunc()
 		}
 
+		//等待接收以及发送的rpc都处理完成
 		util.WaitCondition(nil, func() bool {
-			return this.rpcMgr.server.PendingCount() == 0 && this.rpcMgr.client.PendingCount() == 0
+			return this.rpcMgr.server.PendingCount() == 0 && atomic.LoadInt32(&this.pendingRPCRequestCount) == 0
 		})
+
 		this.queue.Close()
 
 		this.l.Close()
 		if len(sendRemoveNode) > 0 && sendRemoveNode[0] {
 			this.centerClient.Close(true)
+			if nil != this.uniLocker {
+				this.uniLocker.Unlock()
+			}
 		} else {
 			this.centerClient.Close(false)
 		}
@@ -57,7 +66,7 @@ func (this *Cluster) IsStoped() bool {
 	return atomic.LoadInt32(&this.serverState.stoped) == 1
 }
 
-func (this *Cluster) postToEndPoint(end *endPoint, msg proto.Message) {
+func (this *Cluster) postToEndPoint(end *endPoint, msg interface{}) {
 	end.Lock()
 	defer end.Unlock()
 
@@ -113,10 +122,12 @@ func (this *Cluster) BrocastToAll(msg proto.Message, exceptTT ...uint32) {
 func (this *Cluster) PostMessage(peer addr.LogicAddr, msg proto.Message) {
 
 	if atomic.LoadInt32(&this.serverState.started) == 0 {
-		panic("cluster not started")
+		logger.Errorf("PostMessage cluster not started")
+		return
 	}
 
 	if peer.Empty() {
+		logger.Errorf("PostMessage to empty peer")
 		return
 	}
 
@@ -143,24 +154,7 @@ func (this *Cluster) PostMessage(peer addr.LogicAddr, msg proto.Message) {
 		msg_ = msg
 	}
 
-	endPoint.Lock()
-	defer endPoint.Unlock()
-
-	logger.Infoln("PostMessage", peer.String())
-
-	if nil != endPoint.session {
-		err := endPoint.session.Send(msg_)
-		if nil != err {
-			//记录日志
-			logger.Errorln("Send error:", err.Error(), reflect.TypeOf(msg_).String())
-		} else {
-			endPoint.lastActive = time.Now()
-		}
-	} else {
-		endPoint.pendingMsg = append(endPoint.pendingMsg, msg_)
-		//尝试与对端建立连接
-		this.dial(endPoint, 0)
-	}
+	this.postToEndPoint(endPoint, msg_)
 }
 
 func (this *Cluster) SelfAddr() addr.Addr {
@@ -170,15 +164,20 @@ func (this *Cluster) SelfAddr() addr.Addr {
 /*
 *  启动服务
  */
-func (this *Cluster) Start(center_addr []string, selfAddr addr.Addr, export ...bool) error {
+func (this *Cluster) Start(center_addr []string, selfAddr addr.Addr, uniLocker UniLocker, export ...bool) error {
+	if selfAddr.Logic.Server() == uint32(0) {
+		return ERR_SERVERADDR_ZERO
+	}
 
 	if !atomic.CompareAndSwapInt32(&this.serverState.started, 0, 1) {
 		return ERR_STARTED
 	}
 
-	if selfAddr.Logic.Server() == uint32(0) {
-		return ERR_SERVERADDR_ZERO
+	if !uniLocker.Lock(selfAddr) {
+		return fmt.Errorf("lock logic addr %s failed", selfAddr.Logic.String())
 	}
+
+	this.uniLocker = uniLocker
 
 	this.serverState.selfAddr = selfAddr
 
@@ -297,5 +296,5 @@ func (this *Cluster) Select(tt uint32) ([]addr.LogicAddr, error) {
 }
 
 func init() {
-	pb.Register("ss", &Heartbeat{}, 1)
+	pb.Register("ss", &cluster_proto.Heartbeat{}, 1)
 }
