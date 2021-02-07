@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-//var rpcServer *rpc.RPCServer
-//var rpcClient *rpc.RPCClient
-
 var timeout = time.Second * 8 // 超时
 
 type RPCChannel struct {
@@ -27,7 +24,11 @@ func (this *RPCChannel) SendResponse(message interface{}) error {
 }
 
 func (this *RPCChannel) Name() string {
-	return "Session"
+	return this.session.RemoteAddr().String() + "<->" + this.session.LocalAddr().String()
+}
+
+func (this *RPCChannel) UID() uint64 {
+	return uint64(uintptr(reflect.ValueOf(this.session.GetNetConn()).Pointer()))
 }
 
 func (this *RPCChannel) GetSession() kendynet.StreamSession {
@@ -74,8 +75,3 @@ func NewClient() *rpc.RPCClient {
 func NewServer() *rpc.RPCServer {
 	return rpc.NewRPCServer(&decoder{}, &encoder{})
 }
-
-/*func init() {
-	rpcServer = rpc.NewRPCServer(&decoder{}, &encoder{})
-	rpcClient = rpc.NewClient(&decoder{}, &encoder{})
-}*/

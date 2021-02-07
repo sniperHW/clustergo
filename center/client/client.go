@@ -11,8 +11,10 @@ import (
 	center_proto "github.com/sniperHW/sanguo/center/protocol"
 	center_rpc "github.com/sniperHW/sanguo/center/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/priority"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/common"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -62,13 +64,9 @@ func (this *CenterClient) Close(sendRemoveNode bool) {
 	}
 }
 
-func (this *CenterClient) dispatchCenterMsg(args []interface{}) {
+func (this *CenterClient) dispatchCenterMsg(session kendynet.StreamSession, msg *ss.Message) {
 
 	if atomic.LoadInt32(&this.closed) == 0 {
-
-		session := args[0].(kendynet.StreamSession)
-		msg := args[1].(*ss.Message)
-
 		data := msg.GetData()
 		switch data.(type) {
 		case *rpc.RPCResponse:
@@ -124,10 +122,8 @@ type center struct {
 	closed       int32
 }
 
-func login(centerClient *CenterClient, session kendynet.StreamSession, req *center_proto.Login, onResp func(interface{}, error)) {
-	if err := center_rpc.AsynCall(centerClient.rpcClient, session, req, onResp); nil != err {
-		panic(err)
-	}
+func login(centerClient *CenterClient, session kendynet.StreamSession, req *center_proto.Login, onResp func(interface{}, error)) error {
+	return center_rpc.AsynCall(centerClient.rpcClient, session, req, onResp)
 }
 
 func (this *center) close(sendRemoveNode bool) {
@@ -180,7 +176,7 @@ func (this *center) connect() {
 							event.Session.Close(event.Data.(error).Error(), 0)
 						} else {
 							msg := event.Data.(*ss.Message)
-							this.centerClient.clientProcessQueue.PostNoWait(this.centerClient.dispatchCenterMsg, session, msg)
+							this.centerClient.clientProcessQueue.PostNoWait(priority.HIGH, this.centerClient.dispatchCenterMsg, session, msg)
 						}
 					})
 
@@ -198,12 +194,14 @@ func (this *center) connect() {
 								this.centerClient.logger.Errorln("login timeout", this.addr)
 								login(this.centerClient, session, loginReq, onResp)
 							} else {
-								panic(err)
+								//登录center中如果出现除超时以外的错误，直接退出进程
+								this.centerClient.logger.Errorln(this.addr, err)
+								os.Exit(0)
 							}
 						} else {
 							resp := r.(*center_proto.LoginRet)
 							if resp.GetErrCode() == constant.LoginOK {
-								this.centerClient.logger.Errorln("login ok", this.addr)
+								this.centerClient.logger.Infoln("login ok", this.addr)
 								ticker := time.NewTicker(time.Second * time.Duration(constant.HeartBeatTimeout/2))
 								go func() {
 									for {
@@ -224,7 +222,10 @@ func (this *center) connect() {
 							}
 						}
 					}
-					login(this.centerClient, session, loginReq, onResp)
+					if err := login(this.centerClient, session, loginReq, onResp); nil != err {
+						this.centerClient.logger.Errorln(this.addr, err)
+						os.Exit(0)
+					}
 					break
 				}
 			}

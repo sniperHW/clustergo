@@ -32,7 +32,7 @@ func main() {
 		fmt.Println(err)
 	} else {
 
-		err = cluster.Start([]string{center_addr}, selfAddr)
+		err = cluster.Start([]string{center_addr}, selfAddr, nil)
 
 		if nil == err {
 			go func() {

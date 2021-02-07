@@ -1,5 +1,5 @@
 syntax = "proto2";
-package cluster;
+package proto;
 
 
 //harbor向cluster的节点发送

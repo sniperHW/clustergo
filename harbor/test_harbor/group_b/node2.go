@@ -42,7 +42,7 @@ func main() {
 		return
 	}
 
-	err = cluster.Start([]string{center_addr}, addr, cluster.EXPORT)
+	err = cluster.Start([]string{center_addr}, addr, nil, cluster.EXPORT)
 
 	if nil == err {
 		sigStop := make(chan bool)

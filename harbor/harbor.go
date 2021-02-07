@@ -33,7 +33,7 @@ func main() {
 	if nil != err {
 		fmt.Println(err)
 	} else {
-		err = cluster.Start(strings.Split(centerAddrs, "@"), selfAddr)
+		err = cluster.Start(strings.Split(centerAddrs, "@"), selfAddr, nil)
 		if nil != err {
 			fmt.Println(err)
 		} else {

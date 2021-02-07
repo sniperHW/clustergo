@@ -5,6 +5,7 @@ import (
 )
 
 type Proc struct {
+	User        string
 	Pid         int
 	CommandName string
 	FullCommand string

@@ -22,14 +22,17 @@ func GetProcs(filter ...string) ([]Proc, error) {
 		command, err := psProc.Name()
 		if err != nil {
 			log.Printf("failed to get process command from gopsutil: %v. psProc: %v. i: %v. pid: %v", err, psProc, i, pid)
+			continue
 		}
 		cpu, err := psProc.CPUPercent()
 		if err != nil {
 			log.Printf("failed to get process cpu usage from gopsutil: %v. psProc: %v. i: %v. pid: %v", err, psProc, i, pid)
+			continue
 		}
 		mem, err := psProc.MemoryPercent()
 		if err != nil {
 			log.Printf("failed to get process memeory usage from gopsutil: %v. psProc: %v. i: %v. pid: %v", err, psProc, i, pid)
+			continue
 		}
 
 		if filterFn(command) {

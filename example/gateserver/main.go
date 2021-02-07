@@ -84,7 +84,7 @@ func main() {
 		return
 	}
 
-	err = cluster.Start([]string{center_addr}, addr)
+	err = cluster.Start([]string{center_addr}, addr, nil)
 
 	if nil == err {
 		cs.StartTcpServer("tcp", "localhost:8110", &dispatcher{logger: logger})

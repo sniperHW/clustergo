@@ -36,8 +36,8 @@ func SelfAddr() addr.Addr {
 /*
 *  启动服务
  */
-func Start(center_addr []string, selfAddr addr.Addr, export ...bool) error {
-	return defaultCluster.Start(center_addr, selfAddr, export...)
+func Start(center_addr []string, selfAddr addr.Addr, uniLocker UniLocker, export ...bool) error {
+	return defaultCluster.Start(center_addr, selfAddr, uniLocker, export...)
 }
 
 func GetEventQueue() *event.EventQueue {
@@ -79,8 +79,8 @@ func AsynCall(peer addr.LogicAddr, arg proto.Message, timeout uint32, cb rpc.RPC
 	defaultCluster.AsynCall(peer, arg, timeout, cb)
 }
 
-func RegisterTimerOnce(expired time.Time, callback func(*timer.Timer, interface{}), ctx interface{}) *timer.Timer {
-	return defaultCluster.RegisterTimerOnce(expired, callback, ctx)
+func RegisterTimerOnce(timeout time.Duration, callback func(*timer.Timer, interface{}), ctx interface{}) *timer.Timer {
+	return defaultCluster.RegisterTimerOnce(timeout, callback, ctx)
 }
 
 func RegisterTimer(timeout time.Duration, callback func(*timer.Timer, interface{}), ctx interface{}) *timer.Timer {

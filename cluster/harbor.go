@@ -3,8 +3,10 @@ package cluster
 import (
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
+	cluster_proto "github.com/sniperHW/sanguo/cluster/proto"
 	"github.com/sniperHW/sanguo/cluster/rpcerr"
 	"github.com/sniperHW/sanguo/codec/ss"
+	"math/rand"
 	"sort"
 	"strings"
 	"time"
@@ -137,8 +139,8 @@ func nodes2Str(nodes []uint32) string {
 }
 
 func (this *serviceManager) NotifyForginServicesH2H(end *endPoint, nodes []uint32) {
-	req := &NotifyForginServicesH2HReq{Nodes: nodes}
-	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
+	req := &cluster_proto.NotifyForginServicesH2HReq{Nodes: nodes}
+	this.cluster.asynCall(end.addr.Logic, end, req, 1000, func(_ interface{}, err error) {
 		if nil == err {
 			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "NotifyForginServicesH2H to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
@@ -154,8 +156,8 @@ func (this *serviceManager) NotifyForginServicesH2H(end *endPoint, nodes []uint3
 }
 
 func (this *serviceManager) AddForginServicesH2H(end *endPoint, nodes []uint32) {
-	req := &AddForginServicesH2HReq{Nodes: nodes}
-	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
+	req := &cluster_proto.AddForginServicesH2HReq{Nodes: nodes}
+	this.cluster.asynCall(end.addr.Logic, end, req, 1000, func(_ interface{}, err error) {
 		if nil == err {
 			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "AddForginServicesH2H to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
@@ -171,8 +173,8 @@ func (this *serviceManager) AddForginServicesH2H(end *endPoint, nodes []uint32) 
 }
 
 func (this *serviceManager) NotifyForginServicesH2S(end *endPoint, nodes []uint32) {
-	req := &NotifyForginServicesH2SReq{Nodes: nodes}
-	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
+	req := &cluster_proto.NotifyForginServicesH2SReq{Nodes: nodes}
+	this.cluster.asynCall(end.addr.Logic, end, req, 1000, func(_ interface{}, err error) {
 		if nil == err {
 			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "NotifyForginServicesH2S to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
@@ -188,8 +190,8 @@ func (this *serviceManager) NotifyForginServicesH2S(end *endPoint, nodes []uint3
 }
 
 func (this *serviceManager) AddForginServicesH2S(end *endPoint, nodes []uint32) {
-	req := &AddForginServicesH2SReq{Nodes: nodes}
-	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
+	req := &cluster_proto.AddForginServicesH2SReq{Nodes: nodes}
+	this.cluster.asynCall(end.addr.Logic, end, req, 1000, func(_ interface{}, err error) {
 		if nil == err {
 			logger.Infoln(this.cluster.serverState.selfAddr.Logic.String(), "AddForginServicesH2S to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
@@ -205,8 +207,8 @@ func (this *serviceManager) AddForginServicesH2S(end *endPoint, nodes []uint32) 
 }
 
 func (this *serviceManager) RemForginServicesH2H(end *endPoint, nodes []uint32) {
-	req := &RemForginServicesH2HReq{Nodes: nodes}
-	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
+	req := &cluster_proto.RemForginServicesH2HReq{Nodes: nodes}
+	this.cluster.asynCall(end.addr.Logic, end, req, 1000, func(_ interface{}, err error) {
 		if nil == err {
 			logger.Infoln("RemForginServicesH2H to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
@@ -222,8 +224,8 @@ func (this *serviceManager) RemForginServicesH2H(end *endPoint, nodes []uint32) 
 }
 
 func (this *serviceManager) RemForginServicesH2S(end *endPoint, nodes []uint32) {
-	req := &RemForginServicesH2SReq{Nodes: nodes}
-	this.cluster.asynCall(end, req, 5000, func(_ interface{}, err error) {
+	req := &cluster_proto.RemForginServicesH2SReq{Nodes: nodes}
+	this.cluster.asynCall(end.addr.Logic, end, req, 1000, func(_ interface{}, err error) {
 		if nil == err {
 			logger.Infoln("RemForginServicesH2S to ", end.addr.Logic, "ok", nodes2Str(nodes))
 		} else if nil != err {
@@ -301,69 +303,82 @@ func diff2(a, b []uint32) ([]uint32, []uint32) {
 
 func (this *serviceManager) initHarbor() {
 
-	this.cluster.RegisterMethod(&NotifyForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&cluster_proto.NotifyForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("NotifyForginServicesH2HReq")
-		if this.isSelfHarbor() {
 
-			msg := req.(*NotifyForginServicesH2HReq)
+		if testRPCTimeout && rand.Int()%2 == 0 {
+			replyer.DropResponse()
+		} else {
 
-			current := this.getAllForginService()
+			if this.isSelfHarbor() {
 
-			endPoints := this.getAllEndpoints()
+				msg := req.(*cluster_proto.NotifyForginServicesH2HReq)
 
-			//logger.Infoln("NotifyForginServicesH2HReq", msg.GetNodes())
+				current := this.getAllForginService()
 
-			add, remove := diff2(msg.GetNodes(), current)
+				endPoints := this.getAllEndpoints()
 
-			for _, v := range add {
-				this.addForginService(addr.LogicAddr(v))
-			}
+				//logger.Infoln("NotifyForginServicesH2HReq", msg.GetNodes())
 
-			for _, v := range remove {
-				this.removeForginService(addr.LogicAddr(v))
-			}
+				add, remove := diff2(msg.GetNodes(), current)
 
-			for _, v := range endPoints {
-
-				if len(add) != 0 {
-					this.AddForginServicesH2S(v, add)
+				for _, v := range add {
+					this.addForginService(addr.LogicAddr(v))
 				}
 
-				if len(remove) != 0 {
-					this.RemForginServicesH2S(v, remove)
+				for _, v := range remove {
+					this.removeForginService(addr.LogicAddr(v))
 				}
+
+				for _, v := range endPoints {
+
+					if len(add) != 0 {
+						this.AddForginServicesH2S(v, add)
+					}
+
+					if len(remove) != 0 {
+						this.RemForginServicesH2S(v, remove)
+					}
+				}
+
 			}
 
+			replyer.Reply(&cluster_proto.NotifyForginServicesH2HResp{}, nil)
 		}
-
-		replyer.Reply(&NotifyForginServicesH2HResp{}, nil)
 	})
 
-	this.cluster.RegisterMethod(&AddForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+	this.cluster.RegisterMethod(&cluster_proto.AddForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
 		//Infoln("AddForginServicesH2HReq")
-		if this.isSelfHarbor() {
-			msg := req.(*AddForginServicesH2HReq)
-			for _, v := range msg.GetNodes() {
-				this.addForginService(addr.LogicAddr(v))
+		if testRPCTimeout && rand.Int()%2 == 0 {
+			replyer.DropResponse()
+		} else {
+			if this.isSelfHarbor() {
+				msg := req.(*cluster_proto.AddForginServicesH2HReq)
+				for _, v := range msg.GetNodes() {
+					this.addForginService(addr.LogicAddr(v))
+				}
+				//向所有非harbor节点通告
+				this.brocastH2S(this.AddForginServicesH2S, msg.GetNodes())
 			}
-			//向所有非harbor节点通告
-			this.brocastH2S(this.AddForginServicesH2S, msg.GetNodes())
+			replyer.Reply(&cluster_proto.AddForginServicesH2HResp{}, nil)
 		}
-		replyer.Reply(&AddForginServicesH2HResp{}, nil)
 	})
 
-	this.cluster.RegisterMethod(&RemForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
-		//Infoln("RemForginServicesH2HReq")
-		if this.isSelfHarbor() {
-			msg := req.(*RemForginServicesH2HReq)
-			for _, v := range msg.GetNodes() {
-				this.removeForginService(addr.LogicAddr(v))
+	this.cluster.RegisterMethod(&cluster_proto.RemForginServicesH2HReq{}, func(replyer *rpc.RPCReplyer, req interface{}) {
+		if testRPCTimeout && rand.Int()%2 == 0 {
+			replyer.DropResponse()
+		} else {
+			//Infoln("RemForginServicesH2HReq")
+			if this.isSelfHarbor() {
+				msg := req.(*cluster_proto.RemForginServicesH2HReq)
+				for _, v := range msg.GetNodes() {
+					this.removeForginService(addr.LogicAddr(v))
+				}
+				//向所有非harbor节点通告
+				this.brocastH2S(this.RemForginServicesH2S, msg.GetNodes())
 			}
-			//向所有非harbor节点通告
-			this.brocastH2S(this.RemForginServicesH2S, msg.GetNodes())
+			replyer.Reply(&cluster_proto.RemForginServicesH2HResp{}, nil)
 		}
-		replyer.Reply(&RemForginServicesH2HResp{}, nil)
-
 	})
 }
 
