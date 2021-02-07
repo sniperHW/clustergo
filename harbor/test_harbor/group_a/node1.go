@@ -62,9 +62,9 @@ func main() {
 					cluster.AsynCall(peer, echoReq, 10, func(result interface{}, err error) {
 						if nil == err {
 							resp := result.(*ss_rpc.EchoResp)
-							kendynet.Infof("echoRpc response %s\n", resp.GetMessage())
+							logger.Infof("echoRpc response %s\n", resp.GetMessage())
 						} else {
-							kendynet.Infoln(echoReq.GetMessage(), err)
+							logger.Infoln(echoReq.GetMessage(), err)
 						}
 					})
 				}

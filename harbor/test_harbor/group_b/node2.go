@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
+	"github.com/sniperHW/sanguo/cluster"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
+	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
+	"os"
+	//ss_msg "github.com/sniperHW/sanguo/protocol/ss/ssmessage"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
 	"github.com/sniperHW/kendynet/rpc"
-	"github.com/sniperHW/sanguo/cluster"
-	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/protocol/cmdEnum"
-	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
-	ss_rpc "github.com/sniperHW/sanguo/protocol/ss/rpc"
-	"os"
 )
 
 func main() {
@@ -29,7 +30,7 @@ func main() {
 
 	cluster.RegisterMethod(&ss_rpc.EchoReq{}, func(replyer *rpc.RPCReplyer, arg interface{}) {
 		echo := arg.(*ss_rpc.EchoReq)
-		kendynet.Infof("echo message:%s\n", echo.GetMessage())
+		logger.Infof("echo message:%s\n", echo.GetMessage())
 		echoResp := &ss_rpc.EchoResp{}
 		echoResp.Message = proto.String("world")
 		replyer.Reply(echoResp, nil)

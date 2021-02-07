@@ -10,6 +10,7 @@ type ServerDispatcher interface {
 	Dispatch(kendynet.StreamSession, *codecs.Message)
 	OnClose(kendynet.StreamSession, string)
 	OnNewClient(kendynet.StreamSession)
+	OnAuthenticate(kendynet.StreamSession) bool
 }
 
 type ClientDispatcher interface {

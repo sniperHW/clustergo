@@ -333,6 +333,7 @@ func (this *Center) Start(service string, l golog.LoggerI) {
 						this.dispatchMsg(session, msg)
 					})*/
 					this.queue.PostNoWait(0, this.dispatchMsg, session, msg)
+
 				}
 			})
 		})

@@ -5,13 +5,15 @@ package asyn
  */
 
 import (
+	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
+	"github.com/sniperHW/kendynet/util"
 	"reflect"
 )
 
 var routinePool_ *routinePool
 
-type wrapFunc func(callback func([]interface{}), args ...interface{})
+type wrapFunc func(callback interface{}, args ...interface{})
 
 func AsynWrap(queue *event.EventQueue, fn interface{}) wrapFunc {
 
@@ -25,28 +27,20 @@ func AsynWrap(queue *event.EventQueue, fn interface{}) wrapFunc {
 		return nil
 	}
 
-	fnType := reflect.TypeOf(fn)
-
-	return func(callback func([]interface{}), args ...interface{}) {
+	return func(callback interface{}, args ...interface{}) {
 		f := func() {
-			in := make([]reflect.Value, len(args))
-			for i, v := range args {
-				if v == nil {
-					in[i] = reflect.Zero(fnType.In(i))
-				} else {
-					in[i] = reflect.ValueOf(v)
+			out, err := util.ProtectCall(fn, args...)
+			if err != nil {
+				logger := kendynet.GetLogger()
+				if logger != nil {
+					logger.Errorln(err)
 				}
+				return
 			}
 
-			out := oriF.Call(in)
-
 			if len(out) > 0 {
-				ret := make([]interface{}, len(out))
-				for i, v := range out {
-					ret[i] = v.Interface()
-				}
 				if nil != callback {
-					queue.PostNoWait(callback, ret...)
+					queue.PostNoWait(callback, out...)
 				}
 			} else {
 				if nil != callback {

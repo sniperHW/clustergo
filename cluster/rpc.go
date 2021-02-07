@@ -111,7 +111,8 @@ func (this *RPCChannel) SendResponse(message interface{}) error {
 }
 
 func (this *RPCChannel) Name() string {
-	return fmt.Sprintf("%s <-> %s", this.cluster.serverState.selfAddr.Logic.String(), this.peer.addr.Logic.String())
+	//return fmt.Sprintf("%s <-> %s", this.cluster.serverState.selfAddr.Logic.String(), this.peer.addr.Logic.String())
+	return this.peer.addr.Logic.String()
 }
 
 func (this *RPCChannel) UID() uint64 {
