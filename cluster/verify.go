@@ -5,14 +5,14 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/common"
+	"github.com/sniperHW/sanguo/network"
 	"io"
 	"net"
 	"time"
 )
 
-func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counter int) {
+func (this *Cluster) login(end *endPoint, conn net.Conn, counter int) {
 	go func() {
-		conn := session.GetUnderConn().(*net.TCPConn)
 		logicAddr := this.serverState.selfAddr.Logic
 		buffer := kendynet.NewByteBuffer(64)
 		buffer.AppendUint32(uint32(logicAddr))
@@ -26,6 +26,8 @@ func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counte
 		conn.SetWriteDeadline(time.Now().Add(common.HeartBeat_Timeout))
 		_, err := conn.Write(buffer.Bytes())
 		conn.SetWriteDeadline(time.Time{})
+
+		session := network.CreateSession(conn)
 
 		if nil != err {
 			this.dialError(end, session, err, counter)
@@ -57,11 +59,9 @@ func (this *Cluster) login(end *endPoint, session kendynet.StreamSession, counte
 	}()
 }
 
-func (this *Cluster) auth(session kendynet.StreamSession) (*endPoint, error) {
+func (this *Cluster) auth(conn net.Conn) (*endPoint, error) {
 	buffer := make([]byte, 64)
 	var err error
-	conn := session.GetUnderConn().(*net.TCPConn)
-
 	conn.SetReadDeadline(time.Now().Add(common.HeartBeat_Timeout))
 	_, err = io.ReadFull(conn, buffer)
 	if nil != err {

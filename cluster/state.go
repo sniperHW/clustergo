@@ -4,11 +4,12 @@ import (
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/golog"
 	"github.com/sniperHW/kendynet/rpc"
-	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
+	//listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 	center_client "github.com/sniperHW/sanguo/center/client"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/cluster/priority"
 	"github.com/sniperHW/sanguo/cluster/rpcerr"
+	"net"
 	"sync"
 )
 
@@ -40,7 +41,7 @@ type Cluster struct {
 	serviceMgr             serviceManager
 	msgMgr                 msgManager
 	centerClient           *center_client.CenterClient
-	l                      *listener.Listener
+	l                      net.Listener //*listener.Listener
 	uniLocker              UniLocker
 	pendingRPCRequestCount int32
 }

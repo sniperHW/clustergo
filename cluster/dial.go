@@ -2,8 +2,9 @@ package cluster
 
 import (
 	"github.com/sniperHW/kendynet"
-	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	//connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 	"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/sanguo/network"
 	"time"
 )
 
@@ -15,7 +16,7 @@ func (this *Cluster) dialError(end *endPoint, session kendynet.StreamSession, er
 	defer end.Unlock()
 
 	if nil != session {
-		session.Close(err.Error(), 0)
+		session.Close(err, 0)
 	}
 
 	end.dialing = false
@@ -64,19 +65,13 @@ func (this *Cluster) _dial(end *endPoint, counter int) {
 
 	logger.Infof("dial %s %v\n", end.addr.Logic.String(), end.addr.Net)
 	go func() {
-		client, err := connector.New("tcp", end.addr.Net.String())
+		conn, err := network.Dial("tcp", end.addr.Net.String(), time.Second*3)
 		if err != nil {
-			this.dialError(end, nil, err, dialTerminateCount)
+			this.dialError(end, nil, err, counter)
 		} else {
-			session, err := client.Dial(time.Second * 3)
-			if nil != session {
-				this.login(end, session, counter)
-			} else {
-				this.dialError(end, nil, err, counter)
-			}
+			this.login(end, conn, counter)
 		}
 	}()
-
 }
 
 func (this *Cluster) dial(end *endPoint, counter int) {

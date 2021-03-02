@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
@@ -34,7 +35,7 @@ func (e *endPoint) isHarbor() bool {
 	return e.addr.Logic.Type() == harbarType
 }
 
-func (e *endPoint) closeSession(reason string) {
+func (e *endPoint) closeSession(reason error) {
 	if session := func() kendynet.StreamSession {
 		e.Lock()
 		defer e.Unlock()
@@ -73,7 +74,7 @@ func (e *endPoint) onTimerTimeout(t *timer.Timer, _ interface{}) {
 		}
 
 	}() {
-		e.closeSession("timeout")
+		e.closeSession(kendynet.ErrRecvTimeout)
 	}
 }
 
@@ -175,7 +176,7 @@ func (this *serviceManager) addEndPoint(centerAddr net.Addr, peer *center_proto.
 	end = this.idEndPointMap[addr.LogicAddr(peerAddr.Logic)]
 	if nil != end {
 		if end.addr.Net.String() != netAddr.String() {
-			end.closeSession("addEndPoint close old connection")
+			end.closeSession(errors.New("addEndPoint close old connection"))
 			end.Lock()
 			end.addr.Net = netAddr
 			end.Unlock()
@@ -244,7 +245,7 @@ func (this *serviceManager) removeEndPoint(centerAddr net.Addr, peer addr.LogicA
 			}
 
 			this.onEndPointLeave(end)
-			end.closeSession("remove endPoint")
+			end.closeSession(errors.New("remove endPoint"))
 		}
 	}
 }

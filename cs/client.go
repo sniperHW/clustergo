@@ -1,15 +1,15 @@
 package cs
 
 import (
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/util"
+	//"net"
 	codecs "github.com/sniperHW/sanguo/codec/cs"
 	"github.com/sniperHW/sanguo/common"
+	"github.com/sniperHW/sanguo/network"
 	_ "github.com/sniperHW/sanguo/protocol/cs" //触发pb注册
 	cs_proto "github.com/sniperHW/sanguo/protocol/cs/message"
 	"time"
-
-	"github.com/sniperHW/kendynet"
-	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
-	"github.com/sniperHW/kendynet/util"
 )
 
 var (
@@ -18,37 +18,33 @@ var (
 )
 
 func DialTcp(peerAddr string, timeout time.Duration, dispatcher ClientDispatcher) {
-	c, _ := connector.New("tcp", peerAddr)
 	go func() {
-		session, err := c.Dial(timeout)
-		if nil != err {
+		conn, err := network.Dial("tcp", peerAddr, timeout)
+		if err != nil {
 			dispatcher.OnConnectFailed(peerAddr, err)
 		} else {
+			session := network.CreateSession(conn)
 			queue.Add(func() {
 				sessions[session] = time.Now().Add(common.HeartBeat_Timeout_Client / 2)
 				session.SetRecvTimeout(common.HeartBeat_Timeout_Client)
-				session.SetReceiver(codecs.NewReceiver("sc"))
+				session.SetInBoundProcessor(codecs.NewReceiver("sc"))
 				session.SetEncoder(codecs.NewEncoder("cs"))
-				session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
+				session.SetCloseCallBack(func(sess kendynet.StreamSession, reason error) {
 					queue.Add(func() {
 						delete(sessions, sess)
 					})
 					dispatcher.OnClose(sess, reason)
 				})
 				dispatcher.OnEstablish(session)
-				session.Start(func(event *kendynet.Event) {
-					if event.EventType == kendynet.EventTypeError {
-						event.Session.Close(event.Data.(error).Error(), 0)
-					} else {
-						msg := event.Data.(*codecs.Message)
-						switch msg.GetData().(type) {
-						case *cs_proto.HeartbeatToC:
-							//fmt.Printf("on HeartbeatToC\n")
-							break
-						default:
-							dispatcher.Dispatch(session, msg)
-							break
-						}
+				session.BeginRecv(func(s kendynet.StreamSession, m interface{}) {
+					msg := m.(*codecs.Message)
+					switch msg.GetData().(type) {
+					case *cs_proto.HeartbeatToC:
+						//fmt.Printf("on HeartbeatToC\n")
+						break
+					default:
+						dispatcher.Dispatch(session, msg)
+						break
 					}
 				})
 			})

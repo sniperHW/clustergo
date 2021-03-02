@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"errors"
 	"github.com/sniperHW/kendynet/rpc"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	cluster_proto "github.com/sniperHW/sanguo/cluster/proto"
@@ -53,7 +54,7 @@ func (this *serviceManager) addHarbor(harbor *endPoint) {
 
 func (this *serviceManager) removeHarbor(harbor *endPoint) {
 	if nil != harbor.session {
-		harbor.session.Close("remove harbor", 0)
+		harbor.session.Close(errors.New("remove harbor"), 0)
 	}
 	group := harbor.addr.Logic.Group()
 	harborGroup, ok := this.harborsByGroup[group]

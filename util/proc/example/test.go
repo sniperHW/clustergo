@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"teacher/util/proc"
+	"github.com/sniperHW/sanguo/util/proc"
 )
 
 func main() {

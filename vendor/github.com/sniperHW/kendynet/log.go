@@ -52,7 +52,8 @@ func (this *EmptyLogger) Fatalf(format string, v ...interface{}) {
 func (this *EmptyLogger) Fatalln(v ...interface{}) {
 	fmt.Println(v...)
 }
-func (this *EmptyLogger) SetLevelByString(level string) {}
+
+//func (this *EmptyLogger) SetLevelByString(level string) {}
 
 /*
 func Debugf(format string, v ...interface{}) {

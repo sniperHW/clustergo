@@ -1,11 +1,11 @@
 package cluster
 
 import (
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/rpc"
 	//"github.com/sniperHW/kendynet/timer"
+	"errors"
 	"github.com/sniperHW/kendynet/util"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/cluster/priority"
@@ -26,7 +26,7 @@ func (this *Cluster) onEstablishClient(end *endPoint, session kendynet.StreamSes
 		 * 如果end.conn != nil 表示两端同时请求建立连接，本端已经作为服务端成功接受了对端的连接
 		 */
 		logger.Infof("endPoint:%s already have connection\n", end.addr.Logic.String())
-		session.Close("duplicate endPoint connection", 0)
+		session.Close(errors.New("duplicate endPoint connection"), 0)
 		return
 	}
 
@@ -46,17 +46,17 @@ func (this *Cluster) onEstablishClient(end *endPoint, session kendynet.StreamSes
 
 }
 
-func (this *Cluster) onSessionEvent(end *endPoint, session kendynet.StreamSession, event *kendynet.Event, updateLastActive bool) {
+func (this *Cluster) onSessionEvent(end *endPoint, session kendynet.StreamSession, event interface{}, updateLastActive bool) {
 	if updateLastActive {
 		end.lastActive = time.Now()
 	}
 
-	switch event.Data.(type) {
+	switch event.(type) {
 	case *ss.Message:
 
 		var err error
 
-		msg := event.Data.(*ss.Message)
+		msg := event.(*ss.Message)
 
 		from := msg.From()
 		if addr.LogicAddr(0) == from {
@@ -83,7 +83,7 @@ func (this *Cluster) onSessionEvent(end *endPoint, session kendynet.StreamSessio
 		break
 	case *ss.RelayMessage:
 		if this.serverState.selfAddr.Logic.Type() == harbarType {
-			this.onRelayMessage(event.Data.(*ss.RelayMessage))
+			this.onRelayMessage(event.(*ss.RelayMessage))
 		}
 		break
 	default:
@@ -109,14 +109,10 @@ func (this *Cluster) onEstablishServer(end *endPoint, session kendynet.StreamSes
 	} else {
 
 		//自连接server
-		session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
+		session.SetInBoundProcessor(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
 		session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
-		session.Start(func(event *kendynet.Event) {
-			if event.EventType == kendynet.EventTypeError {
-				event.Session.Close(event.Data.(error).Error(), 0)
-			} else {
-				this.onSessionEvent(end, session, event, false)
-			}
+		session.BeginRecv(func(s kendynet.StreamSession, e interface{}) {
+			this.onSessionEvent(end, s, e, false)
 		})
 	}
 
@@ -127,22 +123,17 @@ func (this *Cluster) onEstablish(end *endPoint, session kendynet.StreamSession) 
 
 	logger.Infoln("onEstablish", end, this.serverState.selfAddr.Logic.String(), "<--->", end.addr.Logic.String(), session.LocalAddr(), session.RemoteAddr())
 
-	session.SetReceiver(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
-	session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
-	session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-		logger.Infoln("disconnected error:", end.addr.Logic.String(), reason, sess.LocalAddr(), sess.RemoteAddr())
-		this.queue.PostNoWait(priority.MID, this.onPeerDisconnected, end.addr.Logic, fmt.Errorf(reason))
-		this.rpcMgr.onEndDisconnected(end)
-	})
-
 	end.session = session
-
-	session.Start(func(event *kendynet.Event) {
-		if event.EventType == kendynet.EventTypeError {
-			end.closeSession(event.Data.(error).Error())
-		} else {
-			this.onSessionEvent(end, session, event, true)
-		}
+	session.SetInBoundProcessor(ss.NewReceiver("ss", "rpc_req", "rpc_resp", this.serverState.selfAddr.Logic))
+	session.SetEncoder(ss.NewEncoder("ss", "rpc_req", "rpc_resp"))
+	session.SetCloseCallBack(func(sess kendynet.StreamSession, reason error) {
+		logger.Infoln("disconnected error:", end.addr.Logic.String(), reason, sess.LocalAddr(), sess.RemoteAddr())
+		this.queue.PostNoWait(priority.MID, this.onPeerDisconnected, end.addr.Logic, reason)
+		this.rpcMgr.onEndDisconnected(end)
+	}).SetErrorCallBack(func(s kendynet.StreamSession, reason error) {
+		end.closeSession(reason)
+	}).BeginRecv(func(s kendynet.StreamSession, e interface{}) {
+		this.onSessionEvent(end, s, e, true)
 	})
 
 	now := time.Now()

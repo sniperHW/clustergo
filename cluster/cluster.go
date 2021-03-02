@@ -3,18 +3,18 @@ package cluster
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/rpc"
-	listener "github.com/sniperHW/kendynet/socket/listener/tcp"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/sanguo/cluster/addr"
 	"github.com/sniperHW/sanguo/cluster/priority"
 	cluster_proto "github.com/sniperHW/sanguo/cluster/proto"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/network"
 	_ "github.com/sniperHW/sanguo/protocol/ss" //触发pb注册
 	"github.com/sniperHW/sanguo/util"
+	"net"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -182,10 +182,27 @@ func (this *Cluster) Start(center_addr []string, selfAddr addr.Addr, uniLocker U
 
 	this.serverState.selfAddr = selfAddr
 
-	server, err := listener.New("tcp", this.serverState.selfAddr.Net.String())
-	if server != nil {
+	l, serve, err := network.Listen("tcp", this.serverState.selfAddr.Net.String(), func(conn net.Conn) {
+		go func() {
+			e, err := this.auth(conn)
+			if nil != err {
+				logger.Infoln("auth error", err.Error(), "self", this.serverState.selfAddr.Logic.String())
+				conn.Close()
+			} else {
+				session := network.CreateSession(conn)
+				err = this.onEstablishServer(e, session)
+				if nil != err {
+					logger.Infoln("onEstablishServer error", err.Error())
+					session.Close(err, 0)
+				}
+			}
+		}()
+	})
 
-		this.l = server
+	if nil != err {
+		return err
+	} else {
+		this.l = l
 		go func() {
 			this.queue.Run()
 		}()
@@ -194,32 +211,9 @@ func (this *Cluster) Start(center_addr []string, selfAddr addr.Addr, uniLocker U
 		this.centerInit(export...)
 		this.connectCenter(center_addr)
 
-		go func() {
-			err := server.Serve(func(session kendynet.StreamSession) {
-				logger.Infoln("on new client", session.LocalAddr(), session.RemoteAddr())
-				go func() {
-					e, err := this.auth(session)
-					if nil != err {
-						logger.Infoln("auth error", err.Error(), "self", this.serverState.selfAddr.Logic.String())
-						session.Close(err.Error(), 0)
-					} else {
-						err = this.onEstablishServer(e, session)
-						if nil != err {
-							logger.Infoln("onEstablishServer error", err.Error())
-							session.Close(err.Error(), 0)
-						}
-					}
-				}()
-			})
-			if nil != err {
-				logger.Errorf("server.Start() failed:%s\n", err.Error())
-			}
-
-		}()
+		go serve()
 
 		return nil
-	} else {
-		return err
 	}
 }
 

@@ -4,6 +4,7 @@ package cluster
 //go tool cover -html=coverage.out
 
 import (
+	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
@@ -741,7 +742,7 @@ func TestRPC(t *testing.T) {
 			//等待从center接收到node1的信息
 			end := node1.serviceMgr.getEndPoint(node2Addr)
 
-			end.closeSession("test")
+			end.closeSession(errors.New("test"))
 
 		}
 		echo := arg.(*ss_rpc.EchoReq)

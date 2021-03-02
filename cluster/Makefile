@@ -1,2 +1,2 @@
 all:
-	protoc --go_out=paths=source_relative:. proto/*.proto
+	protoc --go_out=. proto/*.proto
