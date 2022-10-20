@@ -1,0 +1,162 @@
+package ss
+
+import (
+	"errors"
+	"fmt"
+	"github.com/sniperHW/network"
+	"github.com/sniperHW/sanguo/cluster/addr"
+	"github.com/sniperHW/sanguo/cluster/rpcerr"
+	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/sanguo/pkg/buffer"
+	"github.com/sniperHW/sanguo/pkg/rpc"
+	"time"
+)
+
+const (
+	maxPacketSize int = 65535 * 4
+	minSize       int = sizeLen + sizeFlag
+)
+
+type Receiver struct {
+	buff     []byte
+	w        int
+	r        int
+	ns_msg   string
+	ns_req   string
+	ns_resp  string
+	selfAddr addr.LogicAddr
+	reader   buffer.BufferReader
+}
+
+func NewReceiver(ns_msg, ns_req, ns_resp string, selfAddr ...addr.LogicAddr) *Receiver {
+	receiver := &Receiver{}
+	receiver.ns_msg = ns_msg
+	receiver.ns_req = ns_req
+	receiver.ns_resp = ns_resp
+	receiver.buff = make([]byte, 4096)
+
+	if len(selfAddr) > 0 {
+		receiver.selfAddr = selfAddr[0]
+	}
+
+	return receiver
+}
+
+func (this *Receiver) isTarget(to addr.LogicAddr) bool {
+	return this.selfAddr == to
+}
+
+func (this *Receiver) read(r network.ReadAble, deadline time.Time) (n int, err error) {
+	if deadline.IsZero() {
+		r.SetReadDeadline(time.Time{})
+		n, err = r.Read(this.buff[this.w:])
+	} else {
+		r.SetReadDeadline(deadline)
+		n, err = r.Read(this.buff[this.w:])
+	}
+	return
+}
+
+func (this *Receiver) Recv(r network.ReadAble, deadline time.Time) ([]byte, error) {
+	for {
+		unpackSize := this.w - this.r
+		if unpackSize >= minSize {
+			this.reader.Reset(this.buff[this.r:this.w])
+			payload := int(this.reader.GetUint32())
+
+			if payload == 0 {
+				return nil, fmt.Errorf("zero payload")
+			}
+
+			totalSize := payload + sizeLen
+
+			if totalSize > maxPacketSize {
+				return nil, fmt.Errorf("large packet %d", totalSize)
+			} else if totalSize <= unpackSize {
+				this.r += sizeLen
+				pkt := this.buff[this.r : this.r+payload]
+				this.r += payload
+				if this.r == this.w {
+					this.r = 0
+					this.w = 0
+				}
+				return pkt, nil
+			} else {
+				if totalSize > cap(this.buff) {
+					buff := make([]byte, totalSize)
+					copy(buff, this.buff[this.r:this.w])
+					this.buff = buff
+				} else {
+					//空间足够容纳下一个包，
+					copy(this.buff, this.buff[this.r:this.w])
+				}
+				this.w = this.w - this.r
+				this.r = 0
+			}
+		}
+	}
+}
+
+func (this *Receiver) Decode(b []byte) (interface{}, error) {
+	this.reader.Reset(b)
+	flag := this.reader.GetByte()
+	var to addr.LogicAddr
+	var from addr.LogicAddr
+	var addrSize int
+	if isRelay(flag) {
+		to = addr.LogicAddr(this.reader.GetUint32())
+		from = addr.LogicAddr(this.reader.GetUint32())
+		addrSize = sizeTo + sizeFrom
+	}
+
+	if (isRelay(flag) && this.isTarget(to)) || !isRelay(flag) {
+		//当前节点是数据包的目标接收方
+		cmd := this.reader.GetUint16()
+		payload := len(b)
+		tt := getMsgType(flag)
+		if tt == MESSAGE {
+			//普通消息
+			size := payload - (sizeCmd + sizeFlag + addrSize)
+			buff := this.reader.GetBytes(size)
+			if msg, err := pb.Unmarshal(this.ns_msg, uint32(cmd), buff); err != nil {
+				return nil, err
+			} else {
+				return NewMessage(msg, to, from), nil
+			}
+		} else {
+			seqNO := this.reader.GetUint64()
+			size := payload - (sizeCmd + sizeFlag + sizeRPCSeqNo + addrSize)
+			if tt == RPCERR {
+				//RPC响应错误信息
+				errStr := this.reader.GetString(size)
+				return NewMessage(&rpc.RPCResponse{Seq: seqNO, Err: rpcerr.GetErrorByShortStr(errStr)}, to, from), nil
+			} else if tt == RPCRESP {
+				//RPC响应
+				buff := this.reader.GetBytes(size)
+				if msg, err := pb.Unmarshal(this.ns_resp, uint32(cmd), buff); err != nil {
+					return nil, err
+				} else {
+					return NewMessage(&rpc.RPCResponse{Seq: seqNO, Ret: msg}, to, from), nil
+				}
+			} else if tt == RPCREQ {
+				//RPC请求
+				buff := this.reader.GetBytes(size)
+				if msg, err := pb.Unmarshal(this.ns_req, uint32(cmd), buff); err != nil {
+					return nil, err
+				} else {
+					return NewMessage(&rpc.RPCRequest{
+						Seq:      seqNO,
+						Method:   pb.GetNameByID(this.ns_req, uint32(cmd)),
+						NeedResp: getNeedRPCResp(flag),
+						Arg:      msg,
+					}, to, from), nil
+				}
+			} else {
+				return nil, errors.New("invaild message type")
+			}
+		}
+	} else {
+		//当前接收方不是目标节点，返回RelayMessage
+		return NewRelayMessage(to, from, b), nil
+	}
+}

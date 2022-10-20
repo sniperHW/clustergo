@@ -37,6 +37,11 @@ func (r *ring) pop() (interface{}, bool) {
 	}
 }
 
+// 从配置系统获得的node视图缓存
+type nodeCache struct {
+	nodes map[addr.LogicAddr]*node
+}
+
 type node struct {
 	sync.Mutex
 	addr         addr.Addr

@@ -1,9 +1,10 @@
-package zaplogger
+package zap
 
 import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
+
 	//"sanguo/node/common/config"
 	"os"
 )
@@ -74,20 +75,4 @@ func NewZapLogger(name string, path string, level string, maxLogfileSize int, ma
 	core := zapcore.NewCore(zapcore.NewConsoleEncoder(encoder), w, zap.NewAtomicLevelAt(getLoggerLevel(level)))
 
 	return zap.New(core, zap.AddCaller()) //.Sugar()
-}
-
-var zapLogger *zap.Logger
-var sugaredLogger *zap.SugaredLogger
-
-func InitLogger(logger *zap.Logger) {
-	zapLogger = logger
-	sugaredLogger = zapLogger.Sugar()
-}
-
-func GetLogger() *zap.Logger {
-	return zapLogger
-}
-
-func GetSugar() *zap.SugaredLogger {
-	return sugaredLogger
 }
