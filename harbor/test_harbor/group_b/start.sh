@@ -1,1 +1,0 @@
-go run node2.go localhost:8011

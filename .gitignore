@@ -1,9 +1,6 @@
-log/
-
-protocol/cs/message
-protocol/ss/message
-protocol/ss/rpc
-
+.DS_Store
+._.DS_Store
+._cluster.png
 *.txt
 *.exe
 *.log
