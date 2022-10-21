@@ -62,71 +62,71 @@ func NewReader(b []byte) BufferReader {
 	return BufferReader{bs: b}
 }
 
-func (this *BufferReader) Reset(b []byte) {
+func (r *BufferReader) Reset(b []byte) {
 	if len(b) > 0 {
-		this.bs = b
+		r.bs = b
 	}
-	this.offset = 0
+	r.offset = 0
 }
 
-func (this *BufferReader) GetAll() []byte {
-	return this.bs[this.offset:]
+func (r *BufferReader) GetAll() []byte {
+	return r.bs[r.offset:]
 }
 
-func (this *BufferReader) GetOffset() int {
-	return this.offset
+func (r *BufferReader) GetOffset() int {
+	return r.offset
 }
 
-func (this *BufferReader) IsOver() bool {
-	return this.offset >= len(this.bs)
+func (r *BufferReader) IsOver() bool {
+	return r.offset >= len(r.bs)
 }
 
-func (this *BufferReader) GetByte() byte {
-	if this.offset+1 > len(this.bs) {
+func (r *BufferReader) GetByte() byte {
+	if r.offset+1 > len(r.bs) {
 		return 0
 	} else {
-		ret := this.bs[this.offset]
-		this.offset += 1
+		ret := r.bs[r.offset]
+		r.offset += 1
 		return ret
 	}
 }
 
-func (this *BufferReader) CheckGetByte() (byte, error) {
-	if this.offset+1 > len(this.bs) {
+func (r *BufferReader) CheckGetByte() (byte, error) {
+	if r.offset+1 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := this.bs[this.offset]
-		this.offset += 1
+		ret := r.bs[r.offset]
+		r.offset += 1
 		return ret, nil
 	}
 }
 
-func (this *BufferReader) GetUint16() uint16 {
-	if this.offset+2 > len(this.bs) {
+func (r *BufferReader) GetUint16() uint16 {
+	if r.offset+2 > len(r.bs) {
 		return 0
 	} else {
-		ret := binary.BigEndian.Uint16(this.bs[this.offset : this.offset+2])
-		this.offset += 2
+		ret := binary.BigEndian.Uint16(r.bs[r.offset : r.offset+2])
+		r.offset += 2
 		return ret
 	}
 }
 
-func (this *BufferReader) CheckGetUint16() (uint16, error) {
-	if this.offset+2 > len(this.bs) {
+func (r *BufferReader) CheckGetUint16() (uint16, error) {
+	if r.offset+2 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := binary.BigEndian.Uint16(this.bs[this.offset : this.offset+2])
-		this.offset += 2
+		ret := binary.BigEndian.Uint16(r.bs[r.offset : r.offset+2])
+		r.offset += 2
 		return ret, nil
 	}
 }
 
-func (this *BufferReader) GetInt16() int16 {
-	return int16(this.GetUint16())
+func (r *BufferReader) GetInt16() int16 {
+	return int16(r.GetUint16())
 }
 
-func (this *BufferReader) CheckGetInt16() (int16, error) {
-	u, err := this.CheckGetUint16()
+func (r *BufferReader) CheckGetInt16() (int16, error) {
+	u, err := r.CheckGetUint16()
 	if nil != err {
 		return 0, err
 	} else {
@@ -134,32 +134,32 @@ func (this *BufferReader) CheckGetInt16() (int16, error) {
 	}
 }
 
-func (this *BufferReader) GetUint32() uint32 {
-	if this.offset+4 > len(this.bs) {
+func (r *BufferReader) GetUint32() uint32 {
+	if r.offset+4 > len(r.bs) {
 		return 0
 	} else {
-		ret := binary.BigEndian.Uint32(this.bs[this.offset : this.offset+4])
-		this.offset += 4
+		ret := binary.BigEndian.Uint32(r.bs[r.offset : r.offset+4])
+		r.offset += 4
 		return ret
 	}
 }
 
-func (this *BufferReader) CheckGetUint32() (uint32, error) {
-	if this.offset+4 > len(this.bs) {
+func (r *BufferReader) CheckGetUint32() (uint32, error) {
+	if r.offset+4 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := binary.BigEndian.Uint32(this.bs[this.offset : this.offset+4])
-		this.offset += 4
+		ret := binary.BigEndian.Uint32(r.bs[r.offset : r.offset+4])
+		r.offset += 4
 		return ret, nil
 	}
 }
 
-func (this *BufferReader) GetInt32() int32 {
-	return int32(this.GetUint32())
+func (r *BufferReader) GetInt32() int32 {
+	return int32(r.GetUint32())
 }
 
-func (this *BufferReader) CheckGetInt32() (int32, error) {
-	u, err := this.CheckGetUint32()
+func (r *BufferReader) CheckGetInt32() (int32, error) {
+	u, err := r.CheckGetUint32()
 	if nil != err {
 		return 0, err
 	} else {
@@ -167,32 +167,32 @@ func (this *BufferReader) CheckGetInt32() (int32, error) {
 	}
 }
 
-func (this *BufferReader) GetUint64() uint64 {
-	if this.offset+8 > len(this.bs) {
+func (r *BufferReader) GetUint64() uint64 {
+	if r.offset+8 > len(r.bs) {
 		return 0
 	} else {
-		ret := binary.BigEndian.Uint64(this.bs[this.offset : this.offset+8])
-		this.offset += 8
+		ret := binary.BigEndian.Uint64(r.bs[r.offset : r.offset+8])
+		r.offset += 8
 		return ret
 	}
 }
 
-func (this *BufferReader) CheckGetUint64() (uint64, error) {
-	if this.offset+8 > len(this.bs) {
+func (r *BufferReader) CheckGetUint64() (uint64, error) {
+	if r.offset+8 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := binary.BigEndian.Uint64(this.bs[this.offset : this.offset+8])
-		this.offset += 8
+		ret := binary.BigEndian.Uint64(r.bs[r.offset : r.offset+8])
+		r.offset += 8
 		return ret, nil
 	}
 }
 
-func (this *BufferReader) GetInt64() int64 {
-	return int64(this.GetUint64())
+func (r *BufferReader) GetInt64() int64 {
+	return int64(r.GetUint64())
 }
 
-func (this *BufferReader) CheckGetInt64() (int64, error) {
-	u, err := this.CheckGetUint64()
+func (r *BufferReader) CheckGetInt64() (int64, error) {
+	u, err := r.CheckGetUint64()
 	if nil != err {
 		return 0, err
 	} else {
@@ -200,8 +200,8 @@ func (this *BufferReader) CheckGetInt64() (int64, error) {
 	}
 }
 
-func (this *BufferReader) CheckGetInt() (int, error) {
-	u, err := this.CheckGetUint32()
+func (r *BufferReader) CheckGetInt() (int, error) {
+	u, err := r.CheckGetUint32()
 	if nil != err {
 		return 0, err
 	} else {
@@ -209,12 +209,12 @@ func (this *BufferReader) CheckGetInt() (int, error) {
 	}
 }
 
-func (this *BufferReader) GetString(size int) string {
-	return string(this.GetBytes(size))
+func (r *BufferReader) GetString(size int) string {
+	return string(r.GetBytes(size))
 }
 
-func (this *BufferReader) CheckGetString(size int) (string, error) {
-	b, err := this.CheckGetBytes(size)
+func (r *BufferReader) CheckGetString(size int) (string, error) {
+	b, err := r.CheckGetBytes(size)
 	if nil != err {
 		return "", err
 	} else {
@@ -222,26 +222,26 @@ func (this *BufferReader) CheckGetString(size int) (string, error) {
 	}
 }
 
-func (this *BufferReader) GetBytes(size int) []byte {
-	if len(this.bs)-this.offset < size {
-		size = len(this.bs) - this.offset
+func (r *BufferReader) GetBytes(size int) []byte {
+	if len(r.bs)-r.offset < size {
+		size = len(r.bs) - r.offset
 	}
-	ret := this.bs[this.offset : this.offset+size]
-	this.offset += size
+	ret := r.bs[r.offset : r.offset+size]
+	r.offset += size
 	return ret
 }
 
-func (this *BufferReader) CheckGetBytes(size int) ([]byte, error) {
-	if len(this.bs)-this.offset < size {
+func (r *BufferReader) CheckGetBytes(size int) ([]byte, error) {
+	if len(r.bs)-r.offset < size {
 		return nil, ErrOutOfBounds
 	}
-	ret := this.bs[this.offset : this.offset+size]
-	this.offset += size
+	ret := r.bs[r.offset : r.offset+size]
+	r.offset += size
 	return ret, nil
 }
 
-func (this *BufferReader) CopyBytes(size int) ([]byte, error) {
-	if b, err := this.CheckGetBytes(size); nil == err {
+func (r *BufferReader) CopyBytes(size int) ([]byte, error) {
+	if b, err := r.CheckGetBytes(size); nil == err {
 		out := make([]byte, len(b))
 		copy(out, b)
 		return out, nil

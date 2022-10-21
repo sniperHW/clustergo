@@ -22,141 +22,123 @@ type SSCodec struct {
 	reader   buffer.BufferReader
 }
 
-func (ss *SSCodec) encode(buffs net.Buffers, o interface{}, relayInfo []addr.LogicAddr) (net.Buffers, int) {
-	var pbbytes []byte
-	var cmd uint32
-	var err error
-	var payloadLen int
-	var totalLen int
-	flag := byte(0)
-
-	if nil != relayInfo {
-		payloadLen = 8
-		setRelay(&flag)
-	}
-
-	switch o := o.(type) {
-	case proto.Message:
-		if pbbytes, cmd, err = pb.Marshal("ss", o); err != nil {
-			return buffs, 0
-		}
-
-		payloadLen += (sizeFlag + sizeCmd + len(pbbytes))
-
-		totalLen = (sizeLen + payloadLen)
-		if totalLen > MaxPacketSize {
-			return buffs, 0
-		}
-
-		b := make([]byte, totalLen)
-
-		//写payload大小
-		b = buffer.AppendInt(b, payloadLen)
-
-		//设置普通消息标记
-		setMsgType(&flag, Msg)
-		//写flag
-		b = buffer.AppendByte(b, flag)
-
-		if isRelay(flag) {
-			b = buffer.AppendUint32(b, uint32(relayInfo[0]))
-			b = buffer.AppendUint32(b, uint32(relayInfo[1]))
-		}
-
-		//写cmd
-		b = buffer.AppendUint16(b, uint16(cmd))
-		//写数据
-		b = buffer.AppendBytes(b, pbbytes)
-
-		return append(buffs, b), len(b)
-	case *rpcgo.RequestMsg:
-		req := &codec.RpcRequest{
-			Seq:    o.Seq,
-			Method: o.Method,
-			Arg:    o.Arg,
-			Oneway: o.Oneway,
-		}
-
-		if pbbytes, err = proto.Marshal(req); err != nil {
-			return buffs, 0
-		}
-
-		payloadLen += (len(pbbytes) + sizeFlag)
-
-		totalLen = (sizeLen + payloadLen)
-		if totalLen > MaxPacketSize {
-			return buffs, 0
-		}
-
-		b := make([]byte, totalLen)
-
-		//写payload大小
-		b = buffer.AppendInt(b, payloadLen)
-
-		//设置RPC请求标记
-		setMsgType(&flag, RpcReq)
-
-		//写flag
-		b = buffer.AppendByte(b, flag)
-
-		if isRelay(flag) {
-			b = buffer.AppendUint32(b, uint32(relayInfo[0]))
-			b = buffer.AppendUint32(b, uint32(relayInfo[1]))
-		}
-
-		b = buffer.AppendBytes(b, pbbytes)
-
-		return append(buffs, b), len(b)
-	case *rpcgo.ResponseMsg:
-		resp := &codec.RpcResponse{
-			Seq:     o.Seq,
-			Ret:     o.Ret,
-			ErrCode: uint32(o.Err.Code),
-			ErrDesc: o.Err.Err,
-		}
-
-		if pbbytes, err = proto.Marshal(resp); err != nil {
-			return buffs, 0
-		}
-
-		payloadLen += (len(pbbytes) + sizeFlag)
-
-		totalLen = (sizeLen + payloadLen)
-		if totalLen > MaxPacketSize {
-			return buffs, 0
-		}
-
-		b := make([]byte, totalLen)
-
-		//写payload大小
-		b = buffer.AppendInt(b, payloadLen)
-
-		//设置RPC响应标记
-		setMsgType(&flag, RpcResp)
-		//写flag
-		b = buffer.AppendByte(b, flag)
-
-		if isRelay(flag) {
-			b = buffer.AppendUint32(b, uint32(relayInfo[0]))
-			b = buffer.AppendUint32(b, uint32(relayInfo[1]))
-		}
-
-		b = buffer.AppendBytes(b, pbbytes)
-
-		return append(buffs, b), len(b)
-	}
-
-	return buffs, 0
-}
-
 func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 	switch o := o.(type) {
 	case *Message:
-		return ss.encode(buffs, o.GetData(), o.relayInfo)
-	case proto.Message, *rpcgo.RequestMsg, *rpcgo.ResponseMsg:
-		return ss.encode(buffs, o, nil)
+		var pbbytes []byte
+		var cmd uint32
+		var err error
+
+		flag := byte(0)
+
+		switch msg := o.Data().(type) {
+		case proto.Message:
+			if pbbytes, cmd, err = pb.Marshal("ss", msg); err != nil {
+				return buffs, 0
+			}
+
+			payloadLen := sizeFlag + sizeToAndFrom + sizeCmd + len(pbbytes)
+
+			totalLen := sizeLen + payloadLen
+
+			if totalLen > MaxPacketSize {
+				return buffs, 0
+			}
+
+			b := make([]byte, totalLen)
+
+			//写payload大小
+			b = buffer.AppendInt(b, payloadLen)
+
+			//设置普通消息标记
+			setMsgType(&flag, Msg)
+			//写flag
+			b = buffer.AppendByte(b, flag)
+
+			b = buffer.AppendUint32(b, uint32(o.To))
+			b = buffer.AppendUint32(b, uint32(o.From))
+
+			//写cmd
+			b = buffer.AppendUint16(b, uint16(cmd))
+			//写数据
+			b = buffer.AppendBytes(b, pbbytes)
+
+			return append(buffs, b), len(b)
+		case *rpcgo.RequestMsg:
+			req := &codec.RpcRequest{
+				Seq:    msg.Seq,
+				Method: msg.Method,
+				Arg:    msg.Arg,
+				Oneway: msg.Oneway,
+			}
+
+			if pbbytes, err = proto.Marshal(req); err != nil {
+				return buffs, 0
+			}
+
+			payloadLen := sizeFlag + sizeToAndFrom + len(pbbytes)
+
+			totalLen := sizeLen + payloadLen
+
+			if totalLen > MaxPacketSize {
+				return buffs, 0
+			}
+
+			b := make([]byte, totalLen)
+
+			//写payload大小
+			b = buffer.AppendInt(b, payloadLen)
+
+			//设置RPC请求标记
+			setMsgType(&flag, RpcReq)
+
+			//写flag
+			b = buffer.AppendByte(b, flag)
+			b = buffer.AppendUint32(b, uint32(o.To))
+			b = buffer.AppendUint32(b, uint32(o.From))
+			b = buffer.AppendBytes(b, pbbytes)
+
+			return append(buffs, b), len(b)
+		case *rpcgo.ResponseMsg:
+			resp := &codec.RpcResponse{
+				Seq:     msg.Seq,
+				Ret:     msg.Ret,
+				ErrCode: uint32(msg.Err.Code),
+				ErrDesc: msg.Err.Err,
+			}
+
+			if pbbytes, err = proto.Marshal(resp); err != nil {
+				return buffs, 0
+			}
+
+			payloadLen := sizeFlag + sizeToAndFrom + len(pbbytes)
+
+			totalLen := sizeLen + payloadLen
+
+			if totalLen > MaxPacketSize {
+				return buffs, 0
+			}
+
+			b := make([]byte, totalLen)
+
+			//写payload大小
+			b = buffer.AppendInt(b, payloadLen)
+
+			//设置RPC响应标记
+			setMsgType(&flag, RpcResp)
+			//写flag
+			b = buffer.AppendByte(b, flag)
+
+			b = buffer.AppendUint32(b, uint32(o.To))
+			b = buffer.AppendUint32(b, uint32(o.From))
+
+			b = buffer.AppendBytes(b, pbbytes)
+
+			return append(buffs, b), len(b)
+		}
+		return buffs, 0
 	case *RelayMessage:
-		return append(buffs, o.data), len(o.data)
+		return append(buffs, o.Data()), len(o.Data())
 	default:
 		return buffs, 0
 	}
@@ -186,8 +168,9 @@ func (ss *SSCodec) Recv(readable netgo.ReadAble, deadline time.Time) (pkt []byte
 			if totalSize > MaxPacketSize {
 				return nil, fmt.Errorf("packet too large:%d", totalSize)
 			} else if totalSize <= unpackSize {
+				ss.r += sizeLen
 				pkt := ss.buff[ss.r : ss.r+payload]
-				ss.r += (sizeLen + payload)
+				ss.r += payload
 				if ss.r == ss.w {
 					ss.r = 0
 					ss.w = 0
@@ -223,20 +206,13 @@ func (ss *SSCodec) isTarget(to addr.LogicAddr) bool {
 	return ss.selfAddr == to
 }
 
-func (ss *SSCodec) Decode(b []byte) (interface{}, error) {
-	payload := b[4:]
-	var to addr.LogicAddr
-	var from addr.LogicAddr
-
+func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 	ss.reader.Reset(payload)
 	flag := ss.reader.GetByte()
+	to := addr.LogicAddr(ss.reader.GetUint32())
+	from := addr.LogicAddr(ss.reader.GetUint32())
 
-	if isRelay(flag) {
-		to = addr.LogicAddr(ss.reader.GetUint32())
-		from = addr.LogicAddr(ss.reader.GetUint32())
-	}
-
-	if (isRelay(flag) && ss.isTarget(to)) || !isRelay(flag) {
+	if ss.isTarget(to) {
 		//当前节点是数据包的目标接收方
 		switch getMsgType(flag) {
 		case Msg:
@@ -245,7 +221,7 @@ func (ss *SSCodec) Decode(b []byte) (interface{}, error) {
 			if msg, err := pb.Unmarshal("ss", uint32(cmd), data); err != nil {
 				return nil, err
 			} else {
-				return NewMessage(msg, to, from), nil
+				return NewMessage(to, from, msg), nil
 			}
 		case RpcReq:
 			data := ss.reader.GetAll()
@@ -253,12 +229,12 @@ func (ss *SSCodec) Decode(b []byte) (interface{}, error) {
 			if err := proto.Unmarshal(data, &req); err != nil {
 				return nil, err
 			} else {
-				return &rpcgo.RequestMsg{
+				return NewMessage(to, from, &rpcgo.RequestMsg{
 					Seq:    req.Seq,
 					Method: req.Method,
 					Arg:    req.Arg,
 					Oneway: req.Oneway,
-				}, nil
+				}), nil
 			}
 		case RpcResp:
 			data := ss.reader.GetAll()
@@ -277,13 +253,13 @@ func (ss *SSCodec) Decode(b []byte) (interface{}, error) {
 						Err:  resp.ErrDesc,
 					}
 				}
-				return r, nil
+				return NewMessage(to, from, r), nil
 			}
 		default:
 			return nil, fmt.Errorf("invaild packet type")
 		}
 	} else {
 		//当前接收方不是目标节点，返回RelayMessage
-		return NewRelayMessage(to, from, b), nil
+		return NewRelayMessage(to, from, payload), nil
 	}
 }

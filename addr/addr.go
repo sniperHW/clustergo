@@ -23,8 +23,8 @@ var ErrInvaildServer error = fmt.Errorf("server should between(0,1023)")
 type LogicAddr uint32
 
 type Addr struct {
-	Logic LogicAddr
-	Net   *net.TCPAddr
+	logicAddr LogicAddr
+	netAddr   *net.TCPAddr
 }
 
 func MakeAddr(logic string, tcpAddr string) (Addr, error) {
@@ -39,8 +39,8 @@ func MakeAddr(logic string, tcpAddr string) (Addr, error) {
 	}
 
 	return Addr{
-		Logic: logicAddr,
-		Net:   netAddr,
+		logicAddr: logicAddr,
+		netAddr:   netAddr,
 	}, nil
 }
 
@@ -56,17 +56,21 @@ func MakeHarborAddr(logic string, tcpAddr string) (Addr, error) {
 	}
 
 	return Addr{
-		Logic: logicAddr,
-		Net:   netAddr,
+		logicAddr: logicAddr,
+		netAddr:   netAddr,
 	}, nil
 }
 
-func (a *Addr) AtomicGetNetaddr() *net.TCPAddr {
-	return (*net.TCPAddr)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&a.Net))))
+func (a *Addr) LogicAddr() LogicAddr {
+	return a.logicAddr
 }
 
-func (a *Addr) AtomicSetNetaddr(addr *net.TCPAddr) {
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&a.Net)), unsafe.Pointer(addr))
+func (a *Addr) NetAddr() *net.TCPAddr {
+	return (*net.TCPAddr)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&a.netAddr))))
+}
+
+func (a *Addr) UpdateNetAddr(addr *net.TCPAddr) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&a.netAddr)), unsafe.Pointer(addr))
 }
 
 func (a LogicAddr) Cluster() uint32 {

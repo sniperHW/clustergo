@@ -2,40 +2,31 @@ package ss
 
 import (
 	"encoding/binary"
-	"reflect"
 
+	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/sanguo/codec"
 	"github.com/sniperHW/sanguo/codec/buffer"
-	"github.com/sniperHW/sanguo/codec/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	sizeLen      = 4
-	sizeFlag     = 1
-	sizeTo       = 4
-	sizeFrom     = 4
-	sizeCmd      = 2
-	sizeRpcSeqNo = 8
-	minSize      = sizeLen + sizeFlag
+	sizeLen       = 4
+	sizeFlag      = 1
+	sizeToAndFrom = 8
+	sizeCmd       = 2
+	sizeRpcSeqNo  = 8
+	minSize       = sizeLen + sizeFlag + sizeToAndFrom
 )
 
 const (
-	Relay           = 0x4  //跨集群透传消息
 	Msg             = 0x8  //普通消息
 	RpcReq          = 0x10 //RPC请求
 	RpcResp         = 0x18 //RPC响应
 	MaskMessageType = 0x38
-	Compress        = 0x80
-	MaxPacketSize   = 1024 * 4
+	//Compress        = 0x80
+	MaxPacketSize = 1024 * 4
 )
-
-func setCompressFlag(flag *byte) {
-	*flag |= Compress
-}
-
-func getCompresFlag(flag byte) bool {
-	return (flag & Compress) != 0
-}
 
 func setMsgType(flag *byte, tt byte) {
 	if tt == Msg || tt == RpcReq || tt == RpcResp {
@@ -47,73 +38,67 @@ func getMsgType(flag byte) byte {
 	return flag & MaskMessageType
 }
 
-func setRelay(flag *byte) {
-	*flag |= Relay
-}
-
-func isRelay(flag byte) bool {
-	return (flag & Relay) != 0
-}
-
 type Message struct {
-	data      interface{}
-	relayInfo []addr.LogicAddr
-}
-
-func NewMessage(data interface{}, relay ...addr.LogicAddr) *Message {
-	m := &Message{
-		data: data,
-	}
-	if len(relay) == 2 {
-		m.relayInfo = relay
-	}
-	return m
-}
-
-func (this *Message) GetData() interface{} {
-	return this.data
-}
-
-func (this *Message) GetCmd() uint16 {
-	name := reflect.TypeOf(this.data).String()
-	return uint16(pb.GetCmdByName(name))
-}
-
-func (this *Message) From() addr.LogicAddr {
-	if len(this.relayInfo) == 2 {
-		return this.relayInfo[1]
-	} else {
-		return addr.LogicAddr(0)
-	}
-}
-
-// 透传消息，从To到From
-type RelayMessage struct {
 	To   addr.LogicAddr
 	From addr.LogicAddr
-	data []byte
+	data interface{}
 }
 
-func (this *RelayMessage) GetData() []byte {
-	return this.data
+func NewMessage(to addr.LogicAddr, from addr.LogicAddr, data interface{}) *Message {
+	return &Message{
+		To:   to,
+		From: from,
+		data: data,
+	}
 }
 
-func (this *RelayMessage) IsRPCReq() bool {
-	return getMsgType(this.data[4]) == RpcReq
+func (m *Message) Data() interface{} {
+	return m.data
 }
 
-func (this *RelayMessage) ResetTo(to addr.LogicAddr) {
-	this.To = to
-	binary.BigEndian.PutUint32(this.data[5:5+4], uint32(to))
+// 透传消息
+type RelayMessage struct {
+	Message
+}
+
+func (m *RelayMessage) Data() []byte {
+	return m.data.([]byte)
+}
+
+func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
+	if getMsgType(m.Data()[0]) != RpcReq {
+		return nil
+	} else {
+		var req codec.RpcRequest
+		if err := proto.Unmarshal(m.Data()[9:], &req); err != nil {
+			return nil
+		} else {
+			return &rpcgo.RequestMsg{
+				Seq:    req.Seq,
+				Method: req.Method,
+				Arg:    req.Arg,
+				Oneway: req.Oneway,
+			}
+		}
+	}
+}
+
+func (m *RelayMessage) ResetTo(to addr.LogicAddr) {
+	m.To = to
+	binary.BigEndian.PutUint32(m.Data()[1:], uint32(to))
 }
 
 func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, data []byte) *RelayMessage {
 	m := &RelayMessage{
-		To:   to,
-		From: from,
-		data: make([]byte, 0, len(data)+sizeLen),
+		Message: Message{
+			To:   to,
+			From: from,
+		},
 	}
-	m.data = buffer.AppendUint32(m.data, uint32(len(data)))
-	m.data = buffer.AppendBytes(m.data, data)
+
+	b := make([]byte, 0, len(data)+sizeLen)
+	b = buffer.AppendUint32(b, uint32(len(data)))
+	b = buffer.AppendBytes(b, data)
+	m.data = b
 	return m
 }
