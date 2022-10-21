@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 
+	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,9 +20,16 @@ type Sanguo struct {
 	localAddr addr.Addr
 	l         net.Listener
 	nodeCache nodeCache
+	rpcSvr    *rpcgo.Server
+	rpcCli    *rpcgo.Client
 }
 
 func (s *Sanguo) SendMessage(peer addr.LogicAddr, msg proto.Message) {
+	if peer == s.localAddr.LogicAddr() {
+		s.dispatchMessage(peer, msg)
+	}
+}
 
-	//this.Post(peer, ss.NewMessage(msg, peer, this.serverState.selfAddr.Logic))
+func (s *Sanguo) dispatchMessage(from addr.LogicAddr, msg proto.Message) {
+
 }

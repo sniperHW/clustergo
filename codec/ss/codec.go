@@ -22,6 +22,13 @@ type SSCodec struct {
 	reader   buffer.BufferReader
 }
 
+func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
+	return &SSCodec{
+		selfAddr: selfAddr,
+		buff:     make([]byte, 4096),
+	}
+}
+
 func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 	switch o := o.(type) {
 	case *Message:

@@ -13,6 +13,7 @@ import (
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
+	"google.golang.org/protobuf/proto"
 )
 
 const maxDialCount int = 3
@@ -128,7 +129,7 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 	}
 
 	if targetNode != nil {
-		n.sendMessage(nil, message, time.Now().Add(time.Second))
+		n.sendMessage(context.TODO(), message, time.Now().Add(time.Second))
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil {
 		//对于无法路由的rpc请求，返回错误响应
 
@@ -141,36 +142,51 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 		})
 
 		if fromNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.From); fromNode != nil {
-			fromNode.sendMessage(nil, respMsg, time.Now().Add(time.Second))
+			fromNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
 		} else if harborNode := n.sanguo.nodeCache.getHarborByCluster(message.From.Cluster(), message.From); harborNode != nil {
-			harborNode.sendMessage(nil, respMsg, time.Now().Add(time.Second))
+			harborNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
 		}
 	}
 }
 
-func (n *node) onMessage(msg interface{}, from *node) {
+func (n *node) onMessage(msg interface{}) {
 	switch msg := msg.(type) {
 	case *ss.Message:
-		/*switch m := msg.Data().(type) {
+		switch m := msg.Data().(type) {
 		case proto.Message:
+			n.sanguo.dispatchMessage(msg.From, m)
 		case *rpcgo.RequestMsg:
+			n.sanguo.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From, node: n}, m)
 		case *rpcgo.ResponseMsg:
-		}*/
-
+			n.sanguo.rpcCli.OnMessage(context.TODO(), m)
+		}
 	case *ss.RelayMessage:
 		n.onRelayMessage(msg)
 	}
+}
+
+func (n *node) onEstablish(conn net.Conn) {
+	codec := ss.NewCodec(n.addr.LogicAddr())
+	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn.(*net.TCPConn), codec),
+		netgo.AsynSocketOption{
+			Codec:    codec,
+			AutoRecv: true,
+		}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
+		n.onMessage(packet)
+		return nil
+	}).Recv()
 }
 
 func (n *node) dialOK(conn net.Conn) {
 	if n == n.sanguo.nodeCache.getNodeByLogicAddr(n.addr.LogicAddr()) {
 		n.Lock()
 		defer n.Unlock()
+		n.dialing = false
 		if n.socket != nil {
 			//两段同时建立连接
 			conn.Close()
 		} else {
-			//n.socket =
+			n.onEstablish(conn)
 		}
 	} else {
 		//不再是合法的node
@@ -180,34 +196,28 @@ func (n *node) dialOK(conn net.Conn) {
 }
 
 func (n *node) dial() {
-	go func() {
-		dialer := &net.Dialer{}
-		if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
-			n.dialError(ErrDial)
+	dialer := &net.Dialer{}
+	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
+		n.dialError(ErrDial)
+	} else {
+		if err := n.login(conn); err != nil {
+			conn.Close()
+			n.dialError(err)
 		} else {
-			if err := n.login(conn); err != nil {
-				conn.Close()
-				n.dialError(err)
-			} else {
-				n.dialOK(conn)
-			}
+			n.dialOK(conn)
 		}
-	}()
+	}
 }
 
-func (n *node) sendMessage(ctx context.Context, msg interface{}, deadline time.Time) {
+func (n *node) sendMessage(ctx context.Context, msg interface{}, deadline time.Time) (err error) {
 	n.Lock()
 	socket := n.socket
 	if socket != nil {
 		n.Unlock()
-		var err error
-		if ctx != nil {
+		if deadline.IsZero() {
 			err = socket.SendWithContext(ctx, msg)
 		} else {
 			err = socket.Send(msg, deadline)
-		}
-		if err != nil {
-			//记录日志
 		}
 	} else {
 		n.pendingMsg.PushBack(&pendingMessage{
@@ -218,8 +228,9 @@ func (n *node) sendMessage(ctx context.Context, msg interface{}, deadline time.T
 		//尝试与对端建立连接
 		if !n.dialing {
 			n.dialing = true
-			n.dial()
+			go n.dial()
 		}
 		n.Unlock()
 	}
+	return err
 }
