@@ -39,30 +39,59 @@ func getMsgType(flag byte) byte {
 }
 
 type Message struct {
-	To   addr.LogicAddr
-	From addr.LogicAddr
+	cmd  uint16
+	to   addr.LogicAddr
+	from addr.LogicAddr
 	data interface{}
 }
 
-func NewMessage(to addr.LogicAddr, from addr.LogicAddr, data interface{}) *Message {
-	return &Message{
-		To:   to,
-		From: from,
+func NewMessage(to addr.LogicAddr, from addr.LogicAddr, data interface{}, cmd ...uint16) *Message {
+	msg := &Message{
+		to:   to,
+		from: from,
 		data: data,
 	}
+
+	if len(cmd) > 0 {
+		msg.cmd = cmd[0]
+	}
+
+	return msg
 }
 
 func (m *Message) Data() interface{} {
 	return m.data
 }
 
+func (m *Message) Cmd() uint16 {
+	return m.cmd
+}
+
+func (m *Message) From() addr.LogicAddr {
+	return m.from
+}
+
+func (m *Message) To() addr.LogicAddr {
+	return m.to
+}
+
 // 透传消息
 type RelayMessage struct {
-	Message
+	to   addr.LogicAddr
+	from addr.LogicAddr
+	data []byte
 }
 
 func (m *RelayMessage) Data() []byte {
-	return m.data.([]byte)
+	return m.data
+}
+
+func (m *RelayMessage) From() addr.LogicAddr {
+	return m.from
+}
+
+func (m *RelayMessage) To() addr.LogicAddr {
+	return m.to
 }
 
 func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
@@ -84,16 +113,14 @@ func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
 }
 
 func (m *RelayMessage) ResetTo(to addr.LogicAddr) {
-	m.To = to
-	binary.BigEndian.PutUint32(m.Data()[1:], uint32(to))
+	m.to = to
+	binary.BigEndian.PutUint32(m.data[1:], uint32(to))
 }
 
 func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, data []byte) *RelayMessage {
 	m := &RelayMessage{
-		Message: Message{
-			To:   to,
-			From: from,
-		},
+		to:   to,
+		from: from,
 	}
 
 	b := make([]byte, 0, len(data)+sizeLen)

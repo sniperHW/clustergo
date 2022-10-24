@@ -110,18 +110,18 @@ func (n *node) dialError(err error) {
 }
 
 func (n *node) onRelayMessage(message *ss.RelayMessage) {
-	targetNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.To)
+	targetNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.To())
 	if targetNode == nil {
-		if message.To.Cluster() != n.addr.LogicAddr().Cluster() {
+		if message.To().Cluster() != n.addr.LogicAddr().Cluster() {
 			//不同cluster要求harbor转发
-			targetNode = n.sanguo.nodeCache.getHarborByCluster(message.To.Cluster(), message.To)
+			targetNode = n.sanguo.nodeCache.getHarborByCluster(message.To().Cluster(), message.To())
 			if nil != targetNode && targetNode.addr.LogicAddr() == n.addr.LogicAddr() {
 				return
 			}
 		} else {
 			//同group,server为0,则从本地随机选择一个符合type的server
-			if message.To.Server() == 0 {
-				targetNode = n.sanguo.nodeCache.getNodeByType(message.To.Type())
+			if message.To().Server() == 0 {
+				targetNode = n.sanguo.nodeCache.getNodeByType(message.To().Type())
 				//设置正确的目标地址
 				message.ResetTo(targetNode.addr.LogicAddr())
 			}
@@ -133,17 +133,17 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil {
 		//对于无法路由的rpc请求，返回错误响应
 
-		respMsg := ss.NewMessage(message.From, message.To, &rpcgo.ResponseMsg{
+		respMsg := ss.NewMessage(message.From(), message.To(), &rpcgo.ResponseMsg{
 			Seq: rpcReq.Seq,
 			Err: &rpcgo.Error{
 				Code: rpcgo.ErrOther,
-				Err:  fmt.Sprintf("can't send message to target:%s", message.To.String()),
+				Err:  fmt.Sprintf("can't send message to target:%s", message.To().String()),
 			},
 		})
 
-		if fromNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.From); fromNode != nil {
+		if fromNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.From()); fromNode != nil {
 			fromNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
-		} else if harborNode := n.sanguo.nodeCache.getHarborByCluster(message.From.Cluster(), message.From); harborNode != nil {
+		} else if harborNode := n.sanguo.nodeCache.getHarborByCluster(message.From().Cluster(), message.From()); harborNode != nil {
 			harborNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
 		}
 	}
@@ -154,9 +154,9 @@ func (n *node) onMessage(msg interface{}) {
 	case *ss.Message:
 		switch m := msg.Data().(type) {
 		case proto.Message:
-			n.sanguo.dispatchMessage(msg.From, m)
+			n.sanguo.dispatchMessage(msg.From(), msg.Cmd(), m)
 		case *rpcgo.RequestMsg:
-			n.sanguo.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From, node: n}, m)
+			n.sanguo.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n}, m)
 		case *rpcgo.ResponseMsg:
 			n.sanguo.rpcCli.OnMessage(context.TODO(), m)
 		}

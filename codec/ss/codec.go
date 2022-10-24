@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const Namespace string = "ss"
+
 type SSCodec struct {
 	buff     []byte
 	w        int
@@ -40,7 +42,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 		switch msg := o.Data().(type) {
 		case proto.Message:
-			if pbbytes, cmd, err = pb.Marshal("ss", msg); err != nil {
+			if pbbytes, cmd, err = pb.Marshal(Namespace, msg); err != nil {
 				return buffs, 0
 			}
 
@@ -62,8 +64,8 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			//写flag
 			b = buffer.AppendByte(b, flag)
 
-			b = buffer.AppendUint32(b, uint32(o.To))
-			b = buffer.AppendUint32(b, uint32(o.From))
+			b = buffer.AppendUint32(b, uint32(o.To()))
+			b = buffer.AppendUint32(b, uint32(o.From()))
 
 			//写cmd
 			b = buffer.AppendUint16(b, uint16(cmd))
@@ -101,8 +103,8 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 			//写flag
 			b = buffer.AppendByte(b, flag)
-			b = buffer.AppendUint32(b, uint32(o.To))
-			b = buffer.AppendUint32(b, uint32(o.From))
+			b = buffer.AppendUint32(b, uint32(o.To()))
+			b = buffer.AppendUint32(b, uint32(o.From()))
 			b = buffer.AppendBytes(b, pbbytes)
 
 			return append(buffs, b), len(b)
@@ -136,8 +138,8 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			//写flag
 			b = buffer.AppendByte(b, flag)
 
-			b = buffer.AppendUint32(b, uint32(o.To))
-			b = buffer.AppendUint32(b, uint32(o.From))
+			b = buffer.AppendUint32(b, uint32(o.To()))
+			b = buffer.AppendUint32(b, uint32(o.From()))
 
 			b = buffer.AppendBytes(b, pbbytes)
 
@@ -225,10 +227,10 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 		case Msg:
 			cmd := ss.reader.GetUint16()
 			data := ss.reader.GetAll()
-			if msg, err := pb.Unmarshal("ss", uint32(cmd), data); err != nil {
+			if msg, err := pb.Unmarshal(Namespace, uint32(cmd), data); err != nil {
 				return nil, err
 			} else {
-				return NewMessage(to, from, msg), nil
+				return NewMessage(to, from, msg, cmd), nil
 			}
 		case RpcReq:
 			data := ss.reader.GetAll()

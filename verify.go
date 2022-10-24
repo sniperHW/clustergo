@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/pkg/crypto"
 )
 
@@ -51,79 +52,61 @@ func (n *node) login(conn net.Conn) error {
 		if nil != err {
 			return err
 		}
-
-		if binary.BigEndian.Uint32(buffer) != 0 {
-			return errors.New("auth error")
-		}
 	}
 	return nil
 }
 
-/*
-func (this *Cluster) auth(conn net.Conn) error {
-
-	bLen := make([]byte, 4)
+func (s *Sanguo) auth(conn net.Conn) (err error) {
+	buff := make([]byte, 4)
 	conn.SetReadDeadline(time.Now().Add(time.Second))
 	defer conn.SetReadDeadline(time.Time{})
 
-	_, err := io.ReadFull(conn, bLen)
+	_, err = io.ReadFull(conn, buff)
 	if nil != err {
 		return err
 	}
 
-	datasize := int(binary.BigEndian.Uint32(bLen))
+	datasize := int(binary.BigEndian.Uint32(buff))
 
-	if datasize > 128 {
-		return errors.New("packet too large")
-	}
+	buff = make([]byte, datasize)
 
-	b := make([]byte, datasize)
-
-	_, err = io.ReadFull(conn, b)
+	_, err = io.ReadFull(conn, buff)
 	if nil != err {
 		return err
 	}
 
-	if b, err = crypto.AESCBCDecrypter(key, b); nil != err {
+	if buff, err = crypto.AESCBCDecrypter(key, buff); nil != err {
 		return err
 	}
 
 	var req loginReq
 
-	if err = json.Unmarshal(b, &req); nil != err {
+	if err = json.Unmarshal(buff, &req); nil != err {
 		return err
 	}
 
-	ismux := req.Mux
-	logicAddr := req.LogicAddr
-
-	end := this.serviceMgr.getEndPoint(addr.LogicAddr(logicAddr))
-	if nil == end {
-		return ERR_INVAILD_ENDPOINT
+	node := s.nodeCache.getNodeByLogicAddr(addr.LogicAddr(req.LogicAddr))
+	if node == nil {
+		return ErrInvaildNode
 	}
 
-	if !ismux {
-		end.Lock()
-		if end.dialing {
+	check := func() error {
+		node.Lock()
+		defer node.Unlock()
+		if node.dialing {
 			//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
-			if this.serverState.selfAddr.Logic < end.addr.Logic {
-				end.Unlock()
-				logger.Sugar().Errorf("(self:%v) (other:%v) both side connectting", this.serverState.selfAddr.Logic, end.addr.Logic)
+			if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
+				logger.Errorf("(self:%v) (other:%v) both side connectting", s.localAddr.LogicAddr(), node.addr.LogicAddr())
 				return errors.New("both side connectting")
 			}
+		} else if nil != node.socket {
+			return ErrDuplicateConn
 		}
+		return nil
+	}
 
-		if nil != end.session {
-			logger.Sugar().Infof("(self:%v) auth duplicate %v\n", this.serverState.selfAddr.Logic, end.addr.Logic)
-			err = ERR_DUP_CONN
-		} else {
-			this.onEstablishServer(end, fnet.NewSocket(conn, fnet.OutputBufLimit{
-				OutPutLimitSoft:        512 * 1024,
-				OutPutLimitSoftSeconds: 10,
-				OutPutLimitHard:        8 * 1024 * 1024,
-			}))
-		}
-		end.Unlock()
+	if err = check(); err != nil {
+		return err
 	}
 
 	resp := []byte{0, 0, 0, 0}
@@ -132,16 +115,12 @@ func (this *Cluster) auth(conn net.Conn) error {
 	conn.SetWriteDeadline(time.Now().Add(time.Second))
 	defer conn.SetWriteDeadline(time.Time{})
 
-	_, sendErr := conn.Write(resp)
-
-	if nil == sendErr && ismux {
-		if this.onNewMuxConn == nil {
-			logger.Sugar().Infof("auth muxConn %s , but onNewMuxConn is nil", this.serverState.selfAddr.Logic.String())
-			return errors.New("onNewMuxConn is nil")
-		} else {
-			this.onNewMuxConn(addr.LogicAddr(logicAddr), conn)
-		}
+	if _, err = conn.Write(resp); err != nil {
+		return err
+	} else {
+		node.Lock()
+		defer node.Unlock()
+		node.onEstablish(conn)
+		return nil
 	}
-	return sendErr
 }
-*/
