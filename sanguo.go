@@ -213,3 +213,37 @@ func NewSanguo() *Sanguo {
 		die: make(chan struct{}),
 	}
 }
+
+var defaultSanguo *Sanguo
+var defaultOnce sync.Once
+
+func getDefault() *Sanguo {
+	defaultOnce.Do(func() {
+		defaultSanguo = NewSanguo()
+	})
+	return defaultSanguo
+}
+
+func Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {
+	return getDefault().Start(discovery, localAddr)
+}
+
+func Stop() {
+	getDefault().Stop()
+}
+
+func RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
+	getDefault().RegisterMessageHandler(msg, handler)
+}
+
+func SendMessage(to addr.LogicAddr, msg proto.Message) {
+	getDefault().SendMessage(to, msg)
+}
+
+func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
+	return getDefault().Call(ctx, to, method, arg, ret)
+}
+
+func CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
+	return getDefault().CallWithCallback(to, deadline, method, arg, ret, cb)
+}

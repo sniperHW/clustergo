@@ -170,10 +170,6 @@ type node struct {
 	sanguo     *Sanguo
 }
 
-func (n *node) isHarbor() bool {
-	return n.addr.LogicAddr().Type() == addr.HarbarType
-}
-
 func (n *node) dialError(err error) {
 	n.Lock()
 	defer n.Unlock()
