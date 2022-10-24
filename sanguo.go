@@ -3,6 +3,7 @@ package sanguo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"runtime"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/discovery"
 	"github.com/sniperHW/sanguo/log"
 	"google.golang.org/protobuf/proto"
 )
@@ -83,6 +85,8 @@ type Sanguo struct {
 	rpcCli     *rpcgo.Client
 	msgManager msgManager
 	startOnce  sync.Once
+	stopOnce   sync.Once
+	die        chan struct{}
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
@@ -150,21 +154,62 @@ func (s *Sanguo) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Mess
 	s.msgManager.dispatch(from, cmd, msg)
 }
 
-func (s *Sanguo) Start(localAddr addr.Addr) (err error) {
+func (s *Sanguo) Stop() {
+	s.stopOnce.Do(func() {
+		close(s.die)
+	})
+}
+
+func (s *Sanguo) Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {
 	s.startOnce.Do(func() {
-		s.localAddr = localAddr
-		var serve func()
-		s.l, serve, err = netgo.ListenTCP("tcp", localAddr.NetAddr().String(), func(conn *net.TCPConn) {
-			go func() {
-				if err := s.auth(conn); nil != err {
-					logger.Infof("auth error %s self %s", err.Error(), localAddr.LogicAddr().String())
-					conn.Close()
-				}
-			}()
-		})
-		if err == nil {
-			go serve()
+		s.nodeCache.sanguo = s
+		s.nodeCache.localAddr = localAddr
+		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
+		var nodeInfo []addr.Addr
+		if nodeInfo, err = discovery.LoadNodeInfo(); err == nil {
+			s.nodeCache.onNodeInfoUpdate(nodeInfo)
+		}
+		if n := s.nodeCache.getNodeByLogicAddr(localAddr); n == nil {
+			//当前节点在配置中找不到
+			err = fmt.Errorf("%s not in config", localAddr.String())
+		} else {
+			s.localAddr = n.addr
+			var serve func()
+			s.l, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
+				go func() {
+					if err := s.auth(conn); nil != err {
+						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())
+						conn.Close()
+					}
+				}()
+			})
+			if err == nil {
+				//订阅更新
+				discovery.Subscribe(s.nodeCache.onNodeInfoUpdate)
+				go serve()
+			}
 		}
 	})
 	return err
+}
+
+func (s *Sanguo) Wait() {
+	<-s.die
+}
+
+func NewSanguo() *Sanguo {
+	codec := &JsonCodec{}
+	return &Sanguo{
+		nodeCache: nodeCache{
+			nodes:            map[addr.LogicAddr]*node{},
+			nodeByType:       map[uint32][]*node{},
+			harborsByCluster: map[uint32][]*node{},
+		},
+		rpcSvr: rpcgo.NewServer(codec),
+		rpcCli: rpcgo.NewClient(codec),
+		msgManager: msgManager{
+			msgHandlers: map[uint16]MsgHandler{},
+		},
+		die: make(chan struct{}),
+	}
 }

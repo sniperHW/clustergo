@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -21,35 +22,137 @@ const maxDialCount int = 3
 // 从配置系统获得的node视图缓存
 type nodeCache struct {
 	sync.RWMutex
+	localAddr        addr.LogicAddr
+	sanguo           *Sanguo
 	nodes            map[addr.LogicAddr]*node
 	nodeByType       map[uint32][]*node
 	harborsByCluster map[uint32][]*node
+	onSelfRemove     func()
 }
 
-func (n *nodeCache) getHarborByCluster(cluster uint32, m addr.LogicAddr) *node {
-	n.RLock()
-	defer n.RUnlock()
-	if harbors, ok := n.harborsByCluster[cluster]; !ok || len(harbors) == 0 {
+func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []addr.Addr) {
+
+	nodes := []addr.Addr{}
+
+	for _, v := range nodeinfo {
+		if v.LogicAddr().Cluster() == cache.localAddr.Cluster() {
+			//只有与自身cluster相同的节点才需要处理
+			nodes = append(nodes, v)
+		} else if cache.localAddr.Type() == addr.HarbarType && v.LogicAddr().Type() == addr.HarbarType {
+			//当前节点是harbor,则不同cluster的harbor节点也需要处理
+			nodes = append(nodes, v)
+		}
+	}
+
+	cache.Lock()
+	defer cache.Unlock()
+
+	localNodes := []*node{}
+	for _, v := range cache.nodes {
+		localNodes = append(localNodes, v)
+	}
+
+	sort.Slice(localNodes, func(l int, r int) bool {
+		return localNodes[l].addr.LogicAddr() < localNodes[r].addr.LogicAddr()
+	})
+
+	sort.Slice(nodes, func(l int, r int) bool {
+		return nodes[l].LogicAddr() < nodes[r].LogicAddr()
+	})
+
+	i := 0
+	j := 0
+
+	for i < len(nodes) && j < len(localNodes) {
+		if nodes[i].LogicAddr() == localNodes[j].addr.LogicAddr() {
+			if nodes[i].NetAddr().String() != localNodes[j].addr.NetAddr().String() {
+				//网络地址发生变更
+				if localNodes[j].addr.LogicAddr() == cache.localAddr {
+					go cache.onSelfRemove()
+					return
+				} else {
+					localNodes[j].closeSocket()
+					localNodes[j].addr.UpdateNetAddr(nodes[i].NetAddr())
+				}
+			}
+			i++
+			j++
+		} else if nodes[i].LogicAddr() > localNodes[j].addr.LogicAddr() {
+			n := &node{
+				addr:       nodes[i],
+				pendingMsg: list.New(),
+				sanguo:     cache.sanguo,
+			}
+			cache.nodes[n.addr.LogicAddr()] = n
+			if n.addr.LogicAddr().Type() != addr.HarbarType {
+				if nodeByType, ok := cache.nodeByType[n.addr.LogicAddr().Type()]; !ok {
+					cache.nodeByType[n.addr.LogicAddr().Type()] = []*node{n}
+				} else {
+					cache.nodeByType[n.addr.LogicAddr().Type()] = append(nodeByType, n)
+				}
+			} else {
+				if harborsByCluster, ok := cache.harborsByCluster[n.addr.LogicAddr().Cluster()]; !ok {
+					cache.harborsByCluster[n.addr.LogicAddr().Cluster()] = []*node{n}
+				} else {
+					cache.harborsByCluster[n.addr.LogicAddr().Cluster()] = append(harborsByCluster, n)
+				}
+			}
+		} else {
+			if localNodes[j].addr.LogicAddr() == cache.localAddr {
+				go cache.onSelfRemove()
+				return
+			} else {
+				n := localNodes[j]
+				delete(cache.nodes, n.addr.LogicAddr())
+				if n.addr.LogicAddr().Type() != addr.HarbarType {
+					nodeByType := cache.nodeByType[n.addr.LogicAddr().Type()]
+					for k, v := range nodeByType {
+						if v == n {
+							nodeByType[k] = nodeByType[len(nodeByType)-1]
+							cache.nodeByType[n.addr.LogicAddr().Type()] = nodeByType[:len(nodeByType)-1]
+							break
+						}
+					}
+				} else {
+					harborsByCluster := cache.harborsByCluster[n.addr.LogicAddr().Cluster()]
+					for k, v := range harborsByCluster {
+						if v == n {
+							harborsByCluster[k] = harborsByCluster[len(harborsByCluster)-1]
+							cache.harborsByCluster[n.addr.LogicAddr().Cluster()] = harborsByCluster[:len(harborsByCluster)-1]
+							break
+						}
+					}
+				}
+				localNodes[j].closeSocket()
+			}
+		}
+	}
+}
+
+func (cache *nodeCache) getHarborByCluster(cluster uint32, m addr.LogicAddr) *node {
+	cache.RLock()
+	defer cache.RUnlock()
+	if harbors, ok := cache.harborsByCluster[cluster]; !ok || len(harbors) == 0 {
 		return nil
 	} else {
 		return harbors[int(m)%len(harbors)]
 	}
 }
 
-func (n *nodeCache) getNodeByType(tt uint32) *node {
-	n.RLock()
-	defer n.RUnlock()
-	if nodes, ok := n.harborsByCluster[tt]; !ok || len(nodes) == 0 {
+func (cache *nodeCache) getNodeByType(tt uint32) *node {
+	cache.RLock()
+	defer cache.RUnlock()
+	if nodes, ok := cache.harborsByCluster[tt]; !ok || len(nodes) == 0 {
 		return nil
 	} else {
 		return nodes[int(rand.Int31())%len(nodes)]
 	}
 }
 
-func (n *nodeCache) getNodeByLogicAddr(logicAddr addr.LogicAddr) *node {
-	n.RLock()
-	defer n.RUnlock()
-	return n.nodes[logicAddr]
+func (cache *nodeCache) getNodeByLogicAddr(logicAddr addr.LogicAddr) *node {
+	cache.RLock()
+	defer cache.RUnlock()
+	return cache.nodes[logicAddr]
 }
 
 type pendingMessage struct {
@@ -233,4 +336,12 @@ func (n *node) sendMessage(ctx context.Context, msg interface{}, deadline time.T
 		n.Unlock()
 	}
 	return err
+}
+
+func (n *node) closeSocket() {
+	n.Lock()
+	defer n.Unlock()
+	if n.socket != nil {
+		n.socket.Close(nil)
+	}
 }

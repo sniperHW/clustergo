@@ -2,6 +2,7 @@ package sanguo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 	"unsafe"
@@ -62,4 +63,15 @@ func (c *selfChannel) Name() string {
 
 func (c *selfChannel) Identity() uint64 {
 	return 0
+}
+
+type JsonCodec struct {
+}
+
+func (c *JsonCodec) Encode(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
+}
+
+func (c *JsonCodec) Decode(b []byte, v interface{}) error {
+	return json.Unmarshal(b, v)
 }
