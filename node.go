@@ -18,8 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const maxDialCount int = 3
-
 // 从配置系统获得的node视图缓存
 type nodeCache struct {
 	sync.RWMutex
@@ -29,6 +27,44 @@ type nodeCache struct {
 	nodeByType       map[uint32][]*node
 	harborsByCluster map[uint32][]*node
 	onSelfRemove     func()
+}
+
+func (cache *nodeCache) addNodeByType(n *node) {
+	if nodeByType, ok := cache.nodeByType[n.addr.LogicAddr().Type()]; !ok {
+		cache.nodeByType[n.addr.LogicAddr().Type()] = []*node{n}
+	} else {
+		cache.nodeByType[n.addr.LogicAddr().Type()] = append(nodeByType, n)
+	}
+}
+
+func (cache *nodeCache) removeNodeByType(n *node) {
+	nodeByType := cache.nodeByType[n.addr.LogicAddr().Type()]
+	for k, v := range nodeByType {
+		if v == n {
+			nodeByType[k] = nodeByType[len(nodeByType)-1]
+			cache.nodeByType[n.addr.LogicAddr().Type()] = nodeByType[:len(nodeByType)-1]
+			break
+		}
+	}
+}
+
+func (cache *nodeCache) addHarborsByCluster(harbor *node) {
+	if harborsByCluster, ok := cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()]; !ok {
+		cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()] = []*node{harbor}
+	} else {
+		cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()] = append(harborsByCluster, harbor)
+	}
+}
+
+func (cache *nodeCache) removeHarborsByCluster(harbor *node) {
+	harborsByCluster := cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()]
+	for k, v := range harborsByCluster {
+		if v == harbor {
+			harborsByCluster[k] = harborsByCluster[len(harborsByCluster)-1]
+			cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()] = harborsByCluster[:len(harborsByCluster)-1]
+			break
+		}
+	}
 }
 
 func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
@@ -65,67 +101,110 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 	j := 0
 
 	for i < len(nodes) && j < len(localNodes) {
-		if nodes[i].Addr.LogicAddr() == localNodes[j].addr.LogicAddr() {
-			if nodes[i].Addr.NetAddr().String() != localNodes[j].addr.NetAddr().String() {
+		localNode := localNodes[j]
+		updateNode := nodes[i]
+
+		if updateNode.Addr.LogicAddr() == localNode.addr.LogicAddr() {
+			if updateNode.Addr.NetAddr().String() != localNode.addr.NetAddr().String() {
 				//网络地址发生变更
-				if localNodes[j].addr.LogicAddr() == cache.localAddr {
+				if localNode.addr.LogicAddr() == cache.localAddr {
 					go cache.onSelfRemove()
 					return
 				} else {
-					localNodes[j].closeSocket()
-					localNodes[j].addr.UpdateNetAddr(nodes[i].Addr.NetAddr())
+					localNode.closeSocket()
+					localNode.addr.UpdateNetAddr(updateNode.Addr.NetAddr())
+				}
+			}
+
+			if updateNode.Available {
+				if !localNode.available {
+					localNode.available = true
+					if localNode.addr.LogicAddr().Type() != addr.HarbarType {
+						cache.addNodeByType(localNode)
+					} else {
+						cache.addHarborsByCluster(localNode)
+					}
+				}
+			} else {
+				if localNode.available {
+					localNode.available = false
+					if localNode.addr.LogicAddr().Type() != addr.HarbarType {
+						cache.removeNodeByType(localNode)
+					} else {
+						cache.removeHarborsByCluster(localNode)
+					}
 				}
 			}
 			i++
 			j++
-		} else if nodes[i].Addr.LogicAddr() > localNodes[j].addr.LogicAddr() {
+		} else if updateNode.Addr.LogicAddr() > localNode.addr.LogicAddr() {
+			//添加节点
 			n := &node{
-				addr:       nodes[i].Addr,
+				addr:       updateNode.Addr,
 				pendingMsg: list.New(),
 				sanguo:     cache.sanguo,
+				available:  updateNode.Available,
 			}
 			cache.nodes[n.addr.LogicAddr()] = n
-			if n.addr.LogicAddr().Type() != addr.HarbarType {
-				if nodeByType, ok := cache.nodeByType[n.addr.LogicAddr().Type()]; !ok {
-					cache.nodeByType[n.addr.LogicAddr().Type()] = []*node{n}
+			if n.available {
+				if n.addr.LogicAddr().Type() != addr.HarbarType {
+					cache.addNodeByType(n)
 				} else {
-					cache.nodeByType[n.addr.LogicAddr().Type()] = append(nodeByType, n)
-				}
-			} else {
-				if harborsByCluster, ok := cache.harborsByCluster[n.addr.LogicAddr().Cluster()]; !ok {
-					cache.harborsByCluster[n.addr.LogicAddr().Cluster()] = []*node{n}
-				} else {
-					cache.harborsByCluster[n.addr.LogicAddr().Cluster()] = append(harborsByCluster, n)
+					cache.addHarborsByCluster(n)
 				}
 			}
 		} else {
-			if localNodes[j].addr.LogicAddr() == cache.localAddr {
+			//移除节点
+			if localNode.addr.LogicAddr() == cache.localAddr {
 				go cache.onSelfRemove()
 				return
 			} else {
-				n := localNodes[j]
-				delete(cache.nodes, n.addr.LogicAddr())
-				if n.addr.LogicAddr().Type() != addr.HarbarType {
-					nodeByType := cache.nodeByType[n.addr.LogicAddr().Type()]
-					for k, v := range nodeByType {
-						if v == n {
-							nodeByType[k] = nodeByType[len(nodeByType)-1]
-							cache.nodeByType[n.addr.LogicAddr().Type()] = nodeByType[:len(nodeByType)-1]
-							break
-						}
-					}
-				} else {
-					harborsByCluster := cache.harborsByCluster[n.addr.LogicAddr().Cluster()]
-					for k, v := range harborsByCluster {
-						if v == n {
-							harborsByCluster[k] = harborsByCluster[len(harborsByCluster)-1]
-							cache.harborsByCluster[n.addr.LogicAddr().Cluster()] = harborsByCluster[:len(harborsByCluster)-1]
-							break
-						}
+				delete(cache.nodes, localNode.addr.LogicAddr())
+				if localNode.available {
+					if localNode.addr.LogicAddr().Type() != addr.HarbarType {
+						cache.removeNodeByType(localNode)
+					} else {
+						cache.removeHarborsByCluster(localNode)
 					}
 				}
-				localNodes[j].closeSocket()
+				localNode.closeSocket()
 			}
+		}
+	}
+
+	for ; i < len(nodes); i++ {
+		n := &node{
+			addr:       nodes[i].Addr,
+			pendingMsg: list.New(),
+			sanguo:     cache.sanguo,
+			available:  nodes[i].Available,
+		}
+		cache.nodes[n.addr.LogicAddr()] = n
+		if n.available {
+			if n.addr.LogicAddr().Type() != addr.HarbarType {
+				cache.addNodeByType(n)
+			} else {
+				cache.addHarborsByCluster(n)
+			}
+		}
+	}
+
+	for ; j < len(localNodes); j++ {
+		localNode := localNodes[j]
+		//移除节点
+		if localNode.addr.LogicAddr() == cache.localAddr {
+			go cache.onSelfRemove()
+			return
+		} else {
+			delete(cache.nodes, localNode.addr.LogicAddr())
+			if localNode.available {
+				if localNode.addr.LogicAddr().Type() != addr.HarbarType {
+					cache.removeNodeByType(localNode)
+				} else {
+					cache.removeHarborsByCluster(localNode)
+				}
+			}
+			localNode.closeSocket()
 		}
 	}
 }
@@ -173,6 +252,7 @@ type node struct {
 	socket     *netgo.AsynSocket
 	pendingMsg *list.List
 	sanguo     *Sanguo
+	available  bool
 }
 
 func (n *node) dialError(err error) {

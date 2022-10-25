@@ -129,6 +129,10 @@ func (s *Sanguo) RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
 	}
 }
 
+func (s *Sanguo) RegisterRPC(name string, method interface{}) error {
+	return s.rpcSvr.Register(name, method)
+}
+
 func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
 	if to == s.localAddr.LogicAddr() {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
@@ -170,6 +174,7 @@ func (s *Sanguo) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Mess
 
 func (s *Sanguo) Stop() {
 	s.stopOnce.Do(func() {
+		s.listener.Close()
 		close(s.die)
 	})
 }
@@ -248,6 +253,10 @@ func Stop() {
 
 func RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
 	getDefault().RegisterMessageHandler(msg, handler)
+}
+
+func RegisterRPC(name string, method interface{}) error {
+	return getDefault().RegisterRPC(name, method)
 }
 
 func SendMessage(to addr.LogicAddr, msg proto.Message) {
