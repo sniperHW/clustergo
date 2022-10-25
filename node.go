@@ -14,6 +14,7 @@ import (
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
+	"github.com/sniperHW/sanguo/discovery"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -30,15 +31,15 @@ type nodeCache struct {
 	onSelfRemove     func()
 }
 
-func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []addr.Addr) {
+func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 
-	nodes := []addr.Addr{}
+	nodes := []discovery.Node{}
 
 	for _, v := range nodeinfo {
-		if v.LogicAddr().Cluster() == cache.localAddr.Cluster() {
-			//只有与自身cluster相同的节点才需要处理
+		if v.Export || v.Addr.LogicAddr().Cluster() == cache.localAddr.Cluster() {
+			//Export节点与自身cluster相同的节点才需要处理
 			nodes = append(nodes, v)
-		} else if cache.localAddr.Type() == addr.HarbarType && v.LogicAddr().Type() == addr.HarbarType {
+		} else if cache.localAddr.Type() == addr.HarbarType && v.Addr.LogicAddr().Type() == addr.HarbarType {
 			//当前节点是harbor,则不同cluster的harbor节点也需要处理
 			nodes = append(nodes, v)
 		}
@@ -57,29 +58,29 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []addr.Addr) {
 	})
 
 	sort.Slice(nodes, func(l int, r int) bool {
-		return nodes[l].LogicAddr() < nodes[r].LogicAddr()
+		return nodes[l].Addr.LogicAddr() < nodes[r].Addr.LogicAddr()
 	})
 
 	i := 0
 	j := 0
 
 	for i < len(nodes) && j < len(localNodes) {
-		if nodes[i].LogicAddr() == localNodes[j].addr.LogicAddr() {
-			if nodes[i].NetAddr().String() != localNodes[j].addr.NetAddr().String() {
+		if nodes[i].Addr.LogicAddr() == localNodes[j].addr.LogicAddr() {
+			if nodes[i].Addr.NetAddr().String() != localNodes[j].addr.NetAddr().String() {
 				//网络地址发生变更
 				if localNodes[j].addr.LogicAddr() == cache.localAddr {
 					go cache.onSelfRemove()
 					return
 				} else {
 					localNodes[j].closeSocket()
-					localNodes[j].addr.UpdateNetAddr(nodes[i].NetAddr())
+					localNodes[j].addr.UpdateNetAddr(nodes[i].Addr.NetAddr())
 				}
 			}
 			i++
 			j++
-		} else if nodes[i].LogicAddr() > localNodes[j].addr.LogicAddr() {
+		} else if nodes[i].Addr.LogicAddr() > localNodes[j].addr.LogicAddr() {
 			n := &node{
-				addr:       nodes[i],
+				addr:       nodes[i].Addr,
 				pendingMsg: list.New(),
 				sanguo:     cache.sanguo,
 			}
@@ -139,13 +140,17 @@ func (cache *nodeCache) getHarborByCluster(cluster uint32, m addr.LogicAddr) *no
 	}
 }
 
-func (cache *nodeCache) getNodeByType(tt uint32) *node {
+func (cache *nodeCache) getNodeByType(tt uint32, n int) *node {
 	cache.RLock()
 	defer cache.RUnlock()
 	if nodes, ok := cache.harborsByCluster[tt]; !ok || len(nodes) == 0 {
 		return nil
 	} else {
-		return nodes[int(rand.Int31())%len(nodes)]
+		if n == 0 {
+			return nodes[int(rand.Int31())%len(nodes)]
+		} else {
+			return nodes[n%len(nodes)]
+		}
 	}
 }
 
@@ -220,7 +225,7 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 		} else {
 			//同group,server为0,则从本地随机选择一个符合type的server
 			if message.To().Server() == 0 {
-				targetNode = n.sanguo.nodeCache.getNodeByType(message.To().Type())
+				targetNode = n.sanguo.nodeCache.getNodeByType(message.To().Type(), 0)
 				//设置正确的目标地址
 				message.ResetTo(targetNode.addr.LogicAddr())
 			}

@@ -2,6 +2,7 @@ package ss
 
 import (
 	"encoding/binary"
+	"log"
 
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
@@ -95,11 +96,13 @@ func (m *RelayMessage) To() addr.LogicAddr {
 }
 
 func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
-	if getMsgType(m.Data()[0]) != RpcReq {
+	if getMsgType(m.data[4]) != RpcReq {
+		log.Panicln("here1")
 		return nil
 	} else {
 		var req codec.RpcRequest
-		if err := proto.Unmarshal(m.Data()[9:], &req); err != nil {
+		if err := proto.Unmarshal(m.data[13:], &req); err != nil {
+			log.Panicln("here2")
 			return nil
 		} else {
 			return &rpcgo.RequestMsg{

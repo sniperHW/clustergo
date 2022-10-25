@@ -2,6 +2,7 @@ package ss
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -50,11 +51,13 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 			totalLen := sizeLen + payloadLen
 
+			log.Println(totalLen, payloadLen)
+
 			if totalLen > MaxPacketSize {
 				return buffs, 0
 			}
 
-			b := make([]byte, totalLen)
+			b := make([]byte, 0, totalLen)
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -93,7 +96,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 				return buffs, 0
 			}
 
-			b := make([]byte, totalLen)
+			b := make([]byte, 0, totalLen)
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -110,10 +113,13 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			return append(buffs, b), len(b)
 		case *rpcgo.ResponseMsg:
 			resp := &codec.RpcResponse{
-				Seq:     msg.Seq,
-				Ret:     msg.Ret,
-				ErrCode: uint32(msg.Err.Code),
-				ErrDesc: msg.Err.Err,
+				Seq: msg.Seq,
+				Ret: msg.Ret,
+			}
+
+			if msg.Err != nil {
+				resp.ErrCode = uint32(msg.Err.Code)
+				resp.ErrDesc = msg.Err.Err
 			}
 
 			if pbbytes, err = proto.Marshal(resp); err != nil {
@@ -128,7 +134,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 				return buffs, 0
 			}
 
-			b := make([]byte, totalLen)
+			b := make([]byte, 0, totalLen)
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)

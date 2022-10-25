@@ -79,7 +79,7 @@ func (m *msgManager) dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message
 
 type Sanguo struct {
 	localAddr  addr.Addr
-	l          net.Listener
+	listener   net.Listener
 	nodeCache  nodeCache
 	rpcSvr     *rpcgo.Server
 	rpcCli     *rpcgo.Client
@@ -90,7 +90,7 @@ type Sanguo struct {
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
-func (s *Sanguo) getNodeByTargetLogicAddr(to addr.LogicAddr) (n *node) {
+func (s *Sanguo) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 	if to.Cluster() == s.localAddr.LogicAddr().Cluster() {
 		//同cluster内发送消息
 		n = s.nodeCache.getNodeByLogicAddr(to)
@@ -109,6 +109,20 @@ func (s *Sanguo) getNodeByTargetLogicAddr(to addr.LogicAddr) (n *node) {
 	return n
 }
 
+func (s *Sanguo) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
+	var num int
+	if len(n) > 0 {
+		num = n[0]
+	}
+
+	if node := s.nodeCache.getNodeByType(tt, num); node != nil {
+		addr = node.addr.LogicAddr()
+	} else {
+		err = errors.New("no available node")
+	}
+	return addr, err
+}
+
 func (s *Sanguo) RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
 	if cmd := pb.GetCmd(ss.Namespace, msg); cmd != 0 {
 		s.msgManager.register(uint16(cmd), handler)
@@ -119,7 +133,7 @@ func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
 	if to == s.localAddr.LogicAddr() {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 	} else {
-		if n := s.getNodeByTargetLogicAddr(to); n != nil {
+		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), msg, time.Time{})
 		}
 	}
@@ -129,7 +143,7 @@ func (s *Sanguo) Call(ctx context.Context, to addr.LogicAddr, method string, arg
 	if to == s.localAddr.LogicAddr() {
 		return s.rpcCli.Call(ctx, &selfChannel{sanguo: s}, method, arg, ret)
 	} else {
-		if n := s.getNodeByTargetLogicAddr(to); n != nil {
+		if n := s.getNodeByLogicAddr(to); n != nil {
 			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n}, method, arg, ret)
 		} else {
 			return errors.New("call failed")
@@ -141,7 +155,7 @@ func (s *Sanguo) CallWithCallback(to addr.LogicAddr, deadline time.Time, method 
 	if to == s.localAddr.LogicAddr() {
 		return s.rpcCli.CallWithCallback(&selfChannel{sanguo: s}, deadline, method, arg, ret, cb)
 	} else {
-		if n := s.getNodeByTargetLogicAddr(to); n != nil {
+		if n := s.getNodeByLogicAddr(to); n != nil {
 			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n}, deadline, method, arg, ret, cb)
 		} else {
 			go cb(nil, errors.New("call failed"))
@@ -160,13 +174,13 @@ func (s *Sanguo) Stop() {
 	})
 }
 
-func (s *Sanguo) Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {
+func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.LogicAddr) (err error) {
 	s.startOnce.Do(func() {
 		s.nodeCache.sanguo = s
 		s.nodeCache.localAddr = localAddr
 		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
-		var nodeInfo []addr.Addr
-		if nodeInfo, err = discovery.LoadNodeInfo(); err == nil {
+		var nodeInfo []discovery.Node
+		if nodeInfo, err = discoveryService.LoadNodeInfo(); err == nil {
 			s.nodeCache.onNodeInfoUpdate(nodeInfo)
 		}
 		if n := s.nodeCache.getNodeByLogicAddr(localAddr); n == nil {
@@ -175,7 +189,7 @@ func (s *Sanguo) Start(discovery discovery.Discovery, localAddr addr.LogicAddr) 
 		} else {
 			s.localAddr = n.addr
 			var serve func()
-			s.l, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
+			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
 				go func() {
 					if err := s.auth(conn); nil != err {
 						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())
@@ -185,7 +199,7 @@ func (s *Sanguo) Start(discovery discovery.Discovery, localAddr addr.LogicAddr) 
 			})
 			if err == nil {
 				//订阅更新
-				discovery.Subscribe(s.nodeCache.onNodeInfoUpdate)
+				discoveryService.Subscribe(s.nodeCache.onNodeInfoUpdate)
 				go serve()
 			}
 		}
