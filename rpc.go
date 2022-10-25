@@ -18,19 +18,19 @@ type rpcChannel struct {
 }
 
 func (c *rpcChannel) SendRequest(request *rpcgo.RequestMsg, deadline time.Time) error {
-	return c.node.sendMessage(context.TODO(), ss.NewMessage(c.peer, c.node.addr.LogicAddr(), request), deadline)
+	return c.node.sendMessage(context.TODO(), ss.NewMessage(c.peer, c.node.sanguo.localAddr.LogicAddr(), request), deadline)
 }
 
 func (c *rpcChannel) SendRequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
-	return c.node.sendMessage(ctx, ss.NewMessage(c.peer, c.node.addr.LogicAddr(), request), time.Time{})
+	return c.node.sendMessage(ctx, ss.NewMessage(c.peer, c.node.sanguo.localAddr.LogicAddr(), request), time.Time{})
 }
 
 func (c *rpcChannel) Reply(response *rpcgo.ResponseMsg) error {
-	return c.node.sendMessage(context.TODO(), ss.NewMessage(c.node.addr.LogicAddr(), c.peer, response), time.Now().Add(time.Second))
+	return c.node.sendMessage(context.TODO(), ss.NewMessage(c.peer, c.node.sanguo.localAddr.LogicAddr(), response), time.Now().Add(time.Second))
 }
 
 func (c *rpcChannel) Name() string {
-	return fmt.Sprintf("%s <-> %s", c.node.addr.LogicAddr().String(), c.peer.String())
+	return fmt.Sprintf("%s <-> %s", c.node.sanguo.localAddr.LogicAddr(), c.peer.String())
 }
 
 func (c *rpcChannel) Identity() uint64 {

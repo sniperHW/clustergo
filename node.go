@@ -228,7 +228,7 @@ func (cache *nodeCache) getHarborByCluster(cluster uint32, m addr.LogicAddr) *no
 func (cache *nodeCache) getNodeByType(tt uint32, n int) *node {
 	cache.RLock()
 	defer cache.RUnlock()
-	if nodes, ok := cache.harborsByCluster[tt]; !ok || len(nodes) == 0 {
+	if nodes, ok := cache.nodeByType[tt]; !ok || len(nodes) == 0 {
 		return nil
 	} else {
 		if n == 0 {
@@ -303,29 +303,31 @@ func (n *node) dialError(err error) {
 }
 
 func (n *node) onRelayMessage(message *ss.RelayMessage) {
-	targetNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.To())
-	if targetNode == nil {
-		if message.To().Cluster() != n.addr.LogicAddr().Cluster() {
-			//不同cluster要求harbor转发
-			targetNode = n.sanguo.nodeCache.getHarborByCluster(message.To().Cluster(), message.To())
-			if nil != targetNode && targetNode.addr.LogicAddr() == n.addr.LogicAddr() {
-				return
-			}
-		} else {
-			//同group,server为0,则从本地随机选择一个符合type的server
-			if message.To().Server() == 0 {
-				targetNode = n.sanguo.nodeCache.getNodeByType(message.To().Type(), 0)
-				//设置正确的目标地址
-				message.ResetTo(targetNode.addr.LogicAddr())
-			}
+	//if message.From() == n.sanguo.localAddr.LogicAddr() {
+	//	panic("here")
+	//}
+
+	logger.Debugf("onRelayMessage self:%s %s->%s", n.sanguo.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
+
+	var nextNode *node //下一跳节点
+	if message.To().Cluster() == n.sanguo.localAddr.LogicAddr().Cluster() {
+		//当前节点与目标节点处于同一个cluster
+		nextNode = n.sanguo.nodeCache.getNodeByLogicAddr(message.To())
+	} else {
+		//获取目标cluster的harbor
+		nextNode = n.sanguo.nodeCache.getHarborByCluster(message.To().Cluster(), message.To())
+		if nil != nextNode && nextNode.addr.LogicAddr() == n.addr.LogicAddr() {
+			return
 		}
 	}
 
-	if targetNode != nil {
-		n.sendMessage(context.TODO(), message, time.Now().Add(time.Second))
+	if nextNode != nil {
+
+		logger.Debugf("nextNode %s", nextNode.addr.LogicAddr())
+
+		nextNode.sendMessage(context.TODO(), message, time.Now().Add(time.Second))
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil {
 		//对于无法路由的rpc请求，返回错误响应
-
 		respMsg := ss.NewMessage(message.From(), message.To(), &rpcgo.ResponseMsg{
 			Seq: rpcReq.Seq,
 			Err: &rpcgo.Error{
@@ -334,10 +336,14 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 			},
 		})
 
-		if fromNode := n.sanguo.nodeCache.getNodeByLogicAddr(message.From()); fromNode != nil {
-			fromNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
-		} else if harborNode := n.sanguo.nodeCache.getHarborByCluster(message.From().Cluster(), message.From()); harborNode != nil {
-			harborNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
+		if message.From().Cluster() == n.sanguo.localAddr.LogicAddr().Cluster() {
+			nextNode = n.sanguo.nodeCache.getNodeByLogicAddr(message.From())
+		} else {
+			nextNode = n.sanguo.nodeCache.getHarborByCluster(message.From().Cluster(), message.From())
+		}
+
+		if nextNode != nil {
+			nextNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
 		}
 	}
 }
@@ -409,16 +415,14 @@ func (n *node) dialOK(conn net.Conn) {
 
 func (n *node) dial() {
 	dialer := &net.Dialer{}
-	logger.Debugf("dial %s:%s", n.addr.LogicAddr().String(), n.addr.NetAddr().String())
+	logger.Debugf("%s dial %s", n.sanguo.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
 	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 		n.dialError(ErrDial)
 	} else {
 		if err := n.login(conn); err != nil {
 			conn.Close()
-			logger.Debugf("%s %s login error %v", n.addr.LogicAddr().String(), n.addr.NetAddr().String(), err)
 			n.dialError(err)
 		} else {
-			logger.Debugf("%s %s login ok", n.addr.LogicAddr().String(), n.addr.NetAddr().String())
 			n.dialOK(conn)
 		}
 	}

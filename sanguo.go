@@ -198,7 +198,7 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 			s.localAddr = n.addr
 			var serve func()
 			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
-				logger.Debugf("%s %s new connection", s.localAddr.LogicAddr().String(), s.localAddr.NetAddr().String())
+				//logger.Debugf("%s %s new connection", s.localAddr.LogicAddr().String(), s.localAddr.NetAddr().String())
 				go func() {
 					if err := s.auth(conn); nil != err {
 						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())
