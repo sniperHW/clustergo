@@ -65,7 +65,7 @@ func TestRPCResponse(t *testing.T) {
 		message, err := codec.Decode(pkt)
 		assert.Nil(t, err)
 
-		rpcReq, ok := message.(*Message).Data().(*rpcgo.ResponseMsg)
+		rpcReq, ok := message.(*Message).Payload().(*rpcgo.ResponseMsg)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, rpcReq.Seq, uint64(1))
 		assert.Equal(t, rpcReq.Ret, []byte("world"))
@@ -107,7 +107,7 @@ func TestRPCRequest(t *testing.T) {
 		message, err := codec.Decode(pkt)
 		assert.Nil(t, err)
 
-		rpcReq, ok := message.(*Message).Data().(*rpcgo.RequestMsg)
+		rpcReq, ok := message.(*Message).Payload().(*rpcgo.RequestMsg)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, rpcReq.Seq, uint64(1))
 		assert.Equal(t, rpcReq.Method, "hello")
@@ -149,7 +149,7 @@ func TestMessage(t *testing.T) {
 		assert.Equal(t, message.(*Message).From(), selfAddr)
 		assert.Equal(t, message.(*Message).To(), targetAddr)
 		assert.Equal(t, message.(*Message).Cmd(), uint16(1))
-		assert.Equal(t, message.(*Message).Data().(*Echo).Msg, "hello")
+		assert.Equal(t, message.(*Message).Payload().(*Echo).Msg, "hello")
 	}
 
 }
@@ -191,8 +191,8 @@ func TestRelayMessage(t *testing.T) {
 
 		relayMessage, ok := message.(*RelayMessage)
 		assert.Equal(t, ok, true)
-		assert.Equal(t, n, len(relayMessage.Data()))
-		log.Println(relayMessage.Data())
+		assert.Equal(t, n, len(relayMessage.Payload()))
+		log.Println(relayMessage.Payload())
 
 		rpcReq := relayMessage.GetRpcRequest()
 		assert.Equal(t, rpcReq.Seq, uint64(1))

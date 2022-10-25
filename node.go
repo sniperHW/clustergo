@@ -163,7 +163,6 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 			n := &node{
 				addr:       updateNode.Addr,
 				pendingMsg: list.New(),
-				sanguo:     cache.sanguo,
 				available:  updateNode.Available,
 			}
 			cache.nodes[n.addr.LogicAddr()] = n
@@ -182,7 +181,6 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 		n := &node{
 			addr:       nodes[i].Addr,
 			pendingMsg: list.New(),
-			sanguo:     cache.sanguo,
 			available:  nodes[i].Available,
 		}
 		cache.nodes[n.addr.LogicAddr()] = n
@@ -257,11 +255,11 @@ type node struct {
 	dialing    bool
 	socket     *netgo.AsynSocket
 	pendingMsg *list.List
-	sanguo     *Sanguo
-	available  bool
+	//sanguo     *Sanguo
+	available bool
 }
 
-func (n *node) dialError(err error) {
+func (n *node) dialError(sanguo *Sanguo, err error) {
 	n.Lock()
 	defer n.Unlock()
 	n.dialing = false
@@ -297,25 +295,24 @@ func (n *node) dialError(err error) {
 
 		if n.pendingMsg.Len() > 0 {
 			n.dialing = true
-			time.AfterFunc(time.Second, n.dial)
+			time.AfterFunc(time.Second, func() {
+				n.dial(sanguo)
+			})
 		}
 	}
 }
 
-func (n *node) onRelayMessage(message *ss.RelayMessage) {
-	//if message.From() == n.sanguo.localAddr.LogicAddr() {
-	//	panic("here")
-	//}
+func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
 
-	logger.Debugf("onRelayMessage self:%s %s->%s", n.sanguo.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
+	logger.Debugf("onRelayMessage self:%s %s->%s", sanguo.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
 
 	var nextNode *node //下一跳节点
-	if message.To().Cluster() == n.sanguo.localAddr.LogicAddr().Cluster() {
+	if message.To().Cluster() == sanguo.localAddr.LogicAddr().Cluster() {
 		//当前节点与目标节点处于同一个cluster
-		nextNode = n.sanguo.nodeCache.getNodeByLogicAddr(message.To())
+		nextNode = sanguo.nodeCache.getNodeByLogicAddr(message.To())
 	} else {
 		//获取目标cluster的harbor
-		nextNode = n.sanguo.nodeCache.getHarborByCluster(message.To().Cluster(), message.To())
+		nextNode = sanguo.nodeCache.getHarborByCluster(message.To().Cluster(), message.To())
 		if nil != nextNode && nextNode.addr.LogicAddr() == n.addr.LogicAddr() {
 			return
 		}
@@ -325,8 +322,8 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 
 		logger.Debugf("nextNode %s", nextNode.addr.LogicAddr())
 
-		nextNode.sendMessage(context.TODO(), message, time.Now().Add(time.Second))
-	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil {
+		nextNode.sendMessage(context.TODO(), sanguo, message, time.Now().Add(time.Second))
+	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil && !rpcReq.Oneway {
 		//对于无法路由的rpc请求，返回错误响应
 		respMsg := ss.NewMessage(message.From(), message.To(), &rpcgo.ResponseMsg{
 			Seq: rpcReq.Seq,
@@ -336,42 +333,42 @@ func (n *node) onRelayMessage(message *ss.RelayMessage) {
 			},
 		})
 
-		if message.From().Cluster() == n.sanguo.localAddr.LogicAddr().Cluster() {
-			nextNode = n.sanguo.nodeCache.getNodeByLogicAddr(message.From())
+		if message.From().Cluster() == sanguo.localAddr.LogicAddr().Cluster() {
+			nextNode = sanguo.nodeCache.getNodeByLogicAddr(message.From())
 		} else {
-			nextNode = n.sanguo.nodeCache.getHarborByCluster(message.From().Cluster(), message.From())
+			nextNode = sanguo.nodeCache.getHarborByCluster(message.From().Cluster(), message.From())
 		}
 
 		if nextNode != nil {
-			nextNode.sendMessage(context.TODO(), respMsg, time.Now().Add(time.Second))
+			nextNode.sendMessage(context.TODO(), sanguo, respMsg, time.Now().Add(time.Second))
 		}
 	}
 }
 
-func (n *node) onMessage(msg interface{}) {
+func (n *node) onMessage(sanguo *Sanguo, msg interface{}) {
 	switch msg := msg.(type) {
 	case *ss.Message:
-		switch m := msg.Data().(type) {
+		switch m := msg.Payload().(type) {
 		case proto.Message:
-			n.sanguo.dispatchMessage(msg.From(), msg.Cmd(), m)
+			sanguo.dispatchMessage(msg.From(), msg.Cmd(), m)
 		case *rpcgo.RequestMsg:
-			n.sanguo.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n}, m)
+			sanguo.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n, sanguo: sanguo}, m)
 		case *rpcgo.ResponseMsg:
-			n.sanguo.rpcCli.OnMessage(context.TODO(), m)
+			sanguo.rpcCli.OnMessage(context.TODO(), m)
 		}
 	case *ss.RelayMessage:
-		n.onRelayMessage(msg)
+		n.onRelayMessage(sanguo, msg)
 	}
 }
 
-func (n *node) onEstablish(conn net.Conn) {
-	codec := ss.NewCodec(n.sanguo.localAddr.LogicAddr())
+func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
+	codec := ss.NewCodec(sanguo.localAddr.LogicAddr())
 	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn.(*net.TCPConn), codec),
 		netgo.AsynSocketOption{
 			Codec:    codec,
 			AutoRecv: true,
 		}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
-		n.onMessage(packet)
+		n.onMessage(sanguo, packet)
 		return nil
 	}).Recv()
 
@@ -395,8 +392,8 @@ func (n *node) onEstablish(conn net.Conn) {
 	}
 }
 
-func (n *node) dialOK(conn net.Conn) {
-	if n == n.sanguo.nodeCache.getNodeByLogicAddr(n.addr.LogicAddr()) {
+func (n *node) dialOK(sanguo *Sanguo, conn net.Conn) {
+	if n == sanguo.nodeCache.getNodeByLogicAddr(n.addr.LogicAddr()) {
 		n.Lock()
 		defer n.Unlock()
 		n.dialing = false
@@ -404,31 +401,31 @@ func (n *node) dialOK(conn net.Conn) {
 			//两段同时建立连接
 			conn.Close()
 		} else {
-			n.onEstablish(conn)
+			n.onEstablish(sanguo, conn)
 		}
 	} else {
 		//不再是合法的node
 		conn.Close()
-		n.dialError(ErrInvaildNode)
+		n.dialError(sanguo, ErrInvaildNode)
 	}
 }
 
-func (n *node) dial() {
+func (n *node) dial(sanguo *Sanguo) {
 	dialer := &net.Dialer{}
-	logger.Debugf("%s dial %s", n.sanguo.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
+	logger.Debugf("%s dial %s", sanguo.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
 	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
-		n.dialError(ErrDial)
+		n.dialError(sanguo, ErrDial)
 	} else {
-		if err := n.login(conn); err != nil {
+		if err := n.login(sanguo, conn); err != nil {
 			conn.Close()
-			n.dialError(err)
+			n.dialError(sanguo, err)
 		} else {
-			n.dialOK(conn)
+			n.dialOK(sanguo, conn)
 		}
 	}
 }
 
-func (n *node) sendMessage(ctx context.Context, msg interface{}, deadline time.Time) (err error) {
+func (n *node) sendMessage(ctx context.Context, sanguo *Sanguo, msg interface{}, deadline time.Time) (err error) {
 	n.Lock()
 	socket := n.socket
 	if socket != nil {
@@ -447,7 +444,7 @@ func (n *node) sendMessage(ctx context.Context, msg interface{}, deadline time.T
 		//尝试与对端建立连接
 		if !n.dialing {
 			n.dialing = true
-			go n.dial()
+			go n.dial(sanguo)
 		}
 		n.Unlock()
 	}

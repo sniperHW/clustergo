@@ -20,9 +20,10 @@ import (
 )
 
 var (
-	ErrInvaildNode   = errors.New("invaild node")
-	ErrDuplicateConn = errors.New("duplicate node connection")
-	ErrDial          = errors.New("dial failed")
+	ErrInvaildNode     = errors.New("invaild node")
+	ErrDuplicateConn   = errors.New("duplicate node connection")
+	ErrDial            = errors.New("dial failed")
+	ErrNetAddrMismatch = errors.New("net addr mismatch")
 )
 
 var logger log.Logger
@@ -138,7 +139,7 @@ func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessage(context.TODO(), ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
+			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
 		} else {
 			logger.Debugf("target: not found", to.String())
 		}
@@ -150,7 +151,7 @@ func (s *Sanguo) Call(ctx context.Context, to addr.LogicAddr, method string, arg
 		return s.rpcCli.Call(ctx, &selfChannel{sanguo: s}, method, arg, ret)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n}, method, arg, ret)
+			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n, sanguo: s}, method, arg, ret)
 		} else {
 			return errors.New("call failed")
 		}
@@ -162,7 +163,7 @@ func (s *Sanguo) CallWithCallback(to addr.LogicAddr, deadline time.Time, method 
 		return s.rpcCli.CallWithCallback(&selfChannel{sanguo: s}, deadline, method, arg, ret, cb)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n}, deadline, method, arg, ret, cb)
+			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n, sanguo: s}, deadline, method, arg, ret, cb)
 		} else {
 			go cb(nil, errors.New("call failed"))
 			return nil
@@ -198,7 +199,6 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 			s.localAddr = n.addr
 			var serve func()
 			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
-				//logger.Debugf("%s %s new connection", s.localAddr.LogicAddr().String(), s.localAddr.NetAddr().String())
 				go func() {
 					if err := s.auth(conn); nil != err {
 						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())

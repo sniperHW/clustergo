@@ -1,9 +1,6 @@
 package ss
 
 import (
-	"encoding/binary"
-	"log"
-
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec"
@@ -40,17 +37,17 @@ func getMsgType(flag byte) byte {
 }
 
 type Message struct {
-	cmd  uint16
-	to   addr.LogicAddr
-	from addr.LogicAddr
-	data interface{}
+	cmd     uint16
+	to      addr.LogicAddr
+	from    addr.LogicAddr
+	payload interface{}
 }
 
-func NewMessage(to addr.LogicAddr, from addr.LogicAddr, data interface{}, cmd ...uint16) *Message {
+func NewMessage(to addr.LogicAddr, from addr.LogicAddr, payload interface{}, cmd ...uint16) *Message {
 	msg := &Message{
-		to:   to,
-		from: from,
-		data: data,
+		to:      to,
+		from:    from,
+		payload: payload,
 	}
 
 	if len(cmd) > 0 {
@@ -60,8 +57,8 @@ func NewMessage(to addr.LogicAddr, from addr.LogicAddr, data interface{}, cmd ..
 	return msg
 }
 
-func (m *Message) Data() interface{} {
-	return m.data
+func (m *Message) Payload() interface{} {
+	return m.payload
 }
 
 func (m *Message) Cmd() uint16 {
@@ -78,13 +75,13 @@ func (m *Message) To() addr.LogicAddr {
 
 // 透传消息
 type RelayMessage struct {
-	to   addr.LogicAddr
-	from addr.LogicAddr
-	data []byte
+	to      addr.LogicAddr
+	from    addr.LogicAddr
+	payload []byte
 }
 
-func (m *RelayMessage) Data() []byte {
-	return m.data
+func (m *RelayMessage) Payload() []byte {
+	return m.payload
 }
 
 func (m *RelayMessage) From() addr.LogicAddr {
@@ -96,13 +93,11 @@ func (m *RelayMessage) To() addr.LogicAddr {
 }
 
 func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
-	if getMsgType(m.data[4]) != RpcReq {
-		log.Panicln("here1")
+	if getMsgType(m.payload[4]) != RpcReq {
 		return nil
 	} else {
 		var req codec.RpcRequest
-		if err := proto.Unmarshal(m.data[13:], &req); err != nil {
-			log.Panicln("here2")
+		if err := proto.Unmarshal(m.payload[13:], &req); err != nil {
 			return nil
 		} else {
 			return &rpcgo.RequestMsg{
@@ -115,20 +110,15 @@ func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
 	}
 }
 
-func (m *RelayMessage) ResetTo(to addr.LogicAddr) {
-	m.to = to
-	binary.BigEndian.PutUint32(m.data[1:], uint32(to))
-}
-
-func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, data []byte) *RelayMessage {
+func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, payload []byte) *RelayMessage {
 	m := &RelayMessage{
 		to:   to,
 		from: from,
 	}
 
-	b := make([]byte, 0, len(data)+sizeLen)
-	b = buffer.AppendUint32(b, uint32(len(data)))
-	b = buffer.AppendBytes(b, data)
-	m.data = b
+	b := make([]byte, 0, len(payload)+sizeLen)
+	b = buffer.AppendUint32(b, uint32(len(payload)))
+	b = buffer.AppendBytes(b, payload)
+	m.payload = b
 	return m
 }

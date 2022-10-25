@@ -43,7 +43,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 		flag := byte(0)
 
-		switch msg := o.Data().(type) {
+		switch msg := o.Payload().(type) {
 		case proto.Message:
 			if pbbytes, cmd, err = pb.Marshal(Namespace, msg); err != nil {
 				panic(err)
@@ -161,7 +161,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 		}
 		return buffs, 0
 	case *RelayMessage:
-		return append(buffs, o.Data()), len(o.Data())
+		return append(buffs, o.Payload()), len(o.Payload())
 	default:
 		panic(reflect.TypeOf(o).String())
 		return buffs, 0

@@ -19,11 +19,11 @@ type loginReq struct {
 	NetAddr   string `json:"NetAddr,omitempty"`
 }
 
-func (n *node) login(conn net.Conn) error {
+func (n *node) login(sanguo *Sanguo, conn net.Conn) error {
 
 	j, err := json.Marshal(&loginReq{
-		LogicAddr: uint32(n.sanguo.localAddr.LogicAddr()),
-		NetAddr:   conn.LocalAddr().String(),
+		LogicAddr: uint32(sanguo.localAddr.LogicAddr()),
+		NetAddr:   sanguo.localAddr.NetAddr().String(),
 	})
 
 	if nil != err {
@@ -88,6 +88,8 @@ func (s *Sanguo) auth(conn net.Conn) (err error) {
 	node := s.nodeCache.getNodeByLogicAddr(addr.LogicAddr(req.LogicAddr))
 	if node == nil {
 		return ErrInvaildNode
+	} else if node.addr.NetAddr().String() != req.NetAddr {
+		return ErrNetAddrMismatch
 	}
 
 	node.Lock()
@@ -95,8 +97,8 @@ func (s *Sanguo) auth(conn net.Conn) (err error) {
 	if node.dialing {
 		//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
 		if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
-			logger.Errorf("(self:%v) (other:%v) both side connectting", s.localAddr.LogicAddr(), node.addr.LogicAddr())
-			return errors.New("both side connectting")
+			logger.Errorf("(self:%v) (other:%v) connectting simultaneously", s.localAddr.LogicAddr(), node.addr.LogicAddr())
+			return errors.New("connectting simultaneously")
 		}
 	} else if nil != node.socket {
 		return ErrDuplicateConn
@@ -111,7 +113,7 @@ func (s *Sanguo) auth(conn net.Conn) (err error) {
 	if _, err = conn.Write(resp); err != nil {
 		return err
 	} else {
-		node.onEstablish(conn)
+		node.onEstablish(s, conn)
 		return nil
 	}
 }
