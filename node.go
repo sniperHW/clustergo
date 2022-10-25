@@ -138,22 +138,8 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 			i++
 			j++
 		} else if updateNode.Addr.LogicAddr() > localNode.addr.LogicAddr() {
-			//添加节点
-			n := &node{
-				addr:       updateNode.Addr,
-				pendingMsg: list.New(),
-				sanguo:     cache.sanguo,
-				available:  updateNode.Available,
-			}
-			cache.nodes[n.addr.LogicAddr()] = n
-			if n.available {
-				if n.addr.LogicAddr().Type() != addr.HarbarType {
-					cache.addNodeByType(n)
-				} else {
-					cache.addHarborsByCluster(n)
-				}
-			}
-		} else {
+			//local  1 2 3 4 5 6
+			//update 1 2 4 5 6
 			//移除节点
 			if localNode.addr.LogicAddr() == cache.localAddr {
 				go cache.onSelfRemove()
@@ -169,6 +155,26 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 				}
 				localNode.closeSocket()
 			}
+			j++
+		} else {
+			//local  1 2 4 5 6
+			//update 1 2 3 4 5 6
+			//添加节点
+			n := &node{
+				addr:       updateNode.Addr,
+				pendingMsg: list.New(),
+				sanguo:     cache.sanguo,
+				available:  updateNode.Available,
+			}
+			cache.nodes[n.addr.LogicAddr()] = n
+			if n.available {
+				if n.addr.LogicAddr().Type() != addr.HarbarType {
+					cache.addNodeByType(n)
+				} else {
+					cache.addHarborsByCluster(n)
+				}
+			}
+			i++
 		}
 	}
 
@@ -267,9 +273,12 @@ func (n *node) dialError(err error) {
 		for e != nil {
 			m := e.Value.(*pendingMessage)
 			remove := false
-			if !m.deadline.IsZero() && now.After(m.deadline) {
-				remove = true
-			} else if m.ctx != nil {
+
+			if !m.deadline.IsZero() {
+				if now.After(m.deadline) {
+					remove = true
+				}
+			} else {
 				select {
 				case <-m.ctx.Done():
 					remove = true
@@ -350,7 +359,7 @@ func (n *node) onMessage(msg interface{}) {
 }
 
 func (n *node) onEstablish(conn net.Conn) {
-	codec := ss.NewCodec(n.addr.LogicAddr())
+	codec := ss.NewCodec(n.sanguo.localAddr.LogicAddr())
 	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn.(*net.TCPConn), codec),
 		netgo.AsynSocketOption{
 			Codec:    codec,
@@ -359,6 +368,25 @@ func (n *node) onEstablish(conn net.Conn) {
 		n.onMessage(packet)
 		return nil
 	}).Recv()
+
+	now := time.Now()
+
+	//logger.Debugf("onEstablish %s %s %d", n.addr.LogicAddr().String(), n.addr.NetAddr().String(), n.pendingMsg.Len())
+
+	for e := n.pendingMsg.Front(); e != nil; e = n.pendingMsg.Front() {
+		msg := n.pendingMsg.Remove(e).(*pendingMessage)
+		if !msg.deadline.IsZero() {
+			if now.Before(msg.deadline) {
+				n.socket.Send(msg.message, msg.deadline)
+			}
+		} else if msg.ctx != nil {
+			select {
+			case <-msg.ctx.Done():
+			default:
+				n.socket.SendWithContext(msg.ctx, msg.message)
+			}
+		}
+	}
 }
 
 func (n *node) dialOK(conn net.Conn) {
@@ -381,13 +409,16 @@ func (n *node) dialOK(conn net.Conn) {
 
 func (n *node) dial() {
 	dialer := &net.Dialer{}
+	logger.Debugf("dial %s:%s", n.addr.LogicAddr().String(), n.addr.NetAddr().String())
 	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 		n.dialError(ErrDial)
 	} else {
 		if err := n.login(conn); err != nil {
 			conn.Close()
+			logger.Debugf("%s %s login error %v", n.addr.LogicAddr().String(), n.addr.NetAddr().String(), err)
 			n.dialError(err)
 		} else {
+			logger.Debugf("%s %s login ok", n.addr.LogicAddr().String(), n.addr.NetAddr().String())
 			n.dialOK(conn)
 		}
 	}

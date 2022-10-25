@@ -6,6 +6,8 @@ import (
 	"net"
 	"time"
 
+	"reflect"
+
 	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
@@ -44,6 +46,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 		switch msg := o.Data().(type) {
 		case proto.Message:
 			if pbbytes, cmd, err = pb.Marshal(Namespace, msg); err != nil {
+				panic(err)
 				return buffs, 0
 			}
 
@@ -54,6 +57,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			log.Println(totalLen, payloadLen)
 
 			if totalLen > MaxPacketSize {
+				panic("1")
 				return buffs, 0
 			}
 
@@ -85,6 +89,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			}
 
 			if pbbytes, err = proto.Marshal(req); err != nil {
+				panic(err)
 				return buffs, 0
 			}
 
@@ -93,6 +98,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			totalLen := sizeLen + payloadLen
 
 			if totalLen > MaxPacketSize {
+				panic("1")
 				return buffs, 0
 			}
 
@@ -123,6 +129,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			}
 
 			if pbbytes, err = proto.Marshal(resp); err != nil {
+				panic(err)
 				return buffs, 0
 			}
 
@@ -131,6 +138,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			totalLen := sizeLen + payloadLen
 
 			if totalLen > MaxPacketSize {
+				panic("1")
 				return buffs, 0
 			}
 
@@ -155,6 +163,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 	case *RelayMessage:
 		return append(buffs, o.Data()), len(o.Data())
 	default:
+		panic(reflect.TypeOf(o).String())
 		return buffs, 0
 	}
 }

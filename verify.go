@@ -12,7 +12,7 @@ import (
 	"github.com/sniperHW/sanguo/pkg/crypto"
 )
 
-var key []byte = []byte("sanguo_2022")
+var cecret_key []byte = []byte("sanguo_2022")
 
 type loginReq struct {
 	LogicAddr uint32 `json:"LogicAddr,omitempty"`
@@ -30,7 +30,7 @@ func (n *node) login(conn net.Conn) error {
 		return err
 	}
 
-	if j, err = crypto.AESCBCEncrypt(key, j); nil != err {
+	if j, err = crypto.AESCBCEncrypt(cecret_key, j); nil != err {
 		return err
 	}
 
@@ -75,7 +75,7 @@ func (s *Sanguo) auth(conn net.Conn) (err error) {
 		return err
 	}
 
-	if buff, err = crypto.AESCBCDecrypter(key, buff); nil != err {
+	if buff, err = crypto.AESCBCDecrypter(cecret_key, buff); nil != err {
 		return err
 	}
 
@@ -90,36 +90,27 @@ func (s *Sanguo) auth(conn net.Conn) (err error) {
 		return ErrInvaildNode
 	}
 
-	check := func() error {
-		node.Lock()
-		defer node.Unlock()
-		if node.dialing {
-			//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
-			if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
-				logger.Errorf("(self:%v) (other:%v) both side connectting", s.localAddr.LogicAddr(), node.addr.LogicAddr())
-				return errors.New("both side connectting")
-			}
-		} else if nil != node.socket {
-			return ErrDuplicateConn
+	node.Lock()
+	defer node.Unlock()
+	if node.dialing {
+		//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
+		if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
+			logger.Errorf("(self:%v) (other:%v) both side connectting", s.localAddr.LogicAddr(), node.addr.LogicAddr())
+			return errors.New("both side connectting")
 		}
-		return nil
-	}
-
-	if err = check(); err != nil {
-		return err
+	} else if nil != node.socket {
+		return ErrDuplicateConn
 	}
 
 	resp := []byte{0, 0, 0, 0}
 	binary.BigEndian.PutUint32(resp, 0)
 
-	conn.SetWriteDeadline(time.Now().Add(time.Second))
+	conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 5))
 	defer conn.SetWriteDeadline(time.Time{})
 
 	if _, err = conn.Write(resp); err != nil {
 		return err
 	} else {
-		node.Lock()
-		defer node.Unlock()
 		node.onEstablish(conn)
 		return nil
 	}

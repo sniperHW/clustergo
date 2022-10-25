@@ -138,7 +138,9 @@ func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessage(context.TODO(), msg, time.Time{})
+			n.sendMessage(context.TODO(), ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
+		} else {
+			logger.Debugf("target: not found", to.String())
 		}
 	}
 }
@@ -184,6 +186,7 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 		s.nodeCache.sanguo = s
 		s.nodeCache.localAddr = localAddr
 		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
+
 		var nodeInfo []discovery.Node
 		if nodeInfo, err = discoveryService.LoadNodeInfo(); err == nil {
 			s.nodeCache.onNodeInfoUpdate(nodeInfo)
@@ -195,6 +198,7 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 			s.localAddr = n.addr
 			var serve func()
 			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
+				logger.Debugf("%s %s new connection", s.localAddr.LogicAddr().String(), s.localAddr.NetAddr().String())
 				go func() {
 					if err := s.auth(conn); nil != err {
 						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())
@@ -205,6 +209,7 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 			if err == nil {
 				//订阅更新
 				discoveryService.Subscribe(s.nodeCache.onNodeInfoUpdate)
+				logger.Debugf("%s serve on:%s", localAddr.String(), s.localAddr.NetAddr().String())
 				go serve()
 			}
 		}
