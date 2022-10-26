@@ -1,84 +1,124 @@
 package ss
 
 import (
-	"encoding/binary"
-	"github.com/sniperHW/sanguo/cluster/addr"
-	"github.com/sniperHW/sanguo/codec/pb"
-	"reflect"
+	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/sanguo/codec"
+	"github.com/sniperHW/sanguo/codec/buffer"
+	"google.golang.org/protobuf/proto"
 )
 
+const (
+	sizeLen       = 4
+	sizeFlag      = 1
+	sizeToAndFrom = 8
+	sizeCmd       = 2
+	sizeRpcSeqNo  = 8
+	minSize       = sizeLen + sizeFlag + sizeToAndFrom
+)
+
+const (
+	Msg             = 0x8  //普通消息
+	RpcReq          = 0x10 //RPC请求
+	RpcResp         = 0x18 //RPC响应
+	MaskMessageType = 0x38
+	//Compress        = 0x80
+	MaxPacketSize = 1024 * 4
+)
+
+func setMsgType(flag *byte, tt byte) {
+	if tt == Msg || tt == RpcReq || tt == RpcResp {
+		*flag |= tt
+	}
+}
+
+func getMsgType(flag byte) byte {
+	return flag & MaskMessageType
+}
+
 type Message struct {
-	data      interface{}
-	relayInfo []addr.LogicAddr
+	cmd     uint16
+	to      addr.LogicAddr
+	from    addr.LogicAddr
+	payload interface{}
 }
 
-func NewMessage(data interface{}, relay ...addr.LogicAddr) *Message {
-	m := &Message{
-		data: data,
+func NewMessage(to addr.LogicAddr, from addr.LogicAddr, payload interface{}, cmd ...uint16) *Message {
+	msg := &Message{
+		to:      to,
+		from:    from,
+		payload: payload,
 	}
-	if len(relay) == 2 {
-		m.relayInfo = relay
+
+	if len(cmd) > 0 {
+		msg.cmd = cmd[0]
 	}
-	return m
+
+	return msg
 }
 
-func (this *Message) GetData() interface{} {
-	return this.data
+func (m *Message) Payload() interface{} {
+	return m.payload
 }
 
-func (this *Message) GetCmd() uint16 {
-	name := reflect.TypeOf(this.data).String()
-	return uint16(pb.GetCmdByName(name))
+func (m *Message) Cmd() uint16 {
+	return m.cmd
 }
 
-func (this *Message) From() addr.LogicAddr {
-	if len(this.relayInfo) == 2 {
-		return this.relayInfo[1]
-	} else {
-		return addr.LogicAddr(0)
-	}
+func (m *Message) From() addr.LogicAddr {
+	return m.from
 }
 
-//透传消息，从To到From
+func (m *Message) To() addr.LogicAddr {
+	return m.to
+}
+
+// 透传消息
 type RelayMessage struct {
-	To   addr.LogicAddr
-	From addr.LogicAddr
-	data []byte
+	to      addr.LogicAddr
+	from    addr.LogicAddr
+	payload []byte
 }
 
-func (this *RelayMessage) GetData() []byte {
-	return this.data
+func (m *RelayMessage) Payload() []byte {
+	return m.payload
 }
 
-func (this *RelayMessage) IsRPCReq() bool {
-	return getMsgType(this.data[4]) == RPCREQ
+func (m *RelayMessage) From() addr.LogicAddr {
+	return m.from
 }
 
-func (this *RelayMessage) GetSeqno() uint64 {
-	beg := sizeLen + sizeFlag + sizeTo + sizeFrom + sizeCmd
-	end := beg + sizeRPCSeqNo
-	return binary.BigEndian.Uint64(this.data[beg:end])
+func (m *RelayMessage) To() addr.LogicAddr {
+	return m.to
 }
 
-func (this *RelayMessage) ResetTo(to addr.LogicAddr) {
-	this.To = to
-	binary.BigEndian.PutUint32(this.data[5:5+4], uint32(to))
-}
-
-func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, data []byte) *RelayMessage {
-	m := &RelayMessage{
-		To:   to,
-		From: from,
-		data: make([]byte, len(data)),
+func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
+	if getMsgType(m.payload[4]) != RpcReq {
+		return nil
+	} else {
+		var req codec.RpcRequest
+		if err := proto.Unmarshal(m.payload[13:], &req); err != nil {
+			return nil
+		} else {
+			return &rpcgo.RequestMsg{
+				Seq:    req.Seq,
+				Method: req.Method,
+				Arg:    req.Arg,
+				Oneway: req.Oneway,
+			}
+		}
 	}
-	copy(m.data, data)
-	return m
 }
 
-type RPCRelayErrorMessage struct {
-	To    addr.LogicAddr
-	From  addr.LogicAddr
-	Seqno uint64
-	Err   error
-	//ErrMsg string
+func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, payload []byte) *RelayMessage {
+	m := &RelayMessage{
+		to:   to,
+		from: from,
+	}
+
+	b := make([]byte, 0, len(payload)+sizeLen)
+	b = buffer.AppendUint32(b, uint32(len(payload)))
+	b = buffer.AppendBytes(b, payload)
+	m.payload = b
+	return m
 }

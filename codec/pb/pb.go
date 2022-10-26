@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type reflectInfo struct {
@@ -18,7 +18,6 @@ type pbMeta struct {
 }
 
 var nameSpace = map[string]pbMeta{}
-var nameToCmd = map[string]uint32{}
 
 func newMessage(namespace string, id uint32) (msg proto.Message, err error) {
 	if ns, ok := nameSpace[namespace]; ok {
@@ -33,7 +32,7 @@ func newMessage(namespace string, id uint32) (msg proto.Message, err error) {
 	return
 }
 
-func GetNameByID(namespace string, id uint32) string {
+/*func GetNameByID(namespace string, id uint32) string {
 	var ns pbMeta
 	var ok bool
 	if ns, ok = nameSpace[namespace]; !ok {
@@ -45,13 +44,17 @@ func GetNameByID(namespace string, id uint32) string {
 	} else {
 		return ""
 	}
+}*/
+
+func GetCmd(namespace string, o proto.Message) uint32 {
+	if ns, ok := nameSpace[namespace]; ok {
+		return ns.nameToID[reflect.TypeOf(o).String()]
+	} else {
+		return 0
+	}
 }
 
-func GetCmdByName(name string) uint32 {
-	return nameToCmd[name]
-}
-
-//根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
+// 根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
 func Register(namespace string, msg proto.Message, id uint32) error {
 
 	var ns pbMeta
@@ -64,15 +67,12 @@ func Register(namespace string, msg proto.Message, id uint32) error {
 
 	tt := reflect.TypeOf(msg)
 	name := tt.String()
-	//fmt.Println("pb  Register", namespace, name)
 	if _, ok = ns.nameToID[name]; ok {
 		return fmt.Errorf("%s already register to namespace:%s", name, namespace)
 	}
 
 	ns.nameToID[name] = id
 	ns.idToMeta[id] = reflectInfo{tt: tt, name: name}
-
-	nameToCmd[name] = id
 	return nil
 }
 
