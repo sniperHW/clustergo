@@ -7,7 +7,6 @@ import (
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/example/discovery"
 	"github.com/sniperHW/sanguo/log/zap"
-	"github.com/sniperHW/sanguo/pbrpc"
 	"github.com/sniperHW/sanguo/pbrpc/service/echo"
 )
 
@@ -22,7 +21,6 @@ func (e *echoService) OnCall(ctx context.Context, replyer *echo.Replyer, request
 func main() {
 	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	sanguo.InitLogger(l.Sugar())
-	sanguo.SetRPCCodec(&pbrpc.Codec{})
 	echo.Register(&echoService{})
 
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")

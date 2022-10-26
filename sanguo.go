@@ -16,6 +16,7 @@ import (
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
 	"github.com/sniperHW/sanguo/log"
+	"github.com/sniperHW/sanguo/pbrpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -249,7 +250,7 @@ func Logger() log.Logger {
 
 var defaultSanguo *Sanguo
 var defaultOnce sync.Once
-var defaultRPCCodec rpcgo.Codec = &JsonCodec{}
+var defaultRPCCodec rpcgo.Codec = &pbrpc.Codec{}
 
 func getDefault() *Sanguo {
 	defaultOnce.Do(func() {
@@ -260,7 +261,7 @@ func getDefault() *Sanguo {
 	return defaultSanguo
 }
 
-func SetRPCCodec(rpcCodec rpcgo.Codec) {
+func SetRpcCodec(rpcCodec rpcgo.Codec) {
 	defaultRPCCodec = rpcCodec
 }
 
