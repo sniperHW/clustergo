@@ -12,7 +12,7 @@ type Node struct {
 
 type Discovery interface {
 	//获取节点信息
-	LoadNodeInfo() ([]Node, error)
+	//LoadNodeInfo() ([]Node, error)
 	//订阅变更
-	Subscribe(func([]Node))
+	Subscribe(func([]Node)) error
 }

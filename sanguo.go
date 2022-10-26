@@ -29,6 +29,7 @@ var (
 var logger log.Logger
 
 func InitLogger(l log.Logger) {
+	rpcgo.InitLogger(l.(rpcgo.Logger))
 	logger = l
 }
 
@@ -188,10 +189,12 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 		s.nodeCache.localAddr = localAddr
 		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
 
-		var nodeInfo []discovery.Node
-		if nodeInfo, err = discoveryService.LoadNodeInfo(); err == nil {
-			s.nodeCache.onNodeInfoUpdate(nodeInfo)
+		if err = discoveryService.Subscribe(s.nodeCache.onNodeInfoUpdate); err != nil {
+			return
 		}
+
+		s.nodeCache.waitInit()
+
 		if n := s.nodeCache.getNodeByLogicAddr(localAddr); n == nil {
 			//当前节点在配置中找不到
 			err = fmt.Errorf("%s not in config", localAddr.String())
@@ -207,8 +210,6 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 				}()
 			})
 			if err == nil {
-				//订阅更新
-				discoveryService.Subscribe(s.nodeCache.onNodeInfoUpdate)
 				logger.Debugf("%s serve on:%s", localAddr.String(), s.localAddr.NetAddr().String())
 				go serve()
 			}
@@ -231,6 +232,7 @@ func newSanguo(o SanguoOption) *Sanguo {
 			nodes:            map[addr.LogicAddr]*node{},
 			nodeByType:       map[uint32][]*node{},
 			harborsByCluster: map[uint32][]*node{},
+			initC:            make(chan struct{}),
 		},
 		rpcSvr: rpcgo.NewServer(o.RPCCodec),
 		rpcCli: rpcgo.NewClient(o.RPCCodec),
@@ -239,6 +241,10 @@ func newSanguo(o SanguoOption) *Sanguo {
 		},
 		die: make(chan struct{}),
 	}
+}
+
+func Logger() log.Logger {
+	return logger
 }
 
 var defaultSanguo *Sanguo
@@ -262,8 +268,16 @@ func Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) 
 	return getDefault().Start(discovery, localAddr)
 }
 
+func GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
+	return getDefault().GetAddrByType(tt, n...)
+}
+
 func Stop() {
 	getDefault().Stop()
+}
+
+func Wait() {
+	getDefault().Wait()
 }
 
 func RegisterMessageHandler(msg proto.Message, handler MsgHandler) {

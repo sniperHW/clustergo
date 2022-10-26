@@ -1,0 +1,14 @@
+[   
+    {
+        "LogicAddr":"1.1.1",
+        "NetAddr":"127.0.0.1:8111",
+        "Export":false,
+        "Available":true
+    },
+    {
+        "LogicAddr":"1.2.1",
+        "NetAddr":"127.0.0.1:8112",
+        "Export":false,
+        "Available":true
+    }
+]

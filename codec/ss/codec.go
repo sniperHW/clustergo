@@ -2,7 +2,6 @@ package ss
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"time"
 
@@ -46,7 +45,6 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 		switch msg := o.Payload().(type) {
 		case proto.Message:
 			if pbbytes, cmd, err = pb.Marshal(Namespace, msg); err != nil {
-				panic(err)
 				return buffs, 0
 			}
 
@@ -54,14 +52,11 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 			totalLen := sizeLen + payloadLen
 
-			log.Println(totalLen, payloadLen)
-
 			if totalLen > MaxPacketSize {
-				panic("1")
 				return buffs, 0
 			}
 
-			b := make([]byte, 0, totalLen)
+			b := make([]byte, 0, totalLen-len(pbbytes))
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -76,10 +71,8 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 			//写cmd
 			b = buffer.AppendUint16(b, uint16(cmd))
-			//写数据
-			b = buffer.AppendBytes(b, pbbytes)
 
-			return append(buffs, b), len(b)
+			return append(buffs, b, pbbytes), len(b)
 		case *rpcgo.RequestMsg:
 			req := &codec.RpcRequest{
 				Seq:    msg.Seq,
@@ -89,7 +82,6 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			}
 
 			if pbbytes, err = proto.Marshal(req); err != nil {
-				panic(err)
 				return buffs, 0
 			}
 
@@ -98,11 +90,10 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			totalLen := sizeLen + payloadLen
 
 			if totalLen > MaxPacketSize {
-				panic("1")
 				return buffs, 0
 			}
 
-			b := make([]byte, 0, totalLen)
+			b := make([]byte, 0, totalLen-len(pbbytes))
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -114,9 +105,8 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			b = buffer.AppendByte(b, flag)
 			b = buffer.AppendUint32(b, uint32(o.To()))
 			b = buffer.AppendUint32(b, uint32(o.From()))
-			b = buffer.AppendBytes(b, pbbytes)
 
-			return append(buffs, b), len(b)
+			return append(buffs, b, pbbytes), totalLen
 		case *rpcgo.ResponseMsg:
 			resp := &codec.RpcResponse{
 				Seq: msg.Seq,
@@ -138,11 +128,10 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			totalLen := sizeLen + payloadLen
 
 			if totalLen > MaxPacketSize {
-				panic("1")
 				return buffs, 0
 			}
 
-			b := make([]byte, 0, totalLen)
+			b := make([]byte, 0, totalLen-len(pbbytes))
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -155,9 +144,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			b = buffer.AppendUint32(b, uint32(o.To()))
 			b = buffer.AppendUint32(b, uint32(o.From()))
 
-			b = buffer.AppendBytes(b, pbbytes)
-
-			return append(buffs, b), len(b)
+			return append(buffs, b, pbbytes), totalLen
 		}
 		return buffs, 0
 	case *RelayMessage:

@@ -23,21 +23,23 @@ type localDiscovery struct {
 	subscribes []func([]discovery.Node)
 }
 
-func (d *localDiscovery) LoadNodeInfo() (nodes []discovery.Node, err error) {
+func (d *localDiscovery) LoadNodeInfo() (nodes []discovery.Node) {
 	for _, v := range d.nodes {
 		nodes = append(nodes, *v)
 	}
-	return nodes, err
+	return nodes
 }
 
 // 订阅变更
-func (d *localDiscovery) Subscribe(updateCB func([]discovery.Node)) {
+func (d *localDiscovery) Subscribe(updateCB func([]discovery.Node)) error {
 	d.subscribes = append(d.subscribes, updateCB)
+	updateCB(d.LoadNodeInfo())
+	return nil
 }
 
 func (d *localDiscovery) AddNode(n *discovery.Node) {
 	d.nodes[n.Addr.LogicAddr()] = n
-	nodes, _ := d.LoadNodeInfo()
+	nodes := d.LoadNodeInfo()
 	for _, v := range d.subscribes {
 		v(nodes)
 	}
@@ -45,7 +47,7 @@ func (d *localDiscovery) AddNode(n *discovery.Node) {
 
 func (d *localDiscovery) RemoveNode(logicAddr addr.LogicAddr) {
 	delete(d.nodes, logicAddr)
-	nodes, _ := d.LoadNodeInfo()
+	nodes := d.LoadNodeInfo()
 	for _, v := range d.subscribes {
 		v(nodes)
 	}
@@ -54,7 +56,7 @@ func (d *localDiscovery) RemoveNode(logicAddr addr.LogicAddr) {
 func (d *localDiscovery) ModifyNode(logicAddr addr.LogicAddr, avaliable bool) {
 	if n, ok := d.nodes[logicAddr]; ok && n.Available != avaliable {
 		n.Available = avaliable
-		nodes, _ := d.LoadNodeInfo()
+		nodes := d.LoadNodeInfo()
 		for _, v := range d.subscribes {
 			v(nodes)
 		}
@@ -64,7 +66,6 @@ func (d *localDiscovery) ModifyNode(logicAddr addr.LogicAddr, avaliable bool) {
 func init() {
 	pb.Register(ss.Namespace, &ss.Echo{}, 1)
 	l := zap.NewZapLogger("sanguo_test.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
-	rpcgo.InitLogger(l)
 	InitLogger(l.Sugar())
 }
 

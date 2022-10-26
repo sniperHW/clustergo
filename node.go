@@ -27,6 +27,12 @@ type nodeCache struct {
 	nodeByType       map[uint32][]*node
 	harborsByCluster map[uint32][]*node
 	onSelfRemove     func()
+	initOnce         sync.Once
+	initC            chan struct{}
+}
+
+func (cache *nodeCache) waitInit() {
+	<-cache.initC
 }
 
 func (cache *nodeCache) addNodeByType(n *node) {
@@ -69,6 +75,13 @@ func (cache *nodeCache) removeHarborsByCluster(harbor *node) {
 
 func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 
+	//logger.Debug("onNodeInfoUpdate")
+
+	defer cache.initOnce.Do(func() {
+		logger.Debug("init ok")
+		close(cache.initC)
+	})
+
 	nodes := []discovery.Node{}
 
 	for _, v := range nodeinfo {
@@ -84,6 +97,8 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 	cache.Lock()
 	defer cache.Unlock()
 
+	//logger.Debug("onNodeInfoUpdate1")
+
 	localNodes := []*node{}
 	for _, v := range cache.nodes {
 		localNodes = append(localNodes, v)
@@ -96,6 +111,8 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 	sort.Slice(nodes, func(l int, r int) bool {
 		return nodes[l].Addr.LogicAddr() < nodes[r].Addr.LogicAddr()
 	})
+
+	//logger.Debug("onNodeInfoUpdate2")
 
 	i := 0
 	j := 0
@@ -177,6 +194,8 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 		}
 	}
 
+	//logger.Debug("onNodeInfoUpdate3")
+
 	for ; i < len(nodes); i++ {
 		n := &node{
 			addr:       nodes[i].Addr,
@@ -211,6 +230,8 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 			localNode.closeSocket()
 		}
 	}
+
+	//logger.Debug("onNodeInfoUpdate4")
 }
 
 func (cache *nodeCache) getHarborByCluster(cluster uint32, m addr.LogicAddr) *node {
@@ -346,6 +367,7 @@ func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
 }
 
 func (n *node) onMessage(sanguo *Sanguo, msg interface{}) {
+
 	switch msg := msg.(type) {
 	case *ss.Message:
 		switch m := msg.Payload().(type) {
@@ -370,11 +392,13 @@ func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
 		}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
 		n.onMessage(sanguo, packet)
 		return nil
+	}).SetCloseCallback(func(as *netgo.AsynSocket, err error) {
+		n.Lock()
+		n.socket = nil
+		n.Unlock()
 	}).Recv()
 
 	now := time.Now()
-
-	//logger.Debugf("onEstablish %s %s %d", n.addr.LogicAddr().String(), n.addr.NetAddr().String(), n.pendingMsg.Len())
 
 	for e := n.pendingMsg.Front(); e != nil; e = n.pendingMsg.Front() {
 		msg := n.pendingMsg.Remove(e).(*pendingMessage)
