@@ -221,16 +221,19 @@ func (s *Sanguo) Wait() {
 	<-s.die
 }
 
-func NewSanguo() *Sanguo {
-	codec := &JsonCodec{}
+type SanguoOption struct {
+	RPCCodec rpcgo.Codec
+}
+
+func newSanguo(o SanguoOption) *Sanguo {
 	return &Sanguo{
 		nodeCache: nodeCache{
 			nodes:            map[addr.LogicAddr]*node{},
 			nodeByType:       map[uint32][]*node{},
 			harborsByCluster: map[uint32][]*node{},
 		},
-		rpcSvr: rpcgo.NewServer(codec),
-		rpcCli: rpcgo.NewClient(codec),
+		rpcSvr: rpcgo.NewServer(o.RPCCodec),
+		rpcCli: rpcgo.NewClient(o.RPCCodec),
 		msgManager: msgManager{
 			msgHandlers: map[uint16]MsgHandler{},
 		},
@@ -240,12 +243,19 @@ func NewSanguo() *Sanguo {
 
 var defaultSanguo *Sanguo
 var defaultOnce sync.Once
+var defaultRPCCodec rpcgo.Codec = &JsonCodec{}
 
 func getDefault() *Sanguo {
 	defaultOnce.Do(func() {
-		defaultSanguo = NewSanguo()
+		defaultSanguo = newSanguo(SanguoOption{
+			RPCCodec: defaultRPCCodec,
+		})
 	})
 	return defaultSanguo
+}
+
+func SetRPCCodec(rpcCodec rpcgo.Codec) {
+	defaultRPCCodec = rpcCodec
 }
 
 func Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {

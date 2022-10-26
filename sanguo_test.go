@@ -80,7 +80,9 @@ func TestSingleNode(t *testing.T) {
 		Available: true,
 	})
 
-	s := NewSanguo()
+	s := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	s.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -122,7 +124,9 @@ func TestTwoNode(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := NewSanguo()
+	node1 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -135,7 +139,9 @@ func TestTwoNode(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := NewSanguo()
+	node2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -195,7 +201,9 @@ func TestHarbor(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := NewSanguo()
+	node1 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -208,15 +216,21 @@ func TestHarbor(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := NewSanguo()
+	node2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor1 := NewSanguo()
+	harbor1 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	err = harbor1.Start(localDiscovery, harbor1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor2 := NewSanguo()
+	harbor2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
 	err = harbor2.Start(localDiscovery, harbor2Addr.LogicAddr())
 	assert.Nil(t, err)
 
