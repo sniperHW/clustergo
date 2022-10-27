@@ -3,11 +3,9 @@ package ss
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"reflect"
 
-	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec"
@@ -19,17 +17,18 @@ import (
 const Namespace string = "ss"
 
 type SSCodec struct {
-	buff     []byte
-	w        int
-	r        int
+	codec.LengthPayloadPacketReceiver
 	selfAddr addr.LogicAddr
 	reader   buffer.BufferReader
 }
 
 func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 	return &SSCodec{
+		LengthPayloadPacketReceiver: codec.LengthPayloadPacketReceiver{
+			Buff:          make([]byte, 4096),
+			MaxPacketSize: MaxPacketSize,
+		},
 		selfAddr: selfAddr,
-		buff:     make([]byte, 4096),
 	}
 }
 
@@ -152,64 +151,6 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 	default:
 		panic(reflect.TypeOf(o).String())
 		return buffs, 0
-	}
-}
-
-func (ss *SSCodec) read(readable netgo.ReadAble, deadline time.Time) (int, error) {
-	if err := readable.SetReadDeadline(deadline); err != nil {
-		return 0, err
-	} else {
-		return readable.Read(ss.buff[ss.w:])
-	}
-}
-
-func (ss *SSCodec) Recv(readable netgo.ReadAble, deadline time.Time) (pkt []byte, err error) {
-	for {
-		unpackSize := ss.w - ss.r
-		if unpackSize >= minSize {
-			ss.reader.Reset(ss.buff[ss.r:ss.w])
-			payload := int(ss.reader.GetUint32())
-
-			if payload == 0 {
-				return nil, fmt.Errorf("zero payload")
-			}
-
-			totalSize := payload + sizeLen
-
-			if totalSize > MaxPacketSize {
-				return nil, fmt.Errorf("packet too large:%d", totalSize)
-			} else if totalSize <= unpackSize {
-				ss.r += sizeLen
-				pkt := ss.buff[ss.r : ss.r+payload]
-				ss.r += payload
-				if ss.r == ss.w {
-					ss.r = 0
-					ss.w = 0
-				}
-				return pkt, nil
-			} else {
-				if totalSize > cap(ss.buff) {
-					buff := make([]byte, totalSize)
-					copy(buff, ss.buff[ss.r:ss.w])
-					ss.buff = buff
-				} else {
-					//空间足够容纳下一个包，
-					copy(ss.buff, ss.buff[ss.r:ss.w])
-				}
-				ss.w = ss.w - ss.r
-				ss.r = 0
-			}
-		}
-
-		var n int
-		n, err = ss.read(readable, deadline)
-		if n > 0 {
-			ss.w += n
-		}
-		if nil != err {
-			return
-		}
-
 	}
 }
 

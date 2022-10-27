@@ -10,6 +10,7 @@ import (
 
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/pkg/crypto"
+	"github.com/xtaci/smux"
 )
 
 var cecret_key []byte = []byte("sanguo_2022")
@@ -17,13 +18,15 @@ var cecret_key []byte = []byte("sanguo_2022")
 type loginReq struct {
 	LogicAddr uint32 `json:"LogicAddr,omitempty"`
 	NetAddr   string `json:"NetAddr,omitempty"`
+	IsStream  bool   `json:"IsStream,omitempty"`
 }
 
-func (n *node) login(sanguo *Sanguo, conn net.Conn) error {
+func (n *node) login(sanguo *Sanguo, conn net.Conn, isStream bool) error {
 
 	j, err := json.Marshal(&loginReq{
 		LogicAddr: uint32(sanguo.localAddr.LogicAddr()),
 		NetAddr:   sanguo.localAddr.NetAddr().String(),
+		IsStream:  isStream,
 	})
 
 	if nil != err {
@@ -54,6 +57,17 @@ func (n *node) login(sanguo *Sanguo, conn net.Conn) error {
 		}
 	}
 	return nil
+}
+
+func listenStream(session *smux.Session, onNewStream func(*smux.Stream)) {
+	for {
+		if s, err := session.AcceptStream(); err == nil {
+			onNewStream(s)
+		} else {
+			session.Close()
+			return
+		}
+	}
 }
 
 func (s *Sanguo) auth(conn net.Conn) (err error) {
@@ -92,28 +106,52 @@ func (s *Sanguo) auth(conn net.Conn) (err error) {
 		return ErrNetAddrMismatch
 	}
 
-	node.Lock()
-	defer node.Unlock()
-	if node.dialing {
-		//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
-		if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
-			logger.Errorf("(self:%v) (other:%v) connectting simultaneously", s.localAddr.LogicAddr(), node.addr.LogicAddr())
-			return errors.New("connectting simultaneously")
+	if req.IsStream {
+
+		if s.onNewStream == nil {
+			return errors.New("onNewStream not set")
 		}
-	} else if nil != node.socket {
-		return ErrDuplicateConn
-	}
 
-	resp := []byte{0, 0, 0, 0}
-	binary.BigEndian.PutUint32(resp, 0)
+		resp := []byte{0, 0, 0, 0}
+		binary.BigEndian.PutUint32(resp, 0)
 
-	conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 5))
-	defer conn.SetWriteDeadline(time.Time{})
+		conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 5))
+		defer conn.SetWriteDeadline(time.Time{})
 
-	if _, err = conn.Write(resp); err != nil {
-		return err
+		if _, err = conn.Write(resp); err != nil {
+			return err
+		} else {
+			if streamSvr, err := smux.Server(conn, nil); err != nil {
+				return err
+			} else {
+				go listenStream(streamSvr, s.onNewStream)
+				return nil
+			}
+		}
 	} else {
-		node.onEstablish(s, conn)
-		return nil
+		node.Lock()
+		defer node.Unlock()
+		if node.dialing {
+			//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
+			if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
+				logger.Errorf("(self:%v) (other:%v) connectting simultaneously", s.localAddr.LogicAddr(), node.addr.LogicAddr())
+				return errors.New("connectting simultaneously")
+			}
+		} else if nil != node.socket {
+			return ErrDuplicateConn
+		}
+
+		resp := []byte{0, 0, 0, 0}
+		binary.BigEndian.PutUint32(resp, 0)
+
+		conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 5))
+		defer conn.SetWriteDeadline(time.Time{})
+
+		if _, err = conn.Write(resp); err != nil {
+			return err
+		} else {
+			node.onEstablish(s, conn)
+			return nil
+		}
 	}
 }

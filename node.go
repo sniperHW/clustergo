@@ -3,6 +3,7 @@ package sanguo
 import (
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
+	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -75,8 +77,6 @@ func (cache *nodeCache) removeHarborsByCluster(harbor *node) {
 
 func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 
-	//logger.Debug("onNodeInfoUpdate")
-
 	defer cache.initOnce.Do(func() {
 		logger.Debug("init ok")
 		close(cache.initC)
@@ -97,8 +97,6 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 	cache.Lock()
 	defer cache.Unlock()
 
-	//logger.Debug("onNodeInfoUpdate1")
-
 	localNodes := []*node{}
 	for _, v := range cache.nodes {
 		localNodes = append(localNodes, v)
@@ -111,8 +109,6 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 	sort.Slice(nodes, func(l int, r int) bool {
 		return nodes[l].Addr.LogicAddr() < nodes[r].Addr.LogicAddr()
 	})
-
-	//logger.Debug("onNodeInfoUpdate2")
 
 	i := 0
 	j := 0
@@ -194,8 +190,6 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 		}
 	}
 
-	//logger.Debug("onNodeInfoUpdate3")
-
 	for ; i < len(nodes); i++ {
 		n := &node{
 			addr:       nodes[i].Addr,
@@ -230,8 +224,6 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 			localNode.closeSocket()
 		}
 	}
-
-	//logger.Debug("onNodeInfoUpdate4")
 }
 
 func (cache *nodeCache) getHarborByCluster(cluster uint32, m addr.LogicAddr) *node {
@@ -270,17 +262,28 @@ type pendingMessage struct {
 	ctx      context.Context
 }
 
+type streamClient struct {
+	sync.Mutex
+	session *smux.Session
+}
+
 type node struct {
 	sync.Mutex
 	addr       addr.Addr
 	dialing    bool
 	socket     *netgo.AsynSocket
 	pendingMsg *list.List
-	//sanguo     *Sanguo
-	available bool
+	available  bool
+	streamCli  streamClient
 }
 
 func (n *node) dialError(sanguo *Sanguo, err error) {
+	select {
+	case <-sanguo.die:
+		return
+	default:
+	}
+
 	n.Lock()
 	defer n.Unlock()
 	n.dialing = false
@@ -417,6 +420,13 @@ func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
 }
 
 func (n *node) dialOK(sanguo *Sanguo, conn net.Conn) {
+	select {
+	case <-sanguo.die:
+		conn.Close()
+		return
+	default:
+	}
+
 	if n == sanguo.nodeCache.getNodeByLogicAddr(n.addr.LogicAddr()) {
 		n.Lock()
 		defer n.Unlock()
@@ -440,11 +450,53 @@ func (n *node) dial(sanguo *Sanguo) {
 	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 		n.dialError(sanguo, ErrDial)
 	} else {
-		if err := n.login(sanguo, conn); err != nil {
+		if err := n.login(sanguo, conn, false); err != nil {
 			conn.Close()
 			n.dialError(sanguo, err)
 		} else {
 			n.dialOK(sanguo, conn)
+		}
+	}
+}
+
+func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
+	n.streamCli.Lock()
+	defer n.streamCli.Unlock()
+	for {
+		if n.streamCli.session != nil {
+			if s, err := n.streamCli.session.OpenStream(); err == nil {
+				return s, err
+			} else if err == smux.ErrGoAway {
+				return nil, err
+			} else {
+				n.streamCli.session.Close()
+				n.streamCli.session = nil
+				return nil, err
+			}
+		} else {
+			dialer := &net.Dialer{}
+			if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
+				return nil, err
+			} else {
+				if err = n.login(sanguo, conn, true); err != nil {
+					conn.Close()
+					return nil, err
+				}
+
+				if session, err := smux.Client(conn, nil); err != nil {
+					conn.Close()
+					return nil, err
+				} else {
+					select {
+					case <-sanguo.die:
+						session.Close()
+						conn.Close()
+						return nil, errors.New("server die")
+					default:
+					}
+					n.streamCli.session = session
+				}
+			}
 		}
 	}
 }

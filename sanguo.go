@@ -16,6 +16,7 @@ import (
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
 	"github.com/sniperHW/sanguo/pbrpc"
+	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -73,15 +74,16 @@ func (m *msgManager) dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message
 }
 
 type Sanguo struct {
-	localAddr  addr.Addr
-	listener   net.Listener
-	nodeCache  nodeCache
-	rpcSvr     *rpcgo.Server
-	rpcCli     *rpcgo.Client
-	msgManager msgManager
-	startOnce  sync.Once
-	stopOnce   sync.Once
-	die        chan struct{}
+	localAddr   addr.Addr
+	listener    net.Listener
+	nodeCache   nodeCache
+	rpcSvr      *rpcgo.Server
+	rpcCli      *rpcgo.Client
+	msgManager  msgManager
+	startOnce   sync.Once
+	stopOnce    sync.Once
+	die         chan struct{}
+	onNewStream func(*smux.Stream)
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
@@ -102,6 +104,18 @@ func (s *Sanguo) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 		n = harbor
 	}
 	return n
+}
+
+func (s *Sanguo) OnNewStream(onNewStream func(*smux.Stream)) {
+	s.onNewStream = onNewStream
+}
+
+func (s *Sanguo) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
+	if n := s.getNodeByLogicAddr(peer); n != nil {
+		return n.openStream(s)
+	} else {
+		return nil, errors.New("invaild peer")
+	}
 }
 
 func (s *Sanguo) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
@@ -172,6 +186,24 @@ func (s *Sanguo) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Mess
 func (s *Sanguo) Stop() {
 	s.stopOnce.Do(func() {
 		s.listener.Close()
+		s.nodeCache.RLock()
+		for _, v := range s.nodeCache.nodes {
+			v.Lock()
+			if v.socket != nil {
+				v.socket.Close(nil)
+			}
+			v.Unlock()
+
+			v.streamCli.Lock()
+			if v.streamCli.session != nil {
+				v.streamCli.session.Close()
+				v.streamCli.session = nil
+			}
+			v.streamCli.Unlock()
+
+		}
+		s.nodeCache.RUnlock()
+
 		close(s.die)
 	})
 }
@@ -287,4 +319,12 @@ func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}
 
 func CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
 	return getDefault().CallWithCallback(to, deadline, method, arg, ret, cb)
+}
+
+func OnNewStream(onNewStream func(*smux.Stream)) {
+	getDefault().OnNewStream(onNewStream)
+}
+
+func OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
+	return getDefault().OpenStream(peer)
 }

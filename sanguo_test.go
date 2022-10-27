@@ -15,6 +15,7 @@ import (
 	"github.com/sniperHW/sanguo/discovery"
 	"github.com/sniperHW/sanguo/logger/zap"
 	"github.com/stretchr/testify/assert"
+	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -267,4 +268,82 @@ func TestHarbor(t *testing.T) {
 	node2.Wait()
 	harbor1.Wait()
 	harbor2.Wait()
+}
+
+func TestStream(t *testing.T) {
+	localDiscovery := &localDiscovery{
+		nodes: map[addr.LogicAddr]*discovery.Node{},
+	}
+
+	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:8110")
+	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:8111")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node1Addr,
+		Available: true,
+	})
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node2Addr,
+		Available: true,
+	})
+
+	node1 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+
+	node1.OnNewStream(func(s *smux.Stream) {
+		go func() {
+			buff := make([]byte, 64)
+			n, _ := s.Read(buff)
+			s.Write(buff[:n])
+			s.Close()
+		}()
+	})
+
+	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	node2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	logger.Debug("Start OK")
+	{
+		ss, err := node2.OpenStream(node1Addr.LogicAddr())
+		if err != nil {
+			panic(err)
+		}
+
+		ss.Write([]byte("hello"))
+		buff := make([]byte, 64)
+		n, _ := ss.Read(buff)
+		assert.Equal(t, "hello", string(buff[:n]))
+		ss.Close()
+	}
+
+	{
+		ss, err := node2.OpenStream(node1Addr.LogicAddr())
+		if err != nil {
+			panic(err)
+		}
+
+		ss.Write([]byte("hello"))
+		buff := make([]byte, 64)
+		n, _ := ss.Read(buff)
+		assert.Equal(t, "hello", string(buff[:n]))
+		ss.Close()
+	}
+
+	localDiscovery.RemoveNode(node1Addr.LogicAddr())
+	node1.Wait()
+
+	_, err = node2.GetAddrByType(1)
+	assert.NotNil(t, err)
+
+	localDiscovery.RemoveNode(node2Addr.LogicAddr())
+	node2.Wait()
+
 }
