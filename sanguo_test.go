@@ -255,7 +255,7 @@ func TestHarbor(t *testing.T) {
 	//将1.1.1移除
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	err = node2.Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
-	assert.Equal(t, "can't send message to target:1.1.1", err.Error())
+	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
 	logger.Debug(err)
 
 	node1.Stop()
