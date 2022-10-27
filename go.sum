@@ -22,8 +22,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/sniperHW/netgo v0.0.0-20221020025547-bb5657764356 h1:4lR5EysUQmN1H+RaGr5bFyeBYNG6qAcm9RNcq3sn/4g=
 github.com/sniperHW/netgo v0.0.0-20221020025547-bb5657764356/go.mod h1:z/obc+bVt6J4rfzD1zowvOiLBqXk3YrbuSQNIF8LMXs=
-github.com/sniperHW/rpcgo v0.0.0-20221025074644-f37abfaba31c h1:rkXxQNTH44P/Xq5kZu+fTloFtLGQObgdBSfLkIff/bA=
-github.com/sniperHW/rpcgo v0.0.0-20221025074644-f37abfaba31c/go.mod h1:OzJKXBcuaaj3+iJaPXGoKYGgPCuT7H8Wyx1TKLW34iE=
+github.com/sniperHW/rpcgo v0.0.0-20221027012913-04eccc054d39 h1:x7Fylad3d4tblyHVNEkYpqmbTZnXR/S3dRqOpEP/KFc=
+github.com/sniperHW/rpcgo v0.0.0-20221027012913-04eccc054d39/go.mod h1:OzJKXBcuaaj3+iJaPXGoKYGgPCuT7H8Wyx1TKLW34iE=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
