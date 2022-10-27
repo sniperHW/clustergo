@@ -184,7 +184,11 @@ func (s *Sanguo) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Mess
 }
 
 func (s *Sanguo) Stop() {
+	once := false
 	s.stopOnce.Do(func() {
+		once = true
+	})
+	if once {
 		s.listener.Close()
 		s.nodeCache.RLock()
 		for _, v := range s.nodeCache.nodes {
@@ -203,19 +207,22 @@ func (s *Sanguo) Stop() {
 
 		}
 		s.nodeCache.RUnlock()
-
 		close(s.die)
-	})
+	}
 }
 
 func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.LogicAddr) (err error) {
+	once := false
 	s.startOnce.Do(func() {
+		once = true
+	})
+	if once {
 		s.nodeCache.sanguo = s
 		s.nodeCache.localAddr = localAddr
 		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
 
 		if err = discoveryService.Subscribe(s.nodeCache.onNodeInfoUpdate); err != nil {
-			return
+			return err
 		}
 
 		s.nodeCache.waitInit()
@@ -239,7 +246,7 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 				go serve()
 			}
 		}
-	})
+	}
 	return err
 }
 
