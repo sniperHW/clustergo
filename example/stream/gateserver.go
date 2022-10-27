@@ -45,36 +45,6 @@ func main() {
 				io.Copy(conn, cliStream)
 				wait.Done()
 			}()
-
-			/*go func() {
-				buff := make([]byte, 1024)
-				for {
-					n, err := conn.Read(buff)
-					if err != nil {
-						break
-					}
-					_, err = cliStream.Write(buff[:n])
-					if err != nil {
-						break
-					}
-				}
-				wait.Done()
-			}()
-
-			go func() {
-				buff := make([]byte, 1024)
-				for {
-					n, err := cliStream.Read(buff)
-					if err != nil {
-						break
-					}
-					_, err = conn.Write(buff[:n])
-					if err != nil {
-						break
-					}
-				}
-				wait.Done()
-			}()*/
 			wait.Wait()
 		}()
 	})
