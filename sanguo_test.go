@@ -13,7 +13,7 @@ import (
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
-	"github.com/sniperHW/sanguo/log/zap"
+	"github.com/sniperHW/sanguo/logger/zap"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 )

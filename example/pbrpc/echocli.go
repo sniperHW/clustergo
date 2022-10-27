@@ -6,7 +6,7 @@ import (
 	"github.com/sniperHW/sanguo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/example/discovery"
-	"github.com/sniperHW/sanguo/log/zap"
+	"github.com/sniperHW/sanguo/logger/zap"
 	"github.com/sniperHW/sanguo/pbrpc/service/echo"
 )
 
@@ -20,7 +20,7 @@ func main() {
 
 	for i := 0; i < 10; i++ {
 		resp, err := echo.Call(context.TODO(), echoAddr, &echo.Request{Msg: "hello"})
-		l.Sugar().Debug(resp, err)
+		sanguo.Log().Debug(resp, err)
 	}
 	sanguo.Stop()
 	sanguo.Wait()

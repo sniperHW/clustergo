@@ -22,8 +22,12 @@ type Replyer struct {
 	replyer *rpcgo.Replyer
 }
 
-func (this *Replyer) Reply(result *Response,err error) {
-	this.replyer.Reply(result,err)
+func (r *Replyer) Reply(result *Response,err error) {
+	r.replyer.Reply(result,err)
+}
+
+func (r *Replyer) Channel() rpcgo.Channel {
+	return r.replyer.Channel()
 }
 
 type [methodI] interface {

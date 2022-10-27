@@ -15,7 +15,6 @@ import (
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
-	"github.com/sniperHW/sanguo/log"
 	"github.com/sniperHW/sanguo/pbrpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -26,13 +25,6 @@ var (
 	ErrDial            = errors.New("dial failed")
 	ErrNetAddrMismatch = errors.New("net addr mismatch")
 )
-
-var logger log.Logger
-
-func InitLogger(l log.Logger) {
-	rpcgo.InitLogger(l.(rpcgo.Logger))
-	logger = l
-}
 
 type MsgHandler func(addr.LogicAddr, proto.Message)
 
@@ -242,10 +234,6 @@ func newSanguo(o SanguoOption) *Sanguo {
 		},
 		die: make(chan struct{}),
 	}
-}
-
-func Logger() log.Logger {
-	return logger
 }
 
 var defaultSanguo *Sanguo

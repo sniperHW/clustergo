@@ -1,4 +1,8 @@
-package log
+package sanguo
+
+import (
+	"github.com/sniperHW/rpcgo"
+)
 
 type Logger interface {
 	Debugf(string, ...interface{})
@@ -13,4 +17,15 @@ type Logger interface {
 	Error(...interface{})
 	Panic(...interface{})
 	Fatal(...interface{})
+}
+
+var logger Logger
+
+func InitLogger(l Logger) {
+	rpcgo.InitLogger(l.(rpcgo.Logger))
+	logger = l
+}
+
+func Log() Logger {
+	return logger
 }

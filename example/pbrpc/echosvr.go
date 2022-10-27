@@ -6,7 +6,7 @@ import (
 	"github.com/sniperHW/sanguo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/example/discovery"
-	"github.com/sniperHW/sanguo/log/zap"
+	"github.com/sniperHW/sanguo/logger/zap"
 	"github.com/sniperHW/sanguo/pbrpc/service/echo"
 )
 
@@ -14,7 +14,8 @@ type echoService struct {
 }
 
 func (e *echoService) OnCall(ctx context.Context, replyer *echo.Replyer, request *echo.Request) {
-	sanguo.Logger().Debug("echo:", request.Msg)
+	from := replyer.Channel().(sanguo.SanguoRPCChannel).Peer() //获取请求的对端逻辑地址
+	sanguo.Log().Debug("from:", from.String(), ",echo:", request.Msg)
 	replyer.Reply(&echo.Response{Msg: request.Msg}, nil)
 }
 

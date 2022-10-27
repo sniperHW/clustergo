@@ -12,6 +12,10 @@ import (
 	"github.com/sniperHW/sanguo/codec/ss"
 )
 
+type SanguoRPCChannel interface {
+	Peer() addr.LogicAddr
+}
+
 type rpcChannel struct {
 	peer   addr.LogicAddr
 	node   *node
@@ -36,6 +40,10 @@ func (c *rpcChannel) Name() string {
 
 func (c *rpcChannel) Identity() uint64 {
 	return *(*uint64)(unsafe.Pointer(c.node))
+}
+
+func (c *rpcChannel) Peer() addr.LogicAddr {
+	return c.peer
 }
 
 // 自连接channel
@@ -64,6 +72,10 @@ func (c *selfChannel) Name() string {
 
 func (c *selfChannel) Identity() uint64 {
 	return 0
+}
+
+func (c *selfChannel) Peer() addr.LogicAddr {
+	return c.sanguo.localAddr.LogicAddr()
 }
 
 type JsonCodec struct {
