@@ -200,5 +200,110 @@ func main() {
 接收到之后发现目标A可以直达，于是将消息发送给A。
 
 
+## Stream（在单个连接上建立多个流）
+
+sanguo支持在同一cluster内的节点之间建立stream。典型的使用方式由gateway接受客户端连接，并且为每一个连接建立一个到gameserver的stream。在gameserver看来，每个stream代表一个客户端连接。
+
+gameserver.go
+
+```go
+
+package main
+
+import (
+	"github.com/sniperHW/sanguo"
+	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/sanguo/example/discovery"
+	"github.com/sniperHW/sanguo/logger/zap"
+	"github.com/xtaci/smux"
+)
+
+func main() {
+	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
+	sanguo.InitLogger(l.Sugar())
+	localaddr, _ := addr.MakeLogicAddr("1.1.1")
+	sanguo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	sanguo.OnNewStream(func(s *smux.Stream) {
+		//处理stream
+		go func() {
+			buff := make([]byte, 64)
+			for {
+				n, err := s.Read(buff)
+				if err != nil {
+					break
+				}
+				n, err = s.Write(buff[:n])
+				if err != nil {
+					break
+				}
+			}
+			s.Close()
+		}()
+	})
+	sanguo.Wait()
+}
 
 
+```
+
+gateserver.go
+
+```go
+package main
+
+import (
+	"io"
+	"net"
+	"sync"
+
+	"github.com/sniperHW/netgo"
+	"github.com/sniperHW/sanguo"
+	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/sanguo/example/discovery"
+	"github.com/sniperHW/sanguo/logger/zap"
+)
+
+func main() {
+	l := zap.NewZapLogger("1.2.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
+	sanguo.InitLogger(l.Sugar())
+	localaddr, _ := addr.MakeLogicAddr("1.2.1")
+	sanguo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+
+	gameAddr, _ := sanguo.GetAddrByType(1)
+
+	_, serve, _ := netgo.ListenTCP("tcp", "127.0.0.1:8113", func(conn *net.TCPConn) {
+		go func() {
+			//客户端连接到达，建立到1.1.1的stream
+			cliStream, err := sanguo.OpenStream(gameAddr)
+			if err != nil {
+				conn.Close()
+				return
+			}
+
+			defer func() {
+				conn.Close()
+				cliStream.Close()
+			}()
+
+			var wait sync.WaitGroup
+			wait.Add(2)
+
+			//将来自客户端的数据通过stream透传到1.1.1
+			go func() {
+				io.Copy(cliStream, conn)
+				wait.Done()
+			}()
+
+			//将来自1.1.1的stream数据透传回客户端
+			go func() {
+				io.Copy(conn, cliStream)
+				wait.Done()
+			}()
+			wait.Wait()
+		}()
+	})
+	go serve()
+
+	sanguo.Wait()
+}
+```
