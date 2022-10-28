@@ -327,50 +327,25 @@ func (n *node) dialError(sanguo *Sanguo, err error) {
 }
 
 func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
-
 	logger.Debugf("onRelayMessage self:%s %s->%s", sanguo.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
-
-	var nextNode *node //下一跳节点
-	if message.To().Cluster() == sanguo.localAddr.LogicAddr().Cluster() {
-		//当前节点与目标节点处于同一个cluster
-		nextNode = sanguo.nodeCache.getNodeByLogicAddr(message.To())
-	} else {
-		//获取目标cluster的harbor
-		nextNode = sanguo.nodeCache.getHarborByCluster(message.To().Cluster(), message.To())
-		if nil != nextNode && nextNode.addr.LogicAddr() == n.addr.LogicAddr() {
-			return
-		}
-	}
-
-	if nextNode != nil {
-
+	if nextNode := sanguo.getNodeByLogicAddr(message.To()); nextNode != nil {
 		logger.Debugf("nextNode %s", nextNode.addr.LogicAddr())
-
 		nextNode.sendMessage(context.TODO(), sanguo, message, time.Now().Add(time.Second))
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil && !rpcReq.Oneway {
 		//对于无法路由的rpc请求，返回错误响应
-		respMsg := ss.NewMessage(message.From(), message.To(), &rpcgo.ResponseMsg{
-			Seq: rpcReq.Seq,
-			Err: &rpcgo.Error{
-				Code: rpcgo.ErrOther,
-				Err:  fmt.Sprintf("can't send message to target:%s", message.To().String()),
-			},
-		})
-
-		if message.From().Cluster() == sanguo.localAddr.LogicAddr().Cluster() {
-			nextNode = sanguo.nodeCache.getNodeByLogicAddr(message.From())
-		} else {
-			nextNode = sanguo.nodeCache.getHarborByCluster(message.From().Cluster(), message.From())
-		}
-
-		if nextNode != nil {
-			nextNode.sendMessage(context.TODO(), sanguo, respMsg, time.Now().Add(time.Second))
+		if nextNode = sanguo.getNodeByLogicAddr(message.From()); nextNode != nil {
+			nextNode.sendMessage(context.TODO(), sanguo, ss.NewMessage(message.From(), message.To(), &rpcgo.ResponseMsg{
+				Seq: rpcReq.Seq,
+				Err: &rpcgo.Error{
+					Code: rpcgo.ErrOther,
+					Err:  fmt.Sprintf("route message to target:%s failed", message.To().String()),
+				},
+			}), time.Now().Add(time.Second))
 		}
 	}
 }
 
 func (n *node) onMessage(sanguo *Sanguo, msg interface{}) {
-
 	switch msg := msg.(type) {
 	case *ss.Message:
 		switch m := msg.Payload().(type) {

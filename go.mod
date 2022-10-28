@@ -3,7 +3,7 @@ module github.com/sniperHW/sanguo
 go 1.19
 
 require (
-	github.com/sniperHW/netgo v0.0.0-20221014012016-06baf0ad38c6
+	github.com/sniperHW/netgo v0.0.0-20221027090749-a38ba3db48ad
 	github.com/sniperHW/rpcgo v0.0.0-20221027012913-04eccc054d39
 	github.com/stretchr/testify v1.8.0
 	github.com/xtaci/smux v1.5.16
@@ -25,6 +25,7 @@ require (
 	github.com/templexxx/xorsimd v0.4.1 // indirect
 	github.com/tjfoc/gmsm v1.3.2 // indirect
 	github.com/xtaci/kcp-go/v5 v5.6.1 // indirect
+	github.com/xtaci/smux v1.5.16 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20221005025214-4161e89ecf1b // indirect

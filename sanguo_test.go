@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
@@ -54,12 +55,15 @@ func (d *localDiscovery) RemoveNode(logicAddr addr.LogicAddr) {
 	}
 }
 
-func (d *localDiscovery) ModifyNode(logicAddr addr.LogicAddr, avaliable bool) {
-	if n, ok := d.nodes[logicAddr]; ok && n.Available != avaliable {
-		n.Available = avaliable
-		nodes := d.LoadNodeInfo()
-		for _, v := range d.subscribes {
-			v(nodes)
+func (d *localDiscovery) ModifyNode(modify *discovery.Node) {
+	if n, ok := d.nodes[modify.Addr.LogicAddr()]; ok {
+		if n.Available != modify.Available || n.Addr.NetAddr() != modify.Addr.NetAddr() {
+			logger.Debug("modify")
+			d.nodes[modify.Addr.LogicAddr()] = modify
+			nodes := d.LoadNodeInfo()
+			for _, v := range d.subscribes {
+				v(nodes)
+			}
 		}
 	}
 }
@@ -138,22 +142,28 @@ func TestTwoNode(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
-	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
-	assert.Nil(t, err)
-
 	node2 := newSanguo(SanguoOption{
 		RPCCodec: &JsonCodec{},
 	})
-	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
+	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
 	logger.Debug("Start OK")
+
+	var resp string
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	err = node2.Call(ctx, node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	cancel()
+	logger.Debug(err)
+
+	err = node1.Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
 
 	node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
 		Msg: "hello",
 	})
 
-	var resp string
+	//var resp string
 	err = node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
@@ -256,8 +266,20 @@ func TestHarbor(t *testing.T) {
 	//将1.1.1移除
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	err = node2.Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
-	assert.Equal(t, "can't send message to target:1.1.1", err.Error())
+	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
 	logger.Debug(err)
+
+	//将harbor1移除
+	localDiscovery.RemoveNode(harbor1Addr.LogicAddr())
+
+	c := make(chan struct{})
+	node2.CallWithCallback(type1Addr, time.Now().Add(time.Second), "hello", "sniperHW", &resp, func(resp interface{}, err error) {
+		assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
+		logger.Debug(err)
+		close(c)
+	})
+
+	<-c
 
 	node1.Stop()
 	node2.Stop()
@@ -346,4 +368,107 @@ func TestStream(t *testing.T) {
 	localDiscovery.RemoveNode(node2Addr.LogicAddr())
 	node2.Wait()
 
+}
+
+func TestDefault(t *testing.T) {
+	localDiscovery := &localDiscovery{
+		nodes: map[addr.LogicAddr]*discovery.Node{},
+	}
+
+	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:8110")
+	node2Addr, _ := addr.MakeAddr("1.2.3", "localhost:8111")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node1Addr,
+		Available: true,
+	})
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node2Addr,
+		Available: true,
+	})
+
+	SetRpcCodec(&JsonCodec{})
+
+	RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+		logger.Debug(msg.(*ss.Echo).Msg)
+	})
+
+	RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+		logger.Debug("on hello call")
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+	})
+
+	err := Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	node2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	logger.Debug("Start OK")
+
+	node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
+		Msg: "hello",
+	})
+
+	node3Addr, _ := addr.MakeAddr("1.2.1", "localhost:8113")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node3Addr,
+		Available: true,
+	})
+
+	time.Sleep(time.Second)
+
+	localDiscovery.ModifyNode(&discovery.Node{
+		Addr:      node3Addr,
+		Available: false,
+	})
+
+	time.Sleep(time.Second)
+	//变更网络地址
+	node3Addr, _ = addr.MakeAddr("1.2.1", "localhost:8114")
+	localDiscovery.ModifyNode(&discovery.Node{
+		Addr:      node3Addr,
+		Available: false,
+	})
+
+	//恢复available
+	time.Sleep(time.Second)
+	localDiscovery.ModifyNode(&discovery.Node{
+		Addr:      node3Addr,
+		Available: true,
+	})
+
+	time.Sleep(time.Second)
+	//移除node3
+	localDiscovery.RemoveNode(node3Addr.LogicAddr())
+
+	time.Sleep(time.Second)
+
+	node4Addr, _ := addr.MakeAddr("1.2.5", "localhost:8115")
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node4Addr,
+		Available: true,
+	})
+
+	time.Sleep(time.Second)
+	localDiscovery.RemoveNode(node4Addr.LogicAddr())
+
+	var resp string
+	err = node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	assert.Nil(t, err)
+	assert.Equal(t, resp, "hello world:sniperHW")
+
+	localDiscovery.RemoveNode(node1Addr.LogicAddr())
+	Wait()
+
+	_, err = node2.GetAddrByType(1)
+	assert.NotNil(t, err)
+
+	localDiscovery.RemoveNode(node2Addr.LogicAddr())
+	node2.Wait()
 }
