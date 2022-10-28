@@ -111,7 +111,9 @@ func (s *Sanguo) OnNewStream(onNewStream func(*smux.Stream)) {
 }
 
 func (s *Sanguo) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
-	if n := s.getNodeByLogicAddr(peer); n != nil {
+	if peer == s.localAddr.LogicAddr() {
+		return nil, errors.New("cant't open stream to self")
+	} else if n := s.getNodeByLogicAddr(peer); n != nil {
 		return n.openStream(s)
 	} else {
 		return nil, errors.New("invaild peer")

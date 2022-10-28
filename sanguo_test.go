@@ -6,6 +6,7 @@ package sanguo
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -402,13 +403,29 @@ func TestDefault(t *testing.T) {
 	err := Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
+	//向自身发送消息
+	SendMessage(node1Addr.LogicAddr(), &ss.Echo{Msg: "hello"})
+
+	//调用自身hello
+	var resp string
+	err = Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	assert.Nil(t, err)
+	assert.Equal(t, resp, "hello world:sniperHW")
+
+	CallWithCallback(node1Addr.LogicAddr(), time.Now().Add(time.Second), "hello", "sniperHW", &resp, func(resp interface{}, err error) {
+		logger.Debug(resp)
+	})
+
+	_, err = OpenStream(node1Addr.LogicAddr())
+	assert.Equal(t, err.Error(), "cant't open stream to self")
+
 	node2 := newSanguo(SanguoOption{
 		RPCCodec: &JsonCodec{},
 	})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	logger.Debug("Start OK")
+	Log().Debug("Start OK")
 
 	node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
 		Msg: "hello",
@@ -458,7 +475,7 @@ func TestDefault(t *testing.T) {
 	time.Sleep(time.Second)
 	localDiscovery.RemoveNode(node4Addr.LogicAddr())
 
-	var resp string
+	//var resp string
 	err = node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
@@ -471,4 +488,74 @@ func TestDefault(t *testing.T) {
 
 	localDiscovery.RemoveNode(node2Addr.LogicAddr())
 	node2.Wait()
+}
+
+func TestBiDirectionDial(t *testing.T) {
+	localDiscovery := &localDiscovery{
+		nodes: map[addr.LogicAddr]*discovery.Node{},
+	}
+
+	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:8110")
+	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:8111")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node1Addr,
+		Available: true,
+	})
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node2Addr,
+		Available: true,
+	})
+
+	node1 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+
+	var wait sync.WaitGroup
+
+	wait.Add(2)
+
+	node1.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+		logger.Debug("message from ", from.String())
+		wait.Done()
+	})
+
+	node2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+
+	node2.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+		logger.Debug("message from ", from.String())
+		wait.Done()
+	})
+
+	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	logger.Debug("Start OK")
+
+	go func() {
+		node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
+			Msg: "hello",
+		})
+	}()
+
+	go func() {
+		node1.SendMessage(node2Addr.LogicAddr(), &ss.Echo{
+			Msg: "hello",
+		})
+	}()
+
+	wait.Wait()
+
+	localDiscovery.RemoveNode(node1Addr.LogicAddr())
+	node1.Wait()
+
+	localDiscovery.RemoveNode(node2Addr.LogicAddr())
+	node2.Wait()
+
 }
