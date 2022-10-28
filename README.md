@@ -307,3 +307,29 @@ func main() {
 	sanguo.Wait()
 }
 ```
+
+## Discovery
+
+sanguo是为游戏服务端设计的分布式框架，游戏服务通常由一个个服务节点组成，每个节点提供一组内聚的功能服务。因此sanguo只提供粗粒度的节点发现功能。
+
+Discovery更确切的说是一个配置管理服务，服务保存了所有成员的如下信息：
+
+```go
+type Node struct {
+	Addr      addr.Addr
+	Export    bool //是否将节点暴露到cluster外部
+	Available bool //是否可用,
+}
+```
+
+节点启动时，首先连接Discovery获取配置信息，之后通过配置的逻辑地址从配置中查询自身节点信息。如果找到则使用配置中的网络地址启动服务，否则启动失败。
+
+sanguo没有提供默认的Discovery服务，使用者可以使用自己熟悉的组件来实现。
+
+### 节点发现
+
+普通节点只会将配置中Cluster相同或Export为true的节点保存到本地。可以通过`GetAddrByType`来获取某个类型的可用节点（Available=true）,如果有多个节点可用`GetAddrByType`将随机返回一个节点。
+
+
+
+
