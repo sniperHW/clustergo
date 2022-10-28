@@ -67,11 +67,11 @@ func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
 }
 
 func (c *selfChannel) Name() string {
-	return "self channel"
+	return fmt.Sprintf("%s <-> %s", c.sanguo.localAddr.LogicAddr(), c.sanguo.localAddr.LogicAddr())
 }
 
 func (c *selfChannel) Identity() uint64 {
-	return 0
+	return *(*uint64)(unsafe.Pointer(c.sanguo))
 }
 
 func (c *selfChannel) Peer() addr.LogicAddr {

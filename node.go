@@ -3,8 +3,11 @@ package sanguo
 import (
 	"container/list"
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"sort"
@@ -16,6 +19,7 @@ import (
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
+	"github.com/sniperHW/sanguo/pkg/crypto"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
@@ -277,6 +281,44 @@ type node struct {
 	streamCli  streamClient
 }
 
+func (n *node) login(sanguo *Sanguo, conn net.Conn, isStream bool) error {
+
+	j, err := json.Marshal(&loginReq{
+		LogicAddr: uint32(sanguo.localAddr.LogicAddr()),
+		NetAddr:   sanguo.localAddr.NetAddr().String(),
+		IsStream:  isStream,
+	})
+
+	if nil != err {
+		return err
+	}
+
+	if j, err = crypto.AESCBCEncrypt(cecret_key, j); nil != err {
+		return err
+	}
+
+	b := make([]byte, 4+len(j))
+	binary.BigEndian.PutUint32(b, uint32(len(j)))
+	copy(b[4:], j)
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second))
+	_, err = conn.Write(b)
+	conn.SetWriteDeadline(time.Time{})
+
+	if nil != err {
+		return err
+	} else {
+		buffer := make([]byte, 4)
+		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_, err = io.ReadFull(conn, buffer)
+		conn.SetReadDeadline(time.Time{})
+		if nil != err {
+			return err
+		}
+	}
+	return nil
+}
+
 func (n *node) dialError(sanguo *Sanguo, err error) {
 	select {
 	case <-sanguo.die:
@@ -424,13 +466,11 @@ func (n *node) dial(sanguo *Sanguo) {
 	logger.Debugf("%s dial %s", sanguo.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
 	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 		n.dialError(sanguo, ErrDial)
+	} else if err := n.login(sanguo, conn, false); err != nil {
+		conn.Close()
+		n.dialError(sanguo, err)
 	} else {
-		if err := n.login(sanguo, conn, false); err != nil {
-			conn.Close()
-			n.dialError(sanguo, err)
-		} else {
-			n.dialOK(sanguo, conn)
-		}
+		n.dialOK(sanguo, conn)
 	}
 }
 
@@ -439,8 +479,8 @@ func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
 	defer n.streamCli.Unlock()
 	for {
 		if n.streamCli.session != nil {
-			if s, err := n.streamCli.session.OpenStream(); err == nil {
-				return s, err
+			if stream, err := n.streamCli.session.OpenStream(); err == nil {
+				return stream, err
 			} else if err == smux.ErrGoAway {
 				return nil, err
 			} else {
@@ -452,25 +492,21 @@ func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
 			dialer := &net.Dialer{}
 			if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 				return nil, err
+			} else if err = n.login(sanguo, conn, true); err != nil {
+				conn.Close()
+				return nil, err
+			} else if session, err := smux.Client(conn, nil); err != nil {
+				conn.Close()
+				return nil, err
 			} else {
-				if err = n.login(sanguo, conn, true); err != nil {
+				select {
+				case <-sanguo.die:
+					session.Close()
 					conn.Close()
-					return nil, err
+					return nil, errors.New("server die")
+				default:
 				}
-
-				if session, err := smux.Client(conn, nil); err != nil {
-					conn.Close()
-					return nil, err
-				} else {
-					select {
-					case <-sanguo.die:
-						session.Close()
-						conn.Close()
-						return nil, errors.New("server die")
-					default:
-					}
-					n.streamCli.session = session
-				}
+				n.streamCli.session = session
 			}
 		}
 	}

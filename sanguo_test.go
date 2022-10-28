@@ -95,6 +95,7 @@ func TestSingleNode(t *testing.T) {
 	})
 
 	s.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
@@ -139,7 +140,7 @@ func TestTwoNode(t *testing.T) {
 	})
 
 	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
-		logger.Debug("on hello call")
+		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
@@ -222,7 +223,7 @@ func TestHarbor(t *testing.T) {
 	})
 
 	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
-		logger.Debug("on hello call")
+		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
@@ -371,6 +372,77 @@ func TestStream(t *testing.T) {
 
 }
 
+func TestBiDirectionDial(t *testing.T) {
+	localDiscovery := &localDiscovery{
+		nodes: map[addr.LogicAddr]*discovery.Node{},
+	}
+
+	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:8110")
+	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:8111")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node1Addr,
+		Available: true,
+	})
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node2Addr,
+		Available: true,
+	})
+
+	node1 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+
+	var wait sync.WaitGroup
+
+	wait.Add(2)
+
+	node1.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+		logger.Debug("message from ", from.String())
+		wait.Done()
+	})
+
+	node2 := newSanguo(SanguoOption{
+		RPCCodec: &JsonCodec{},
+	})
+
+	node2.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+		logger.Debug("message from ", from.String())
+		wait.Done()
+	})
+
+	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	logger.Debug("Start OK")
+
+	//双方同时向对方发消息，使得两边同时dial,最终两节点之间应该只能成功建立一条通信连接
+	go func() {
+		node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
+			Msg: "hello",
+		})
+	}()
+
+	go func() {
+		node1.SendMessage(node2Addr.LogicAddr(), &ss.Echo{
+			Msg: "hello",
+		})
+	}()
+
+	wait.Wait()
+
+	localDiscovery.RemoveNode(node1Addr.LogicAddr())
+	node1.Wait()
+
+	localDiscovery.RemoveNode(node2Addr.LogicAddr())
+	node2.Wait()
+
+}
+
 func TestDefault(t *testing.T) {
 	localDiscovery := &localDiscovery{
 		nodes: map[addr.LogicAddr]*discovery.Node{},
@@ -396,7 +468,7 @@ func TestDefault(t *testing.T) {
 	})
 
 	RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
-		logger.Debug("on hello call")
+		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
@@ -488,74 +560,4 @@ func TestDefault(t *testing.T) {
 
 	localDiscovery.RemoveNode(node2Addr.LogicAddr())
 	node2.Wait()
-}
-
-func TestBiDirectionDial(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
-	}
-
-	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:8110")
-	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:8111")
-
-	localDiscovery.AddNode(&discovery.Node{
-		Addr:      node1Addr,
-		Available: true,
-	})
-
-	localDiscovery.AddNode(&discovery.Node{
-		Addr:      node2Addr,
-		Available: true,
-	})
-
-	node1 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
-
-	var wait sync.WaitGroup
-
-	wait.Add(2)
-
-	node1.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
-		logger.Debug("message from ", from.String())
-		wait.Done()
-	})
-
-	node2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
-
-	node2.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
-		logger.Debug("message from ", from.String())
-		wait.Done()
-	})
-
-	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
-	assert.Nil(t, err)
-
-	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
-	assert.Nil(t, err)
-
-	logger.Debug("Start OK")
-
-	go func() {
-		node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
-			Msg: "hello",
-		})
-	}()
-
-	go func() {
-		node1.SendMessage(node2Addr.LogicAddr(), &ss.Echo{
-			Msg: "hello",
-		})
-	}()
-
-	wait.Wait()
-
-	localDiscovery.RemoveNode(node1Addr.LogicAddr())
-	node1.Wait()
-
-	localDiscovery.RemoveNode(node2Addr.LogicAddr())
-	node2.Wait()
-
 }

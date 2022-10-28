@@ -2,11 +2,15 @@ package sanguo
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sniperHW/netgo"
@@ -16,6 +20,7 @@ import (
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
 	"github.com/sniperHW/sanguo/pbrpc"
+	"github.com/sniperHW/sanguo/pkg/crypto"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
@@ -26,6 +31,14 @@ var (
 	ErrDial            = errors.New("dial failed")
 	ErrNetAddrMismatch = errors.New("net addr mismatch")
 )
+
+var cecret_key []byte = []byte("sanguo_2022")
+
+type loginReq struct {
+	LogicAddr uint32 `json:"LogicAddr,omitempty"`
+	NetAddr   string `json:"NetAddr,omitempty"`
+	IsStream  bool   `json:"IsStream,omitempty"`
+}
 
 type MsgHandler func(addr.LogicAddr, proto.Message)
 
@@ -83,7 +96,7 @@ type Sanguo struct {
 	startOnce   sync.Once
 	stopOnce    sync.Once
 	die         chan struct{}
-	onNewStream func(*smux.Stream)
+	onNewStream atomic.Value //func(*smux.Stream)
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
@@ -107,7 +120,7 @@ func (s *Sanguo) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 }
 
 func (s *Sanguo) OnNewStream(onNewStream func(*smux.Stream)) {
-	s.onNewStream = onNewStream
+	s.onNewStream.Store(onNewStream)
 }
 
 func (s *Sanguo) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
@@ -237,7 +250,7 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 			var serve func()
 			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
 				go func() {
-					if err := s.auth(conn); nil != err {
+					if err := s.onNewConnection(conn); nil != err {
 						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())
 						conn.Close()
 					}
@@ -254,6 +267,107 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 
 func (s *Sanguo) Wait() {
 	<-s.die
+}
+
+func (s *Sanguo) listenStream(session *smux.Session, onNewStream func(*smux.Stream)) {
+	defer session.Close()
+	for {
+		session.SetDeadline(time.Now().Add(time.Second))
+		if stream, err := session.AcceptStream(); err == nil {
+			onNewStream(stream)
+		} else if err == smux.ErrTimeout {
+			select {
+			case <-s.die:
+				return
+			default:
+			}
+		} else {
+			session.Close()
+			return
+		}
+	}
+}
+
+func (s *Sanguo) onNewConnection(conn net.Conn) (err error) {
+	buff := make([]byte, 4)
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	defer conn.SetReadDeadline(time.Time{})
+
+	_, err = io.ReadFull(conn, buff)
+	if nil != err {
+		return err
+	}
+
+	datasize := int(binary.BigEndian.Uint32(buff))
+
+	buff = make([]byte, datasize)
+
+	_, err = io.ReadFull(conn, buff)
+	if nil != err {
+		return err
+	}
+
+	if buff, err = crypto.AESCBCDecrypter(cecret_key, buff); nil != err {
+		return err
+	}
+
+	var req loginReq
+
+	if err = json.Unmarshal(buff, &req); nil != err {
+		return err
+	}
+
+	node := s.nodeCache.getNodeByLogicAddr(addr.LogicAddr(req.LogicAddr))
+	if node == nil {
+		return ErrInvaildNode
+	} else if node.addr.NetAddr().String() != req.NetAddr {
+		return ErrNetAddrMismatch
+	}
+
+	resp := []byte{0, 0, 0, 0}
+	binary.BigEndian.PutUint32(resp, 0)
+
+	if req.IsStream {
+		if onNewStream, ok := s.onNewStream.Load().(func(*smux.Stream)); !ok {
+			return errors.New("onNewStream not set")
+		} else {
+			conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 5))
+			defer conn.SetWriteDeadline(time.Time{})
+
+			if _, err = conn.Write(resp); err != nil {
+				return err
+			} else {
+				if streamSvr, err := smux.Server(conn, nil); err != nil {
+					return err
+				} else {
+					go s.listenStream(streamSvr, onNewStream)
+					return nil
+				}
+			}
+		}
+	} else {
+		node.Lock()
+		defer node.Unlock()
+		if node.dialing {
+			//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
+			if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
+				logger.Errorf("(self:%v) (other:%v) connectting simultaneously", s.localAddr.LogicAddr(), node.addr.LogicAddr())
+				return errors.New("connectting simultaneously")
+			}
+		} else if nil != node.socket {
+			return ErrDuplicateConn
+		}
+
+		conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 5))
+		defer conn.SetWriteDeadline(time.Time{})
+
+		if _, err = conn.Write(resp); err != nil {
+			return err
+		} else {
+			node.onEstablish(s, conn)
+			return nil
+		}
+	}
 }
 
 type SanguoOption struct {
