@@ -33,7 +33,7 @@ message response {
 
 对于任务服务，请求参数必须命名为request,返回值必须命名为response,go_package永远设置为"../service/echo"。
 
-在pbrpc目录执行make,这个操作会在pbrpc/service目录下生成echo.pb.go和echo.go两个文件。
+在pbrpc目录执行./gen.sh,这个操作会在pbrpc/service目录下生成echo.pb.go和echo.go两个文件。
 
 其中echo.go的内容如下：
 

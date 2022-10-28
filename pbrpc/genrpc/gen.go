@@ -5,10 +5,11 @@ import (
 	"log"
 	"os"
 	"strings"
+	"text/template"
 )
 
-var template string = `
-package [method]
+var templateStr string = `
+package {{.Method}}
 
 import (
 	"github.com/sniperHW/sanguo"
@@ -30,19 +31,19 @@ func (r *Replyer) Channel() rpcgo.Channel {
 	return r.replyer.Channel()
 }
 
-type [methodI] interface {
+type {{.Service}} interface {
 	OnCall(context.Context, *Replyer,*Request)
 }
 
-func Register(o [methodI]) {
-	sanguo.RegisterRPC("[method]",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
+func Register(o {{.Service}}) {
+	sanguo.RegisterRPC("{{.Method}}",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
 		o.OnCall(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
 func Call(ctx context.Context, peer addr.LogicAddr,arg *Request) (*Response,error) {
 	var resp Response
-	err := sanguo.Call(ctx,peer,"[method]",arg,&resp)
+	err := sanguo.Call(ctx,peer,"{{.Method}}",arg,&resp)
 	return &resp,err
 }
 
@@ -60,12 +61,17 @@ func CallWithCallback(peer addr.LogicAddr,deadline time.Time,arg *Request,cb fun
 	}
 
 
-	return sanguo.CallWithCallback(peer,deadline,"[method]",arg,&resp,fn) 		
+	return sanguo.CallWithCallback(peer,deadline,"{{.Method}}",arg,&resp,fn) 		
 }
 
 `
 
-func gen(name string) {
+type method struct {
+	Method  string
+	Service string
+}
+
+func gen(tmpl *template.Template, name string) {
 	filename := fmt.Sprintf("service/%s/%s.go", name, name)
 	os.MkdirAll(fmt.Sprintf("service/%s", name), os.ModePerm)
 	f, err := os.OpenFile(filename, os.O_RDWR, os.ModePerm)
@@ -89,19 +95,20 @@ func gen(name string) {
 		return
 	}
 
-	content := template
-	content = strings.Replace(content, "[method]", name, -1)
-	content = strings.Replace(content, "[methodI]", strings.Title(name)+"Service", -1)
-	_, err = f.WriteString(content)
-
-	if nil != err {
-		log.Printf("------ error -------- %s Write error:%s\n", filename, err.Error())
+	err = tmpl.Execute(f, method{name, strings.Title(name) + "Service"})
+	if err != nil {
+		panic(err)
 	} else {
 		log.Printf("%s Write ok\n", filename)
 	}
 }
 
 func main() {
+	tmpl, err := template.New("test").Parse(templateStr)
+	if err != nil {
+		panic(err)
+	}
+
 	//遍历proto目录获取所有.proto文件
 	if f, err := os.Open("./proto"); err == nil {
 		var fi []os.FileInfo
@@ -109,7 +116,7 @@ func main() {
 			for _, v := range fi {
 				t := strings.Split(v.Name(), ".")
 				if len(t) == 2 && t[1] == "proto" {
-					gen(t[0])
+					gen(tmpl, t[0])
 				}
 			}
 		}
