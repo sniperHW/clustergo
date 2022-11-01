@@ -71,7 +71,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			//写cmd
 			b = buffer.AppendUint16(b, uint16(cmd))
 
-			return append(buffs, b, pbbytes), len(b)
+			return append(buffs, b, pbbytes), totalLen
 		case *rpcgo.RequestMsg:
 			req := &codec.RpcRequest{
 				Seq:    msg.Seq,
