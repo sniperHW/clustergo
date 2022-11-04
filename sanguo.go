@@ -19,7 +19,6 @@ import (
 	"github.com/sniperHW/sanguo/codec/pb"
 	"github.com/sniperHW/sanguo/codec/ss"
 	"github.com/sniperHW/sanguo/discovery"
-	"github.com/sniperHW/sanguo/pbrpc"
 	"github.com/sniperHW/sanguo/pkg/crypto"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
@@ -393,7 +392,7 @@ func newSanguo(o SanguoOption) *Sanguo {
 
 var defaultSanguo *Sanguo
 var defaultOnce sync.Once
-var defaultRPCCodec rpcgo.Codec = &pbrpc.Codec{}
+var defaultRPCCodec rpcgo.Codec = &PbCodec{}
 
 func getDefault() *Sanguo {
 	defaultOnce.Do(func() {

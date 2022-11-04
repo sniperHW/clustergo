@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/sanguo/addr"
 	"github.com/sniperHW/sanguo/codec/ss"
+	"google.golang.org/protobuf/proto"
 )
 
 type SanguoRPCChannel interface {
@@ -87,4 +88,15 @@ func (c *JsonCodec) Encode(v interface{}) ([]byte, error) {
 
 func (c *JsonCodec) Decode(b []byte, v interface{}) error {
 	return json.Unmarshal(b, v)
+}
+
+type PbCodec struct {
+}
+
+func (c *PbCodec) Encode(v interface{}) ([]byte, error) {
+	return proto.Marshal(v.(proto.Message))
+}
+
+func (c *PbCodec) Decode(b []byte, v interface{}) error {
+	return proto.Unmarshal(b, v.(proto.Message))
 }

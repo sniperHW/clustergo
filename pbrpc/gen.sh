@@ -1,6 +1,9 @@
 #!/bin/bash
  
 function make_proto(){
+    if [ ! -d "./service" ];then
+        mkdir ./service
+    fi
     for file in `ls ./proto`       	
     do
         if [ "${file##*.}"x = "proto"x ];then

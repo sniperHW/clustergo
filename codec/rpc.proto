@@ -2,6 +2,8 @@ syntax = "proto3";
 
 option go_package = "../codec";
 
+option csharp_namespace = "SanguoDotNet.Rpc.Proto";
+
 message rpcRequest {
 	uint64 seq    = 1;
     string method = 2;

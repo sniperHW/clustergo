@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -71,9 +72,14 @@ type method struct {
 	Service string
 }
 
+var (
+	inputPath  string
+	outputPath string
+)
+
 func gen(tmpl *template.Template, name string) {
-	filename := fmt.Sprintf("service/%s/%s.go", name, name)
-	os.MkdirAll(fmt.Sprintf("service/%s", name), os.ModePerm)
+	filename := fmt.Sprintf("%s/%s/%s.go", outputPath, name, name)
+	os.MkdirAll(fmt.Sprintf("%s/%s", outputPath, name), os.ModePerm)
 	f, err := os.OpenFile(filename, os.O_RDWR, os.ModePerm)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -104,13 +110,17 @@ func gen(tmpl *template.Template, name string) {
 }
 
 func main() {
+
+	inputPath = *flag.String("inputPath", "proto", "inputPath")
+	outputPath = *flag.String("outputPath", "service", "outputPath")
+
 	tmpl, err := template.New("test").Parse(templateStr)
 	if err != nil {
 		panic(err)
 	}
 
 	//遍历proto目录获取所有.proto文件
-	if f, err := os.Open("./proto"); err == nil {
+	if f, err := os.Open(inputPath); err == nil {
 		var fi []os.FileInfo
 		if fi, err = f.Readdir(0); err == nil {
 			for _, v := range fi {
