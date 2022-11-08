@@ -28,7 +28,6 @@ import (
 type nodeCache struct {
 	sync.RWMutex
 	localAddr        addr.LogicAddr
-	sanguo           *Sanguo
 	nodes            map[addr.LogicAddr]*node
 	nodeByType       map[uint32][]*node
 	harborsByCluster map[uint32][]*node

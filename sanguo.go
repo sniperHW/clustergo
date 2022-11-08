@@ -231,7 +231,6 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 		once = true
 	})
 	if once {
-		s.nodeCache.sanguo = s
 		s.nodeCache.localAddr = localAddr
 		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
 
