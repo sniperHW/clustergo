@@ -49,12 +49,13 @@ func (cache *nodeCache) addNodeByType(n *node) {
 }
 
 func (cache *nodeCache) removeNodeByType(n *node) {
-	nodeByType := cache.nodeByType[n.addr.LogicAddr().Type()]
-	for k, v := range nodeByType {
-		if v == n {
-			nodeByType[k] = nodeByType[len(nodeByType)-1]
-			cache.nodeByType[n.addr.LogicAddr().Type()] = nodeByType[:len(nodeByType)-1]
-			break
+	if nodeByType, ok := cache.nodeByType[n.addr.LogicAddr().Type()]; ok {
+		for k, v := range nodeByType {
+			if v == n {
+				nodeByType[k] = nodeByType[len(nodeByType)-1]
+				cache.nodeByType[n.addr.LogicAddr().Type()] = nodeByType[:len(nodeByType)-1]
+				break
+			}
 		}
 	}
 }
@@ -68,12 +69,13 @@ func (cache *nodeCache) addHarborsByCluster(harbor *node) {
 }
 
 func (cache *nodeCache) removeHarborsByCluster(harbor *node) {
-	harborsByCluster := cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()]
-	for k, v := range harborsByCluster {
-		if v == harbor {
-			harborsByCluster[k] = harborsByCluster[len(harborsByCluster)-1]
-			cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()] = harborsByCluster[:len(harborsByCluster)-1]
-			break
+	if harborsByCluster, ok := cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()]; ok {
+		for k, v := range harborsByCluster {
+			if v == harbor {
+				harborsByCluster[k] = harborsByCluster[len(harborsByCluster)-1]
+				cache.harborsByCluster[harbor.addr.LogicAddr().Cluster()] = harborsByCluster[:len(harborsByCluster)-1]
+				break
+			}
 		}
 	}
 }
