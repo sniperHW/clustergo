@@ -53,17 +53,23 @@ type selfChannel struct {
 }
 
 func (c *selfChannel) SendRequest(request *rpcgo.RequestMsg, deadline time.Time) error {
-	c.sanguo.rpcSvr.OnMessage(context.TODO(), c, request)
+	go func() {
+		c.sanguo.rpcSvr.OnMessage(context.TODO(), c, request)
+	}()
 	return nil
 }
 
 func (c *selfChannel) SendRequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
-	c.sanguo.rpcSvr.OnMessage(context.TODO(), c, request)
+	go func() {
+		c.sanguo.rpcSvr.OnMessage(context.TODO(), c, request)
+	}()
 	return nil
 }
 
 func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
-	c.sanguo.rpcCli.OnMessage(context.TODO(), response)
+	go func() {
+		c.sanguo.rpcCli.OnMessage(context.TODO(), response)
+	}()
 	return nil
 }
 
