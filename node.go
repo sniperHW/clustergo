@@ -377,7 +377,7 @@ func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil && !rpcReq.Oneway {
 		//对于无法路由的rpc请求，返回错误响应
 		if nextNode = sanguo.getNodeByLogicAddr(message.From()); nextNode != nil {
-			nextNode.sendMessage(context.TODO(), sanguo, ss.NewMessage(message.From(), message.To(), &rpcgo.ResponseMsg{
+			nextNode.sendMessage(context.TODO(), sanguo, ss.NewMessage(sanguo.localAddr.LogicAddr(), message.To(), &rpcgo.ResponseMsg{
 				Seq: rpcReq.Seq,
 				Err: &rpcgo.Error{
 					Code: rpcgo.ErrOther,
