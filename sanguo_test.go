@@ -6,6 +6,7 @@ package sanguo
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"testing"
 	"time"
@@ -265,6 +266,8 @@ func TestHarbor(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
 
+	log.Println("1")
+
 	//将1.1.1移除
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	err = node2.Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
@@ -274,6 +277,8 @@ func TestHarbor(t *testing.T) {
 	//将harbor1移除
 	localDiscovery.RemoveNode(harbor1Addr.LogicAddr())
 
+	log.Println("2")
+
 	c := make(chan struct{})
 	node2.CallWithCallback(type1Addr, time.Now().Add(time.Second), "hello", "sniperHW", &resp, func(resp interface{}, err error) {
 		assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
@@ -281,7 +286,11 @@ func TestHarbor(t *testing.T) {
 		close(c)
 	})
 
+	log.Println("3")
+
 	<-c
+
+	log.Println("4")
 
 	node1.Stop()
 	node2.Stop()

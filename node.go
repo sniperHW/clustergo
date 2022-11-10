@@ -31,7 +31,6 @@ type nodeCache struct {
 	nodes            map[addr.LogicAddr]*node
 	nodeByType       map[uint32][]*node
 	harborsByCluster map[uint32][]*node
-	onSelfRemove     func()
 	initOnce         sync.Once
 	initC            chan struct{}
 }
@@ -80,7 +79,7 @@ func (cache *nodeCache) removeHarborsByCluster(harbor *node) {
 	}
 }
 
-func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
+func (cache *nodeCache) onNodeInfoUpdate(sanguo *Sanguo, nodeinfo []discovery.Node) {
 
 	defer cache.initOnce.Do(func() {
 		logger.Debug("init ok")
@@ -126,7 +125,7 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 			if updateNode.Addr.NetAddr().String() != localNode.addr.NetAddr().String() {
 				//网络地址发生变更
 				if localNode.addr.LogicAddr() == cache.localAddr {
-					go cache.onSelfRemove()
+					go sanguo.Stop()
 					return
 				} else {
 					localNode.closeSocket()
@@ -160,7 +159,7 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 			//update 1 2 4 5 6
 			//移除节点
 			if localNode.addr.LogicAddr() == cache.localAddr {
-				go cache.onSelfRemove()
+				go sanguo.Stop()
 				return
 			} else {
 				delete(cache.nodes, localNode.addr.LogicAddr())
@@ -215,7 +214,7 @@ func (cache *nodeCache) onNodeInfoUpdate(nodeinfo []discovery.Node) {
 		localNode := localNodes[j]
 		//移除节点
 		if localNode.addr.LogicAddr() == cache.localAddr {
-			go cache.onSelfRemove()
+			go sanguo.Stop()
 			return
 		} else {
 			delete(cache.nodes, localNode.addr.LogicAddr())
@@ -320,55 +319,6 @@ func (n *node) login(sanguo *Sanguo, conn net.Conn, isStream bool) error {
 	return nil
 }
 
-func (n *node) dialError(sanguo *Sanguo, err error) {
-	select {
-	case <-sanguo.die:
-		return
-	default:
-	}
-
-	n.Lock()
-	defer n.Unlock()
-	n.dialing = false
-	if err == ErrInvaildNode {
-		n.pendingMsg = list.New()
-	} else if nil == n.socket {
-		now := time.Now()
-		e := n.pendingMsg.Front()
-		for e != nil {
-			m := e.Value.(*pendingMessage)
-			remove := false
-
-			if !m.deadline.IsZero() {
-				if now.After(m.deadline) {
-					remove = true
-				}
-			} else {
-				select {
-				case <-m.ctx.Done():
-					remove = true
-				default:
-				}
-			}
-
-			if remove {
-				next := e.Next()
-				n.pendingMsg.Remove(e)
-				e = next
-			} else {
-				e = e.Next()
-			}
-		}
-
-		if n.pendingMsg.Len() > 0 {
-			n.dialing = true
-			time.AfterFunc(time.Second, func() {
-				n.dial(sanguo)
-			})
-		}
-	}
-}
-
 func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
 	logger.Debugf("onRelayMessage self:%s %s->%s", sanguo.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
 	if nextNode := sanguo.getNodeByLogicAddr(message.To()); nextNode != nil {
@@ -411,8 +361,12 @@ func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
 			Codec:    codec,
 			AutoRecv: true,
 		}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
-		n.onMessage(sanguo, packet)
-		return nil
+		if sanguo.getNodeByLogicAddr(n.addr.LogicAddr()) != n {
+			return ErrInvaildNode
+		} else {
+			n.onMessage(sanguo, packet)
+			return nil
+		}
 	}).SetCloseCallback(func(as *netgo.AsynSocket, err error) {
 		n.Lock()
 		n.socket = nil
@@ -437,41 +391,84 @@ func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
 	}
 }
 
-func (n *node) dialOK(sanguo *Sanguo, conn net.Conn) {
-	select {
-	case <-sanguo.die:
-		conn.Close()
-		return
-	default:
-	}
+func (n *node) dialError(sanguo *Sanguo) {
+	n.Lock()
+	defer n.Unlock()
+	n.dialing = false
+	if nil == n.socket {
+		now := time.Now()
+		e := n.pendingMsg.Front()
+		for e != nil {
+			m := e.Value.(*pendingMessage)
+			remove := false
 
-	if n == sanguo.nodeCache.getNodeByLogicAddr(n.addr.LogicAddr()) {
-		n.Lock()
-		defer n.Unlock()
-		n.dialing = false
-		if n.socket != nil {
-			//两段同时建立连接
-			conn.Close()
-		} else {
-			n.onEstablish(sanguo, conn)
+			if !m.deadline.IsZero() {
+				if now.After(m.deadline) {
+					remove = true
+				}
+			} else {
+				select {
+				case <-m.ctx.Done():
+					remove = true
+				default:
+				}
+			}
+
+			if remove {
+				next := e.Next()
+				n.pendingMsg.Remove(e)
+				e = next
+			} else {
+				e = e.Next()
+			}
 		}
-	} else {
-		//不再是合法的node
+
+		if n.pendingMsg.Len() > 0 {
+			n.dialing = true
+			time.AfterFunc(time.Second, func() {
+				n.dial(sanguo)
+			})
+		}
+	}
+}
+
+func (n *node) dialOK(sanguo *Sanguo, conn net.Conn) {
+	n.Lock()
+	defer n.Unlock()
+	n.dialing = false
+	if n.socket != nil {
+		//两段同时建立连接
 		conn.Close()
-		n.dialError(sanguo, ErrInvaildNode)
+	} else {
+		n.onEstablish(sanguo, conn)
 	}
 }
 
 func (n *node) dial(sanguo *Sanguo) {
 	dialer := &net.Dialer{}
 	logger.Debugf("%s dial %s", sanguo.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
-	if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
-		n.dialError(sanguo, ErrDial)
-	} else if err := n.login(sanguo, conn, false); err != nil {
-		conn.Close()
-		n.dialError(sanguo, err)
-	} else {
-		n.dialOK(sanguo, conn)
+	ok := false
+	conn, err := dialer.Dial("tcp", n.addr.NetAddr().String())
+	if err == nil {
+		if err = n.login(sanguo, conn, false); err != nil {
+			conn.Close()
+			conn = nil
+		} else {
+			ok = true
+		}
+	}
+
+	select {
+	case <-sanguo.die:
+		if conn != nil {
+			conn.Close()
+		}
+	default:
+		if ok {
+			n.dialOK(sanguo, conn)
+		} else {
+			n.dialError(sanguo)
+		}
 	}
 }
 

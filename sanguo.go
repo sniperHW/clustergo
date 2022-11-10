@@ -27,7 +27,6 @@ import (
 var (
 	ErrInvaildNode     = errors.New("invaild node")
 	ErrDuplicateConn   = errors.New("duplicate node connection")
-	ErrDial            = errors.New("dial failed")
 	ErrNetAddrMismatch = errors.New("net addr mismatch")
 )
 
@@ -232,9 +231,10 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 	})
 	if once {
 		s.nodeCache.localAddr = localAddr
-		s.nodeCache.onSelfRemove = s.Stop //当自己从配置中移除调用Stop
 
-		if err = discoveryService.Subscribe(s.nodeCache.onNodeInfoUpdate); err != nil {
+		if err = discoveryService.Subscribe(func(nodeinfo []discovery.Node) {
+			s.nodeCache.onNodeInfoUpdate(s, nodeinfo)
+		}); err != nil {
 			return err
 		}
 
