@@ -205,19 +205,7 @@ func (s *Sanguo) Stop() {
 		s.listener.Close()
 		s.nodeCache.RLock()
 		for _, v := range s.nodeCache.nodes {
-			v.Lock()
-			if v.socket != nil {
-				v.socket.Close(nil)
-			}
-			v.Unlock()
-
-			v.streamCli.Lock()
-			if v.streamCli.session != nil {
-				v.streamCli.session.Close()
-				v.streamCli.session = nil
-			}
-			v.streamCli.Unlock()
-
+			v.closeSocket()
 		}
 		s.nodeCache.RUnlock()
 		close(s.die)

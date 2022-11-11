@@ -539,8 +539,16 @@ func (n *node) sendMessage(ctx context.Context, sanguo *Sanguo, msg interface{},
 
 func (n *node) closeSocket() {
 	n.Lock()
-	defer n.Unlock()
 	if n.socket != nil {
 		n.socket.Close(nil)
+		n.socket = nil
 	}
+	n.Unlock()
+
+	n.streamCli.Lock()
+	if n.streamCli.session != nil {
+		n.streamCli.session.Close()
+		n.streamCli.session = nil
+	}
+	n.streamCli.Unlock()
 }
