@@ -316,7 +316,7 @@ func TestStream(t *testing.T) {
 		RPCCodec: &JsonCodec{},
 	})
 
-	node1.OnNewStream(func(s *smux.Stream) {
+	node1.StartSmuxServer(func(s *smux.Stream) {
 		go func() {
 			buff := make([]byte, 64)
 			n, _ := s.Read(buff)

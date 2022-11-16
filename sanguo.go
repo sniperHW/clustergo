@@ -85,16 +85,17 @@ func (m *msgManager) dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message
 }
 
 type Sanguo struct {
-	localAddr   addr.Addr
-	listener    net.Listener
-	nodeCache   nodeCache
-	rpcSvr      *rpcgo.Server
-	rpcCli      *rpcgo.Client
-	msgManager  msgManager
-	startOnce   sync.Once
-	stopOnce    sync.Once
-	die         chan struct{}
-	onNewStream atomic.Value //func(*smux.Stream)
+	localAddr    addr.Addr
+	listener     net.Listener
+	nodeCache    nodeCache
+	rpcSvr       *rpcgo.Server
+	rpcCli       *rpcgo.Client
+	msgManager   msgManager
+	startOnce    sync.Once
+	stopOnce     sync.Once
+	die          chan struct{}
+	smuxSessions sync.Map
+	onNewStream  atomic.Value
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
@@ -117,8 +118,12 @@ func (s *Sanguo) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 	return n
 }
 
-func (s *Sanguo) OnNewStream(onNewStream func(*smux.Stream)) {
-	s.onNewStream.Store(onNewStream)
+func (s *Sanguo) StartSmuxServer(onNewStream func(*smux.Stream)) error {
+	if s.onNewStream.CompareAndSwap(nil, onNewStream) {
+		return nil
+	} else {
+		return errors.New("started")
+	}
 }
 
 func (s *Sanguo) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
@@ -196,19 +201,22 @@ func (s *Sanguo) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Mess
 	s.msgManager.dispatch(from, cmd, msg)
 }
 
-func (s *Sanguo) Stop() {
+func (s *Sanguo) Stop() error {
 	once := false
 	s.stopOnce.Do(func() {
 		once = true
 	})
 	if once {
 		s.listener.Close()
-		s.nodeCache.RLock()
-		for _, v := range s.nodeCache.nodes {
-			v.closeSocket()
-		}
-		s.nodeCache.RUnlock()
+		s.nodeCache.close()
+		s.smuxSessions.Range(func(key, _ interface{}) bool {
+			key.(*smux.Session).Close()
+			return true
+		})
 		close(s.die)
+		return nil
+	} else {
+		return errors.New("stoped")
 	}
 }
 
@@ -247,6 +255,8 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 				go serve()
 			}
 		}
+	} else {
+		err = errors.New("started")
 	}
 	return err
 }
@@ -256,19 +266,15 @@ func (s *Sanguo) Wait() {
 }
 
 func (s *Sanguo) listenStream(session *smux.Session, onNewStream func(*smux.Stream)) {
-	defer session.Close()
+	defer func() {
+		session.Close()
+		s.smuxSessions.Delete(session)
+	}()
+	s.smuxSessions.Store(session, struct{}{})
 	for {
-		session.SetDeadline(time.Now().Add(time.Second))
 		if stream, err := session.AcceptStream(); err == nil {
 			onNewStream(stream)
-		} else if err == smux.ErrTimeout {
-			select {
-			case <-s.die:
-				return
-			default:
-			}
 		} else {
-			session.Close()
 			return
 		}
 	}
@@ -402,8 +408,8 @@ func GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
 	return getDefault().GetAddrByType(tt, n...)
 }
 
-func Stop() {
-	getDefault().Stop()
+func Stop() error {
+	return getDefault().Stop()
 }
 
 func Wait() {
@@ -430,8 +436,8 @@ func CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg 
 	return getDefault().CallWithCallback(to, deadline, method, arg, ret, cb)
 }
 
-func OnNewStream(onNewStream func(*smux.Stream)) {
-	getDefault().OnNewStream(onNewStream)
+func StartSmuxServer(onNewStream func(*smux.Stream)) {
+	getDefault().StartSmuxServer(onNewStream)
 }
 
 func OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {

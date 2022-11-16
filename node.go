@@ -35,6 +35,14 @@ type nodeCache struct {
 	initC            chan struct{}
 }
 
+func (cache *nodeCache) close() {
+	cache.RLock()
+	for _, v := range cache.nodes {
+		v.closeSocket()
+	}
+	cache.RUnlock()
+}
+
 func (cache *nodeCache) waitInit() {
 	<-cache.initC
 }
