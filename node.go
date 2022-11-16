@@ -274,7 +274,6 @@ type streamClient struct {
 type node struct {
 	sync.Mutex
 	addr       addr.Addr
-	dialing    bool
 	socket     *netgo.AsynSocket
 	pendingMsg *list.List
 	available  bool
@@ -395,7 +394,6 @@ func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
 func (n *node) dialError(sanguo *Sanguo) {
 	n.Lock()
 	defer n.Unlock()
-	n.dialing = false
 	if nil == n.socket {
 		now := time.Now()
 		e := n.pendingMsg.Front()
@@ -425,7 +423,6 @@ func (n *node) dialError(sanguo *Sanguo) {
 		}
 
 		if n.pendingMsg.Len() > 0 {
-			n.dialing = true
 			time.AfterFunc(time.Second, func() {
 				n.dial(sanguo)
 			})
@@ -436,7 +433,6 @@ func (n *node) dialError(sanguo *Sanguo) {
 func (n *node) dialOK(sanguo *Sanguo, conn net.Conn) {
 	n.Lock()
 	defer n.Unlock()
-	n.dialing = false
 	if n.socket != nil {
 		//两段同时建立连接
 		conn.Close()
@@ -528,8 +524,7 @@ func (n *node) sendMessage(ctx context.Context, sanguo *Sanguo, msg interface{},
 			deadline: deadline,
 		})
 		//尝试与对端建立连接
-		if !n.dialing {
-			n.dialing = true
+		if n.pendingMsg.Len() == 1 {
 			go n.dial(sanguo)
 		}
 		n.Unlock()

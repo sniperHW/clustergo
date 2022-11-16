@@ -334,7 +334,7 @@ func (s *Sanguo) onNewConnection(conn net.Conn) (err error) {
 	} else {
 		node.Lock()
 		defer node.Unlock()
-		if node.dialing {
+		if node.pendingMsg.Len() != 0 {
 			//当前节点同时正在向对端dialing,逻辑地址小的一方放弃接受连接
 			if s.localAddr.LogicAddr() < node.addr.LogicAddr() {
 				logger.Errorf("(self:%v) (other:%v) connectting simultaneously", s.localAddr.LogicAddr(), node.addr.LogicAddr())
