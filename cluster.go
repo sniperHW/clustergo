@@ -110,10 +110,10 @@ func (s *Node) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 		var harbor *node
 		if s.localAddr.LogicAddr().Type() == addr.HarbarType {
 			//当前为harbor节点，选择harbor集群中与to在同一个cluster的harbor节点负责转发
-			harbor = s.nodeCache.getHarborByCluster(to.Cluster(), to)
+			harbor = s.nodeCache.getHarbor(to.Cluster(), to)
 		} else {
 			//当前节点非harbor节点，从cluster内选择一个harbor节点负责转发
-			harbor = s.nodeCache.getHarborByCluster(s.localAddr.LogicAddr().Cluster(), to)
+			harbor = s.nodeCache.getHarbor(s.localAddr.LogicAddr().Cluster(), to)
 		}
 		n = harbor
 	}
@@ -144,7 +144,7 @@ func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err erro
 		num = n[0]
 	}
 
-	if node := s.nodeCache.getNodeByType(tt, num); node != nil {
+	if node := s.nodeCache.getNormalNode(tt, num); node != nil {
 		addr = node.addr.LogicAddr()
 	} else {
 		err = errors.New("no available node")
@@ -358,7 +358,7 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 		if _, err = conn.Write(resp); err != nil {
 			return err
 		} else {
-			node.onEstablish(s, conn)
+			node.onEstablish(s, conn.(*net.TCPConn))
 			return nil
 		}
 	}
@@ -367,10 +367,10 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 func newNode() *Node {
 	return &Node{
 		nodeCache: nodeCache{
-			nodes:            map[addr.LogicAddr]*node{},
-			nodeByType:       map[uint32][]*node{},
-			harborsByCluster: map[uint32][]*node{},
-			initC:            make(chan struct{}),
+			allnodes: map[addr.LogicAddr]*node{},
+			nodes:    map[uint32][]*node{},
+			harbors:  map[uint32][]*node{},
+			initC:    make(chan struct{}),
 		},
 		rpcSvr: rpcgo.NewServer(RPCCodec),
 		rpcCli: rpcgo.NewClient(RPCCodec),
