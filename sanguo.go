@@ -167,7 +167,7 @@ func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
 		} else {
-			logger.Debugf("target: not found", to.String())
+			logger.Debugf("target:%s not found", to.String())
 		}
 	}
 }
@@ -179,7 +179,7 @@ func (s *Sanguo) Call(ctx context.Context, to addr.LogicAddr, method string, arg
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n, sanguo: s}, method, arg, ret)
 		} else {
-			return errors.New("call failed")
+			return rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String()))
 		}
 	}
 }
@@ -191,7 +191,7 @@ func (s *Sanguo) CallWithCallback(to addr.LogicAddr, deadline time.Time, method 
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n, sanguo: s}, deadline, method, arg, ret, cb)
 		} else {
-			go cb(nil, errors.New("call failed"))
+			go cb(nil, rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String())))
 			return nil
 		}
 	}
