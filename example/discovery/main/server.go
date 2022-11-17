@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/sniperHW/sanguo/example/discovery"
+	"github.com/sniperHW/clustergo/example/discovery"
 )
 
 func main() {

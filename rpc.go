@@ -1,4 +1,4 @@
-package sanguo
+package clustergo
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec/ss"
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec/ss"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -18,25 +18,25 @@ type SanguoRPCChannel interface {
 }
 
 type rpcChannel struct {
-	peer   addr.LogicAddr
-	node   *node
-	sanguo *Sanguo
+	peer addr.LogicAddr
+	node *node
+	self *Node
 }
 
 func (c *rpcChannel) SendRequest(request *rpcgo.RequestMsg, deadline time.Time) error {
-	return c.node.sendMessage(context.TODO(), c.sanguo, ss.NewMessage(c.peer, c.sanguo.localAddr.LogicAddr(), request), deadline)
+	return c.node.sendMessage(context.TODO(), c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request), deadline)
 }
 
 func (c *rpcChannel) SendRequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
-	return c.node.sendMessage(ctx, c.sanguo, ss.NewMessage(c.peer, c.sanguo.localAddr.LogicAddr(), request), time.Time{})
+	return c.node.sendMessage(ctx, c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request), time.Time{})
 }
 
 func (c *rpcChannel) Reply(response *rpcgo.ResponseMsg) error {
-	return c.node.sendMessage(context.TODO(), c.sanguo, ss.NewMessage(c.peer, c.sanguo.localAddr.LogicAddr(), response), time.Now().Add(time.Second))
+	return c.node.sendMessage(context.TODO(), c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), response), time.Now().Add(time.Second))
 }
 
 func (c *rpcChannel) Name() string {
-	return fmt.Sprintf("%s <-> %s", c.sanguo.localAddr.LogicAddr(), c.peer.String())
+	return fmt.Sprintf("%s <-> %s", c.self.localAddr.LogicAddr(), c.peer.String())
 }
 
 func (c *rpcChannel) Identity() uint64 {
@@ -49,40 +49,40 @@ func (c *rpcChannel) Peer() addr.LogicAddr {
 
 // 自连接channel
 type selfChannel struct {
-	sanguo *Sanguo
+	self *Node
 }
 
 func (c *selfChannel) SendRequest(request *rpcgo.RequestMsg, deadline time.Time) error {
 	go func() {
-		c.sanguo.rpcSvr.OnMessage(context.TODO(), c, request)
+		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
 	}()
 	return nil
 }
 
 func (c *selfChannel) SendRequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
 	go func() {
-		c.sanguo.rpcSvr.OnMessage(context.TODO(), c, request)
+		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
 	}()
 	return nil
 }
 
 func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
 	go func() {
-		c.sanguo.rpcCli.OnMessage(context.TODO(), response)
+		c.self.rpcCli.OnMessage(context.TODO(), response)
 	}()
 	return nil
 }
 
 func (c *selfChannel) Name() string {
-	return fmt.Sprintf("%s <-> %s", c.sanguo.localAddr.LogicAddr(), c.sanguo.localAddr.LogicAddr())
+	return fmt.Sprintf("%s <-> %s", c.self.localAddr.LogicAddr(), c.self.localAddr.LogicAddr())
 }
 
 func (c *selfChannel) Identity() uint64 {
-	return *(*uint64)(unsafe.Pointer(c.sanguo))
+	return *(*uint64)(unsafe.Pointer(c.self))
 }
 
 func (c *selfChannel) Peer() addr.LogicAddr {
-	return c.sanguo.localAddr.LogicAddr()
+	return c.self.localAddr.LogicAddr()
 }
 
 type JsonCodec struct {

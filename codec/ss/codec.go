@@ -7,10 +7,10 @@ import (
 	"reflect"
 
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec"
-	"github.com/sniperHW/sanguo/codec/buffer"
-	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec"
+	"github.com/sniperHW/clustergo/codec/buffer"
+	"github.com/sniperHW/clustergo/codec/pb"
 	"google.golang.org/protobuf/proto"
 )
 

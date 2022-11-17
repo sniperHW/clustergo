@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/sniperHW/netgo"
-	"github.com/sniperHW/sanguo/example/stream/pb"
+	"github.com/sniperHW/clustergo/example/stream/pb"
 	"google.golang.org/protobuf/proto"
 )
 

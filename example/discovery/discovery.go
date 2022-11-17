@@ -12,9 +12,9 @@ import (
 	"log"
 
 	"github.com/sniperHW/netgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec/buffer"
-	"github.com/sniperHW/sanguo/discovery"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec/buffer"
+	"github.com/sniperHW/clustergo/discovery"
 )
 
 type Node struct {

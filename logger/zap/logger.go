@@ -5,7 +5,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	//"sanguo/node/common/config"
+	//"clustergo/node/common/config"
 	"os"
 )
 

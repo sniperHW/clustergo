@@ -2,8 +2,8 @@
 package test
 
 import (
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/rpcgo"
 	"context"
 	"time"
@@ -26,14 +26,14 @@ type TestService interface {
 }
 
 func Register(o TestService) {
-	sanguo.RegisterRPC("test",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
+	clustergo.RegisterRPC("test",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
 		o.OnCall(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
 func Call(ctx context.Context, peer addr.LogicAddr,arg *Request) (*Response,error) {
 	var resp Response
-	err := sanguo.Call(ctx,peer,"test",arg,&resp)
+	err := clustergo.Call(ctx,peer,"test",arg,&resp)
 	return &resp,err
 }
 
@@ -51,6 +51,6 @@ func CallWithCallback(peer addr.LogicAddr,deadline time.Time,arg *Request,cb fun
 	}
 
 
-	return sanguo.CallWithCallback(peer,deadline,"test",arg,&resp,fn) 		
+	return clustergo.CallWithCallback(peer,deadline,"test",arg,&resp,fn) 		
 }
 

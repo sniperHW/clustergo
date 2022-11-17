@@ -2,9 +2,9 @@ package ss
 
 import (
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec"
-	"github.com/sniperHW/sanguo/codec/buffer"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec"
+	"github.com/sniperHW/clustergo/codec/buffer"
 	"google.golang.org/protobuf/proto"
 )
 

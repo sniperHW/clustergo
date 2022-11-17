@@ -1,4 +1,4 @@
-package sanguo
+package clustergo
 
 import (
 	"context"
@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec/pb"
+	"github.com/sniperHW/clustergo/codec/ss"
+	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/pkg/crypto"
 	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec/pb"
-	"github.com/sniperHW/sanguo/codec/ss"
-	"github.com/sniperHW/sanguo/discovery"
-	"github.com/sniperHW/sanguo/pkg/crypto"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
@@ -29,6 +29,8 @@ var (
 	ErrDuplicateConn   = errors.New("duplicate node connection")
 	ErrNetAddrMismatch = errors.New("net addr mismatch")
 )
+
+var RPCCodec rpcgo.Codec = &PbCodec{}
 
 var cecret_key []byte = []byte("sanguo_2022")
 
@@ -84,7 +86,7 @@ func (m *msgManager) dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message
 	}
 }
 
-type Sanguo struct {
+type Node struct {
 	localAddr    addr.Addr
 	listener     net.Listener
 	nodeCache    nodeCache
@@ -99,7 +101,7 @@ type Sanguo struct {
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
-func (s *Sanguo) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
+func (s *Node) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 	if to.Cluster() == s.localAddr.LogicAddr().Cluster() {
 		//同cluster内发送消息
 		n = s.nodeCache.getNodeByLogicAddr(to)
@@ -118,7 +120,7 @@ func (s *Sanguo) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 	return n
 }
 
-func (s *Sanguo) StartSmuxServer(onNewStream func(*smux.Stream)) error {
+func (s *Node) StartSmuxServer(onNewStream func(*smux.Stream)) error {
 	if s.onNewStream.CompareAndSwap(nil, onNewStream) {
 		return nil
 	} else {
@@ -126,7 +128,7 @@ func (s *Sanguo) StartSmuxServer(onNewStream func(*smux.Stream)) error {
 	}
 }
 
-func (s *Sanguo) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
+func (s *Node) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 	if peer == s.localAddr.LogicAddr() {
 		return nil, errors.New("cant't open stream to self")
 	} else if n := s.getNodeByLogicAddr(peer); n != nil {
@@ -136,7 +138,7 @@ func (s *Sanguo) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 	}
 }
 
-func (s *Sanguo) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
+func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
 	var num int
 	if len(n) > 0 {
 		num = n[0]
@@ -150,17 +152,17 @@ func (s *Sanguo) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err er
 	return addr, err
 }
 
-func (s *Sanguo) RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
+func (s *Node) RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
 	if cmd := pb.GetCmd(ss.Namespace, msg); cmd != 0 {
 		s.msgManager.register(uint16(cmd), handler)
 	}
 }
 
-func (s *Sanguo) RegisterRPC(name string, method interface{}) error {
+func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
+func (s *Node) SendMessage(to addr.LogicAddr, msg proto.Message) {
 	if to == s.localAddr.LogicAddr() {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 	} else {
@@ -172,24 +174,24 @@ func (s *Sanguo) SendMessage(to addr.LogicAddr, msg proto.Message) {
 	}
 }
 
-func (s *Sanguo) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
+func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
 	if to == s.localAddr.LogicAddr() {
-		return s.rpcCli.Call(ctx, &selfChannel{sanguo: s}, method, arg, ret)
+		return s.rpcCli.Call(ctx, &selfChannel{self: s}, method, arg, ret)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n, sanguo: s}, method, arg, ret)
+			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n, self: s}, method, arg, ret)
 		} else {
 			return rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String()))
 		}
 	}
 }
 
-func (s *Sanguo) CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
+func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
 	if to == s.localAddr.LogicAddr() {
-		return s.rpcCli.CallWithCallback(&selfChannel{sanguo: s}, deadline, method, arg, ret, cb)
+		return s.rpcCli.CallWithCallback(&selfChannel{self: s}, deadline, method, arg, ret, cb)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n, sanguo: s}, deadline, method, arg, ret, cb)
+			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n, self: s}, deadline, method, arg, ret, cb)
 		} else {
 			go cb(nil, rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String())))
 			return nil
@@ -197,11 +199,11 @@ func (s *Sanguo) CallWithCallback(to addr.LogicAddr, deadline time.Time, method 
 	}
 }
 
-func (s *Sanguo) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Message) {
+func (s *Node) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	s.msgManager.dispatch(from, cmd, msg)
 }
 
-func (s *Sanguo) Stop() error {
+func (s *Node) Stop() error {
 	once := false
 	s.stopOnce.Do(func() {
 		once = true
@@ -220,7 +222,7 @@ func (s *Sanguo) Stop() error {
 	}
 }
 
-func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.LogicAddr) (err error) {
+func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicAddr) (err error) {
 	once := false
 	s.startOnce.Do(func() {
 		once = true
@@ -261,11 +263,11 @@ func (s *Sanguo) Start(discoveryService discovery.Discovery, localAddr addr.Logi
 	return err
 }
 
-func (s *Sanguo) Wait() {
+func (s *Node) Wait() {
 	<-s.die
 }
 
-func (s *Sanguo) listenStream(session *smux.Session, onNewStream func(*smux.Stream)) {
+func (s *Node) listenStream(session *smux.Session, onNewStream func(*smux.Stream)) {
 	defer func() {
 		session.Close()
 		s.smuxSessions.Delete(session)
@@ -280,7 +282,7 @@ func (s *Sanguo) listenStream(session *smux.Session, onNewStream func(*smux.Stre
 	}
 }
 
-func (s *Sanguo) onNewConnection(conn net.Conn) (err error) {
+func (s *Node) onNewConnection(conn net.Conn) (err error) {
 	buff := make([]byte, 4)
 	conn.SetReadDeadline(time.Now().Add(time.Second))
 	defer conn.SetReadDeadline(time.Time{})
@@ -362,20 +364,16 @@ func (s *Sanguo) onNewConnection(conn net.Conn) (err error) {
 	}
 }
 
-type SanguoOption struct {
-	RPCCodec rpcgo.Codec
-}
-
-func newSanguo(o SanguoOption) *Sanguo {
-	return &Sanguo{
+func newNode() *Node {
+	return &Node{
 		nodeCache: nodeCache{
 			nodes:            map[addr.LogicAddr]*node{},
 			nodeByType:       map[uint32][]*node{},
 			harborsByCluster: map[uint32][]*node{},
 			initC:            make(chan struct{}),
 		},
-		rpcSvr: rpcgo.NewServer(o.RPCCodec),
-		rpcCli: rpcgo.NewClient(o.RPCCodec),
+		rpcSvr: rpcgo.NewServer(RPCCodec),
+		rpcCli: rpcgo.NewClient(RPCCodec),
 		msgManager: msgManager{
 			msgHandlers: map[uint16]MsgHandler{},
 		},
@@ -383,21 +381,14 @@ func newSanguo(o SanguoOption) *Sanguo {
 	}
 }
 
-var defaultSanguo *Sanguo
+var defaultInstance *Node
 var defaultOnce sync.Once
-var defaultRPCCodec rpcgo.Codec = &PbCodec{}
 
-func getDefault() *Sanguo {
+func getDefault() *Node {
 	defaultOnce.Do(func() {
-		defaultSanguo = newSanguo(SanguoOption{
-			RPCCodec: defaultRPCCodec,
-		})
+		defaultInstance = newNode()
 	})
-	return defaultSanguo
-}
-
-func SetRpcCodec(rpcCodec rpcgo.Codec) {
-	defaultRPCCodec = rpcCodec
+	return defaultInstance
 }
 
 func Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {

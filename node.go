@@ -1,4 +1,4 @@
-package sanguo
+package clustergo
 
 import (
 	"container/list"
@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec/ss"
+	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/pkg/crypto"
 	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec/ss"
-	"github.com/sniperHW/sanguo/discovery"
-	"github.com/sniperHW/sanguo/pkg/crypto"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
@@ -87,7 +87,7 @@ func (cache *nodeCache) removeHarborsByCluster(harbor *node) {
 	}
 }
 
-func (cache *nodeCache) onNodeInfoUpdate(sanguo *Sanguo, nodeinfo []discovery.Node) {
+func (cache *nodeCache) onNodeInfoUpdate(self *Node, nodeinfo []discovery.Node) {
 
 	defer cache.initOnce.Do(func() {
 		logger.Debug("init ok")
@@ -133,7 +133,7 @@ func (cache *nodeCache) onNodeInfoUpdate(sanguo *Sanguo, nodeinfo []discovery.No
 			if updateNode.Addr.NetAddr().String() != localNode.addr.NetAddr().String() {
 				//网络地址发生变更
 				if localNode.addr.LogicAddr() == cache.localAddr {
-					go sanguo.Stop()
+					go self.Stop()
 					return
 				} else {
 					localNode.closeSocket()
@@ -167,7 +167,7 @@ func (cache *nodeCache) onNodeInfoUpdate(sanguo *Sanguo, nodeinfo []discovery.No
 			//update 1 2 4 5 6
 			//移除节点
 			if localNode.addr.LogicAddr() == cache.localAddr {
-				go sanguo.Stop()
+				go self.Stop()
 				return
 			} else {
 				delete(cache.nodes, localNode.addr.LogicAddr())
@@ -222,7 +222,7 @@ func (cache *nodeCache) onNodeInfoUpdate(sanguo *Sanguo, nodeinfo []discovery.No
 		localNode := localNodes[j]
 		//移除节点
 		if localNode.addr.LogicAddr() == cache.localAddr {
-			go sanguo.Stop()
+			go self.Stop()
 			return
 		} else {
 			delete(cache.nodes, localNode.addr.LogicAddr())
@@ -288,11 +288,11 @@ type node struct {
 	streamCli  streamClient
 }
 
-func (n *node) login(sanguo *Sanguo, conn net.Conn, isStream bool) error {
+func (n *node) login(self *Node, conn net.Conn, isStream bool) error {
 
 	j, err := json.Marshal(&loginReq{
-		LogicAddr: uint32(sanguo.localAddr.LogicAddr()),
-		NetAddr:   sanguo.localAddr.NetAddr().String(),
+		LogicAddr: uint32(self.localAddr.LogicAddr()),
+		NetAddr:   self.localAddr.NetAddr().String(),
 		IsStream:  isStream,
 	})
 
@@ -326,16 +326,16 @@ func (n *node) login(sanguo *Sanguo, conn net.Conn, isStream bool) error {
 	return nil
 }
 
-func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
-	logger.Debugf("onRelayMessage self:%s %s->%s", sanguo.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
-	if nextNode := sanguo.getNodeByLogicAddr(message.To()); nextNode != nil {
+func (n *node) onRelayMessage(self *Node, message *ss.RelayMessage) {
+	logger.Debugf("onRelayMessage self:%s %s->%s", self.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
+	if nextNode := self.getNodeByLogicAddr(message.To()); nextNode != nil {
 		logger.Debugf("nextNode %s", nextNode.addr.LogicAddr())
-		nextNode.sendMessage(context.TODO(), sanguo, message, time.Now().Add(time.Second))
+		nextNode.sendMessage(context.TODO(), self, message, time.Now().Add(time.Second))
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil && !rpcReq.Oneway {
 		//对于无法路由的rpc请求，返回错误响应
-		if nextNode = sanguo.getNodeByLogicAddr(message.From()); nextNode != nil {
+		if nextNode = self.getNodeByLogicAddr(message.From()); nextNode != nil {
 			logger.Debugf(fmt.Sprintf("route message to target:%s failed", message.To().String()))
-			nextNode.sendMessage(context.TODO(), sanguo, ss.NewMessage(message.From(), sanguo.localAddr.LogicAddr(), &rpcgo.ResponseMsg{
+			nextNode.sendMessage(context.TODO(), self, ss.NewMessage(message.From(), self.localAddr.LogicAddr(), &rpcgo.ResponseMsg{
 				Seq: rpcReq.Seq,
 				Err: &rpcgo.Error{
 					Code: rpcgo.ErrOther,
@@ -346,33 +346,33 @@ func (n *node) onRelayMessage(sanguo *Sanguo, message *ss.RelayMessage) {
 	}
 }
 
-func (n *node) onMessage(sanguo *Sanguo, msg interface{}) {
+func (n *node) onMessage(self *Node, msg interface{}) {
 	switch msg := msg.(type) {
 	case *ss.Message:
 		switch m := msg.Payload().(type) {
 		case proto.Message:
-			sanguo.dispatchMessage(msg.From(), msg.Cmd(), m)
+			self.dispatchMessage(msg.From(), msg.Cmd(), m)
 		case *rpcgo.RequestMsg:
-			sanguo.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n, sanguo: sanguo}, m)
+			self.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n, self: self}, m)
 		case *rpcgo.ResponseMsg:
-			sanguo.rpcCli.OnMessage(context.TODO(), m)
+			self.rpcCli.OnMessage(context.TODO(), m)
 		}
 	case *ss.RelayMessage:
-		n.onRelayMessage(sanguo, msg)
+		n.onRelayMessage(self, msg)
 	}
 }
 
-func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
-	codec := ss.NewCodec(sanguo.localAddr.LogicAddr())
+func (n *node) onEstablish(self *Node, conn net.Conn) {
+	codec := ss.NewCodec(self.localAddr.LogicAddr())
 	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn.(*net.TCPConn), codec),
 		netgo.AsynSocketOption{
 			Codec:    codec,
 			AutoRecv: true,
 		}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
-		if sanguo.getNodeByLogicAddr(n.addr.LogicAddr()) != n {
+		if self.getNodeByLogicAddr(n.addr.LogicAddr()) != n {
 			return ErrInvaildNode
 		} else {
-			n.onMessage(sanguo, packet)
+			n.onMessage(self, packet)
 			return nil
 		}
 	}).SetCloseCallback(func(as *netgo.AsynSocket, err error) {
@@ -399,7 +399,7 @@ func (n *node) onEstablish(sanguo *Sanguo, conn net.Conn) {
 	}
 }
 
-func (n *node) dialError(sanguo *Sanguo) {
+func (n *node) dialError(self *Node) {
 	n.Lock()
 	defer n.Unlock()
 	if nil == n.socket {
@@ -432,30 +432,30 @@ func (n *node) dialError(sanguo *Sanguo) {
 
 		if n.pendingMsg.Len() > 0 {
 			time.AfterFunc(time.Second, func() {
-				n.dial(sanguo)
+				n.dial(self)
 			})
 		}
 	}
 }
 
-func (n *node) dialOK(sanguo *Sanguo, conn net.Conn) {
+func (n *node) dialOK(self *Node, conn net.Conn) {
 	n.Lock()
 	defer n.Unlock()
 	if n.socket != nil {
 		//两段同时建立连接
 		conn.Close()
 	} else {
-		n.onEstablish(sanguo, conn)
+		n.onEstablish(self, conn)
 	}
 }
 
-func (n *node) dial(sanguo *Sanguo) {
+func (n *node) dial(self *Node) {
 	dialer := &net.Dialer{}
-	logger.Debugf("%s dial %s", sanguo.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
+	logger.Debugf("%s dial %s", self.localAddr.LogicAddr().String(), n.addr.LogicAddr().String())
 	ok := false
 	conn, err := dialer.Dial("tcp", n.addr.NetAddr().String())
 	if err == nil {
-		if err = n.login(sanguo, conn, false); err != nil {
+		if err = n.login(self, conn, false); err != nil {
 			conn.Close()
 			conn = nil
 		} else {
@@ -464,20 +464,20 @@ func (n *node) dial(sanguo *Sanguo) {
 	}
 
 	select {
-	case <-sanguo.die:
+	case <-self.die:
 		if conn != nil {
 			conn.Close()
 		}
 	default:
 		if ok {
-			n.dialOK(sanguo, conn)
+			n.dialOK(self, conn)
 		} else {
-			n.dialError(sanguo)
+			n.dialError(self)
 		}
 	}
 }
 
-func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
+func (n *node) openStream(self *Node) (*smux.Stream, error) {
 	n.streamCli.Lock()
 	defer n.streamCli.Unlock()
 	for {
@@ -495,7 +495,7 @@ func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
 			dialer := &net.Dialer{}
 			if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 				return nil, err
-			} else if err = n.login(sanguo, conn, true); err != nil {
+			} else if err = n.login(self, conn, true); err != nil {
 				conn.Close()
 				return nil, err
 			} else if session, err := smux.Client(conn, nil); err != nil {
@@ -503,7 +503,7 @@ func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
 				return nil, err
 			} else {
 				select {
-				case <-sanguo.die:
+				case <-self.die:
 					session.Close()
 					conn.Close()
 					return nil, errors.New("server die")
@@ -515,7 +515,7 @@ func (n *node) openStream(sanguo *Sanguo) (*smux.Stream, error) {
 	}
 }
 
-func (n *node) sendMessage(ctx context.Context, sanguo *Sanguo, msg interface{}, deadline time.Time) (err error) {
+func (n *node) sendMessage(ctx context.Context, self *Node, msg interface{}, deadline time.Time) (err error) {
 	n.Lock()
 	socket := n.socket
 	if socket != nil {
@@ -533,7 +533,7 @@ func (n *node) sendMessage(ctx context.Context, sanguo *Sanguo, msg interface{},
 		})
 		//尝试与对端建立连接
 		if n.pendingMsg.Len() == 1 {
-			go n.dial(sanguo)
+			go n.dial(self)
 		}
 		n.Unlock()
 	}

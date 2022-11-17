@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/clustergo/addr"
 
-	"github.com/sniperHW/sanguo/codec/pb"
+	"github.com/sniperHW/clustergo/codec/pb"
 	"github.com/stretchr/testify/assert"
 )
 

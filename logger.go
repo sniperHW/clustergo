@@ -1,4 +1,4 @@
-package sanguo
+package clustergo
 
 import (
 	"github.com/sniperHW/rpcgo"

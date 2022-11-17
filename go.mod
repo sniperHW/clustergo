@@ -1,4 +1,4 @@
-module github.com/sniperHW/sanguo
+module github.com/sniperHW/clustergo
 
 go 1.19
 

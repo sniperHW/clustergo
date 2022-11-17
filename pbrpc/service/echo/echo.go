@@ -2,8 +2,8 @@
 package echo
 
 import (
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/rpcgo"
 	"context"
 	"time"
@@ -26,14 +26,14 @@ type EchoService interface {
 }
 
 func Register(o EchoService) {
-	sanguo.RegisterRPC("echo",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
+	clustergo.RegisterRPC("echo",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
 		o.OnCall(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
 func Call(ctx context.Context, peer addr.LogicAddr,arg *Request) (*Response,error) {
 	var resp Response
-	err := sanguo.Call(ctx,peer,"echo",arg,&resp)
+	err := clustergo.Call(ctx,peer,"echo",arg,&resp)
 	return &resp,err
 }
 
@@ -51,6 +51,6 @@ func CallWithCallback(peer addr.LogicAddr,deadline time.Time,arg *Request,cb fun
 	}
 
 
-	return sanguo.CallWithCallback(peer,deadline,"echo",arg,&resp,fn) 		
+	return clustergo.CallWithCallback(peer,deadline,"echo",arg,&resp,fn) 		
 }
 

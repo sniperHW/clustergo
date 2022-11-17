@@ -1,11 +1,11 @@
 # 游戏服务端框架 
 
-sanguo是一个简单的网络游戏服务端框架。可以快速构建服务器集群内部以及服务器与客户端时间的通信。集群内部采用tcp通信。服务器客户端之间
+clustergo是一个简单的网络游戏服务端框架。可以快速构建服务器集群内部以及服务器与客户端时间的通信。集群内部采用tcp通信。服务器客户端之间
 支持tcp,websocket,kcp通信方式。
 
 服务器集群间支持两种通信模式：PRC及普通的消息传递。服务器节点使用一个逻辑地址作为标识，只要知道对端逻辑地址就可以与对端通信。集群内部通信节点会建立tcp连接，连接在首次通信请求时建立。
 
-框架同时提供了[c#版本](https://github.com/sniperHW/SanguoDotNet)，如需要在服务端运行客户端的C#逻辑，可以选择c#版本。
+框架同时提供了[c#版本](https://github.com/sniperHW/ClusterDotNet)，如需要在服务端运行客户端的C#逻辑，可以选择c#版本。
 
 
 ## 逻辑地址
@@ -14,7 +14,7 @@ sanguo是一个简单的网络游戏服务端框架。可以快速构建服务�
 
 ## rpc
 
-sanguo默认采用pbrpc
+clustergo默认采用pbrpc
 
 将协议文件添加到pbrpc/proto目录中
 
@@ -48,8 +48,8 @@ import (
 	"time"
 
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
 )
 
 type Replyer struct {
@@ -65,14 +65,14 @@ type EchoService interface {
 }
 
 func Register(o EchoService) {
-	sanguo.RegisterRPC("echo", func(ctx context.Context, r *rpcgo.Replyer, arg *Request) {
+	clustergo.RegisterRPC("echo", func(ctx context.Context, r *rpcgo.Replyer, arg *Request) {
 		o.OnCall(ctx, &Replyer{replyer: r}, arg)
 	})
 }
 
 func Call(ctx context.Context, peer addr.LogicAddr, arg *Request) (*Response, error) {
 	var resp Response
-	err := sanguo.Call(ctx, peer, "echo", arg, &resp)
+	err := clustergo.Call(ctx, peer, "echo", arg, &resp)
 	return &resp, err
 }
 
@@ -89,7 +89,7 @@ func CallWithCallback(peer addr.LogicAddr, deadline time.Time, arg *Request, cb 
 		}
 	}
 
-	return sanguo.CallWithCallback(peer, deadline, "echo", arg, &resp, fn)
+	return clustergo.CallWithCallback(peer, deadline, "echo", arg, &resp, fn)
 }
 ```
 
@@ -104,11 +104,11 @@ package main
 import (
 	"context"
 
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/example/discovery"
-	"github.com/sniperHW/sanguo/log/zap"
-	"github.com/sniperHW/sanguo/pbrpc/service/echo"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/log/zap"
+	"github.com/sniperHW/clustergo/pbrpc/service/echo"
 )
 
 //实现echo.EchoService 
@@ -116,21 +116,21 @@ type echoService struct {
 }
 
 func (e *echoService) OnCall(ctx context.Context, replyer *echo.Replyer, request *echo.Request) {
-	sanguo.Logger().Debug("echo:", request.Msg)
+	clustergo.Logger().Debug("echo:", request.Msg)
 	replyer.Reply(&echo.Response{Msg: request.Msg}, nil)
 }
 
 func main() {
 	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
-	sanguo.InitLogger(l.Sugar())
+	clustergo.InitLogger(l.Sugar())
 
 	//注册服务
 	echo.Register(&echoService{})
 
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")
-	sanguo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
 
-	sanguo.Wait()
+	clustergo.Wait()
 
 }
 
@@ -145,29 +145,29 @@ package main
 import (
 	"context"
 
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/example/discovery"
-	"github.com/sniperHW/sanguo/log/zap"
-	"github.com/sniperHW/sanguo/pbrpc/service/echo"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/log/zap"
+	"github.com/sniperHW/clustergo/pbrpc/service/echo"
 )
 
 func main() {
 	l := zap.NewZapLogger("1.2.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
-	sanguo.InitLogger(l.Sugar())
+	clustergo.InitLogger(l.Sugar())
 	localaddr, _ := addr.MakeLogicAddr("1.2.1")
-	sanguo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
 
 	//假设echo服务全部由逻辑地址type=1的节点提供，这里任意获取一个type=1的节点
-	echoAddr, _ := sanguo.GetAddrByType(1)
+	echoAddr, _ := clustergo.GetAddrByType(1)
 
 	//执行10次同步调用
 	for i := 0; i < 10; i++ {
 		resp, err := echo.Call(context.TODO(), echoAddr, &echo.Request{Msg: "hello"})
 		l.Sugar().Debug(resp, err)
 	}
-	sanguo.Stop()
-	sanguo.Wait()
+	clustergo.Stop()
+	clustergo.Wait()
 }
 
 
@@ -214,19 +214,19 @@ gameserver.go
 package main
 
 import (
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/example/discovery"
-	"github.com/sniperHW/sanguo/logger/zap"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/logger/zap"
 	"github.com/xtaci/smux"
 )
 
 func main() {
 	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
-	sanguo.InitLogger(l.Sugar())
+	clustergo.InitLogger(l.Sugar())
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")
-	sanguo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
-	sanguo.OnNewStream(func(s *smux.Stream) {
+	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	clustergo.OnNewStream(func(s *smux.Stream) {
 		//处理stream
 		go func() {
 			buff := make([]byte, 64)
@@ -243,7 +243,7 @@ func main() {
 			s.Close()
 		}()
 	})
-	sanguo.Wait()
+	clustergo.Wait()
 }
 
 
@@ -260,24 +260,24 @@ import (
 	"sync"
 
 	"github.com/sniperHW/netgo"
-	"github.com/sniperHW/sanguo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/example/discovery"
-	"github.com/sniperHW/sanguo/logger/zap"
+	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/logger/zap"
 )
 
 func main() {
 	l := zap.NewZapLogger("1.2.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
-	sanguo.InitLogger(l.Sugar())
+	clustergo.InitLogger(l.Sugar())
 	localaddr, _ := addr.MakeLogicAddr("1.2.1")
-	sanguo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
 
-	gameAddr, _ := sanguo.GetAddrByType(1)
+	gameAddr, _ := clustergo.GetAddrByType(1)
 
 	_, serve, _ := netgo.ListenTCP("tcp", "127.0.0.1:8113", func(conn *net.TCPConn) {
 		go func() {
 			//客户端连接到达，建立到1.1.1的stream
-			cliStream, err := sanguo.OpenStream(gameAddr)
+			cliStream, err := clustergo.OpenStream(gameAddr)
 			if err != nil {
 				conn.Close()
 				return
@@ -307,7 +307,7 @@ func main() {
 	})
 	go serve()
 
-	sanguo.Wait()
+	clustergo.Wait()
 }
 ```
 

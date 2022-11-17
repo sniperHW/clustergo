@@ -1,7 +1,7 @@
 package discovery
 
 import (
-	"github.com/sniperHW/sanguo/addr"
+	"github.com/sniperHW/clustergo/addr"
 )
 
 type Node struct {

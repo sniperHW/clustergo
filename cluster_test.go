@@ -1,4 +1,4 @@
-package sanguo
+package clustergo
 
 //go test -race -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/codec/pb"
+	"github.com/sniperHW/clustergo/codec/ss"
+	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/logger/zap"
 	"github.com/sniperHW/rpcgo"
-	"github.com/sniperHW/sanguo/addr"
-	"github.com/sniperHW/sanguo/codec/pb"
-	"github.com/sniperHW/sanguo/codec/ss"
-	"github.com/sniperHW/sanguo/discovery"
-	"github.com/sniperHW/sanguo/logger/zap"
 	"github.com/stretchr/testify/assert"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
@@ -87,9 +87,10 @@ func TestSingleNode(t *testing.T) {
 		Available: true,
 	})
 
-	s := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	RPCCodec = &JsonCodec{}
+
+	s := newNode()
+
 	s.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -132,9 +133,9 @@ func TestTwoNode(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	RPCCodec = &JsonCodec{}
+
+	node1 := newNode()
 	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -144,9 +145,7 @@ func TestTwoNode(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
-	node2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	node2 := newNode()
 	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -215,9 +214,9 @@ func TestHarbor(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	RPCCodec = &JsonCodec{}
+
+	node1 := newNode()
 	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -230,21 +229,15 @@ func TestHarbor(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	node2 := newNode()
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor1 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	harbor1 := newNode()
 	err = harbor1.Start(localDiscovery, harbor1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	harbor2 := newNode()
 	err = harbor2.Start(localDiscovery, harbor2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -312,9 +305,9 @@ func TestStream(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	RPCCodec = &JsonCodec{}
+
+	node1 := newNode()
 
 	node1.StartSmuxServer(func(s *smux.Stream) {
 		go func() {
@@ -328,9 +321,7 @@ func TestStream(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	node2 := newNode()
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -390,9 +381,9 @@ func TestBiDirectionDial(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	RPCCodec = &JsonCodec{}
+
+	node1 := newNode()
 
 	var wait sync.WaitGroup
 
@@ -403,9 +394,7 @@ func TestBiDirectionDial(t *testing.T) {
 		wait.Done()
 	})
 
-	node2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	node2 := newNode()
 
 	node2.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
 		logger.Debug("message from ", from.String())
@@ -461,7 +450,7 @@ func TestDefault(t *testing.T) {
 		Available: true,
 	})
 
-	SetRpcCodec(&JsonCodec{})
+	RPCCodec = &JsonCodec{}
 
 	RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
@@ -491,9 +480,7 @@ func TestDefault(t *testing.T) {
 	_, err = OpenStream(node1Addr.LogicAddr())
 	assert.Equal(t, err.Error(), "cant't open stream to self")
 
-	node2 := newSanguo(SanguoOption{
-		RPCCodec: &JsonCodec{},
-	})
+	node2 := newNode()
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
