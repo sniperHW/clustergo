@@ -48,7 +48,7 @@ func Call(ctx context.Context, peer addr.LogicAddr,arg *Request) (*Response,erro
 	return &resp,err
 }
 
-func CallWithCallback(peer addr.LogicAddr,deadline time.Time,arg *Request,cb func(*Response,error)) func() bool {
+func CallWithCallback(peer addr.LogicAddr,deadline time.Time,arg *Request,cb func(*Response,error)) (func() bool,error) {
 	var resp Response
 	var fn func(interface{}, error)
 	if cb != nil {

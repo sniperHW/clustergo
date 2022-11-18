@@ -91,6 +91,12 @@ func TestSingleNode(t *testing.T) {
 
 	s := newNode()
 
+	assert.NotNil(t, s.Stop())
+	assert.NotNil(t, s.Wait())
+	assert.NotNil(t, s.SendMessage(localAddr.LogicAddr(), &ss.Echo{
+		Msg: "hello",
+	}))
+
 	s.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})

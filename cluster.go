@@ -134,6 +134,8 @@ func (s *Node) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 	case <-s.die:
 		return nil, errors.New("server die")
 	case <-s.started:
+	default:
+		return nil, errors.New("server not start")
 	}
 
 	if peer == s.localAddr.LogicAddr() {
@@ -151,6 +153,9 @@ func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err erro
 		err = errors.New("server die")
 		return
 	case <-s.started:
+	default:
+		err = errors.New("server not start")
+		return
 	}
 
 	var num int
@@ -181,6 +186,8 @@ func (s *Node) SendMessage(to addr.LogicAddr, msg proto.Message) error {
 	case <-s.die:
 		return errors.New("server die")
 	case <-s.started:
+	default:
+		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
@@ -199,6 +206,8 @@ func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg i
 	case <-s.die:
 		return rpcgo.NewError(rpcgo.ErrOther, "server die")
 	case <-s.started:
+	default:
+		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
 		return s.rpcCli.Call(ctx, &selfChannel{self: s}, method, arg, ret)
@@ -211,12 +220,13 @@ func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg i
 	}
 }
 
-func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
+func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) (func() bool, error) {
 	select {
 	case <-s.die:
-		go cb(nil, rpcgo.NewError(rpcgo.ErrSend, "server die"))
-		return nil
+		return nil, rpcgo.NewError(rpcgo.ErrSend, "server die")
 	case <-s.started:
+	default:
+		return nil, rpcgo.NewError(rpcgo.ErrSend, "server not start")
 	}
 
 	if to == s.localAddr.LogicAddr() {
@@ -226,7 +236,7 @@ func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method st
 			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n, self: s}, deadline, method, arg, ret, cb)
 		} else {
 			go cb(nil, rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String())))
-			return nil
+			return nil, nil
 		}
 	}
 }
@@ -236,6 +246,12 @@ func (s *Node) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Messag
 }
 
 func (s *Node) Stop() error {
+	select {
+	case <-s.started:
+	default:
+		return errors.New("server not start")
+	}
+
 	once := false
 	s.stopOnce.Do(func() {
 		once = true
@@ -296,8 +312,14 @@ func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicA
 	return err
 }
 
-func (s *Node) Wait() {
+func (s *Node) Wait() error {
+	select {
+	case <-s.started:
+	default:
+		return errors.New("server not start")
+	}
 	<-s.die
+	return nil
 }
 
 func (s *Node) listenStream(session *smux.Session, onNewStream func(*smux.Stream)) {
@@ -437,8 +459,8 @@ func Stop() error {
 	return getDefault().Stop()
 }
 
-func Wait() {
-	getDefault().Wait()
+func Wait() error {
+	return getDefault().Wait()
 }
 
 func RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
@@ -457,7 +479,7 @@ func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}
 	return getDefault().Call(ctx, to, method, arg, ret)
 }
 
-func CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
+func CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) (func() bool, error) {
 	return getDefault().CallWithCallback(to, deadline, method, arg, ret, cb)
 }
 
