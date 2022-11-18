@@ -96,6 +96,7 @@ type Node struct {
 	startOnce    sync.Once
 	stopOnce     sync.Once
 	die          chan struct{}
+	started      chan struct{}
 	smuxSessions sync.Map
 	onNewStream  atomic.Value
 }
@@ -129,6 +130,12 @@ func (s *Node) StartSmuxServer(onNewStream func(*smux.Stream)) error {
 }
 
 func (s *Node) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
+	select {
+	case <-s.die:
+		return nil, errors.New("server die")
+	case <-s.started:
+	}
+
 	if peer == s.localAddr.LogicAddr() {
 		return nil, errors.New("cant't open stream to self")
 	} else if n := s.getNodeByLogicAddr(peer); n != nil {
@@ -139,6 +146,13 @@ func (s *Node) OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 }
 
 func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
+	select {
+	case <-s.die:
+		err = errors.New("server die")
+		return
+	case <-s.started:
+	}
+
 	var num int
 	if len(n) > 0 {
 		num = n[0]
@@ -162,19 +176,30 @@ func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Node) SendMessage(to addr.LogicAddr, msg proto.Message) {
+func (s *Node) SendMessage(to addr.LogicAddr, msg proto.Message) error {
+	select {
+	case <-s.die:
+		return errors.New("server die")
+	case <-s.started:
+	}
 	if to == s.localAddr.LogicAddr() {
 		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
 		} else {
-			logger.Debugf("target:%s not found", to.String())
+			return fmt.Errorf("target:%s not found", to.String())
 		}
 	}
+	return nil
 }
 
 func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
+	select {
+	case <-s.die:
+		return rpcgo.NewError(rpcgo.ErrOther, "server die")
+	case <-s.started:
+	}
 	if to == s.localAddr.LogicAddr() {
 		return s.rpcCli.Call(ctx, &selfChannel{self: s}, method, arg, ret)
 	} else {
@@ -187,6 +212,13 @@ func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg i
 }
 
 func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) func() bool {
+	select {
+	case <-s.die:
+		go cb(nil, rpcgo.NewError(rpcgo.ErrSend, "server die"))
+		return nil
+	case <-s.started:
+	}
+
 	if to == s.localAddr.LogicAddr() {
 		return s.rpcCli.CallWithCallback(&selfChannel{self: s}, deadline, method, arg, ret, cb)
 	} else {
@@ -255,6 +287,7 @@ func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicA
 			if err == nil {
 				logger.Debugf("%s serve on:%s", localAddr.String(), s.localAddr.NetAddr().String())
 				go serve()
+				close(s.started)
 			}
 		}
 	} else {
@@ -377,7 +410,8 @@ func newNode() *Node {
 		msgManager: msgManager{
 			msgHandlers: map[uint16]MsgHandler{},
 		},
-		die: make(chan struct{}),
+		die:     make(chan struct{}),
+		started: make(chan struct{}),
 	}
 }
 
