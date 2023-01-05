@@ -3,7 +3,7 @@ module github.com/sniperHW/clustergo
 go 1.19
 
 require (
-	github.com/sniperHW/netgo v0.0.0-20221027090749-a38ba3db48ad
+	github.com/sniperHW/netgo v0.0.0-20221122025345-4c522983cd70
 	github.com/sniperHW/rpcgo v0.0.0-20221118031818-c70507dbc40d
 	github.com/stretchr/testify v1.8.0
 	github.com/xtaci/smux v1.5.16

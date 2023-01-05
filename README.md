@@ -205,7 +205,7 @@ func main() {
 
 ## Stream（在单个连接上建立多个流）
 
-sanguo支持在同一cluster内的节点之间建立stream。典型的使用方式由gateway接受客户端连接，并且为每一个连接建立一个到gameserver的stream。在gameserver看来，每个stream代表一个客户端连接。
+clustergo支持在同一cluster内的节点之间建立stream。典型的使用方式由gateway接受客户端连接，并且为每一个连接建立一个到gameserver的stream。在gameserver看来，每个stream代表一个客户端连接。
 
 gameserver.go
 
@@ -313,7 +313,7 @@ func main() {
 
 ## Discovery
 
-sanguo是为游戏服务端设计的分布式框架，游戏服务通常由一个个服务节点组成，每个节点提供一组内聚的功能服务。因此sanguo只提供粗粒度的节点发现功能。
+clustergo是为游戏服务端设计的分布式框架，游戏服务通常由一个个服务节点组成，每个节点提供一组内聚的功能服务。因此clustergo只提供粗粒度的节点发现功能。
 
 Discovery更确切的说是一个配置管理服务，服务保存了所有成员的如下信息：
 
@@ -327,7 +327,7 @@ type Node struct {
 
 节点启动时，首先连接Discovery获取配置信息，之后通过配置的逻辑地址从配置中查询自身节点信息。如果找到则使用配置中的网络地址启动服务，否则启动失败。
 
-sanguo没有提供默认的Discovery服务，使用者可以使用自己熟悉的组件来实现。
+clustergo没有提供默认的Discovery服务，使用者可以使用自己熟悉的组件来实现。
 
 ### 节点发现
 
