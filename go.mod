@@ -3,11 +3,11 @@ module github.com/sniperHW/clustergo
 go 1.19
 
 require (
-	github.com/sniperHW/netgo v0.0.0-20221122025345-4c522983cd70
-	github.com/sniperHW/rpcgo v0.0.0-20221118031818-c70507dbc40d
+	github.com/sniperHW/netgo v0.0.0-20230107025550-0ab3b396e8ee
+	github.com/sniperHW/rpcgo v0.0.0-20230110032046-7ea60f243398
 	github.com/stretchr/testify v1.8.0
-	github.com/xtaci/smux v1.5.16
-	go.uber.org/zap v1.23.0
+	github.com/xtaci/smux v1.5.17
+	go.uber.org/zap v1.24.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
