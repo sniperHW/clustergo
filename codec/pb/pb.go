@@ -99,17 +99,16 @@ func Marshal(namespace string, o interface{}) ([]byte, uint32, error) {
 	return data, id, nil
 }
 
-func Unmarshal(namespace string, id uint32, buff []byte) (proto.Message, error) {
-	var msg proto.Message
-	var err error
-
+func Unmarshal(namespace string, id uint32, buff []byte) (msg proto.Message, err error) {
 	if msg, err = newMessage(namespace, id); err != nil {
-		return nil, err
+		return
 	}
 
-	if err = proto.Unmarshal(buff, msg); err != nil {
-		return nil, err
+	if len(buff) > 0 {
+		if err = proto.Unmarshal(buff, msg); err != nil {
+			return
+		}
 	}
 
-	return msg, nil
+	return
 }
