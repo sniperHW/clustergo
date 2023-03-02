@@ -482,13 +482,13 @@ func (n *node) openStream(self *Node) (*smux.Stream, error) {
 	for {
 		if n.streamCli.session != nil {
 			if stream, err := n.streamCli.session.OpenStream(); err == nil {
-				return stream, err
+				return stream, nil
 			} else if err == smux.ErrGoAway {
+				//stream id overflows, should start a new connection
 				return nil, err
 			} else {
 				n.streamCli.session.Close()
 				n.streamCli.session = nil
-				return nil, err
 			}
 		} else {
 			dialer := &net.Dialer{}
