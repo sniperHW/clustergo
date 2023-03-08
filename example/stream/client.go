@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/clustergo/example/stream/pb"
+	"github.com/sniperHW/netgo"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -105,7 +105,7 @@ func main() {
 	codec := &PBCodec{buff: make([]byte, 4096)}
 
 	for {
-		if conn, err := dialer.Dial("tcp", "127.0.0.1:8113"); nil != err {
+		if conn, err := dialer.Dial("tcp", "127.0.0.1:18113"); nil != err {
 			time.Sleep(time.Second)
 		} else {
 			s = netgo.NewTcpSocket(conn.(*net.TCPConn), codec)

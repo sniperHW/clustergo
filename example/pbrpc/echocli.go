@@ -14,7 +14,7 @@ func main() {
 	l := zap.NewZapLogger("1.2.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	clustergo.InitLogger(l.Sugar())
 	localaddr, _ := addr.MakeLogicAddr("1.2.1")
-	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	clustergo.Start(discovery.NewClient("127.0.0.1:18110"), localaddr)
 
 	echoAddr, _ := clustergo.GetAddrByType(1)
 

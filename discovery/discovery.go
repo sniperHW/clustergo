@@ -10,9 +10,15 @@ type Node struct {
 	Available bool //是否可用,
 }
 
+type DiscoveryInfo struct {
+	Add    []Node
+	Remove []Node
+	Update []Node
+}
+
 type Discovery interface {
 	//获取节点信息
 	//LoadNodeInfo() ([]Node, error)
 	//订阅变更
-	Subscribe(func([]Node)) error
+	Subscribe(func(DiscoveryInfo)) error
 }

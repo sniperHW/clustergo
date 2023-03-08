@@ -278,7 +278,7 @@ func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicA
 	if once {
 		s.nodeCache.localAddr = localAddr
 
-		if err = discoveryService.Subscribe(func(nodeinfo []discovery.Node) {
+		if err = discoveryService.Subscribe(func(nodeinfo discovery.DiscoveryInfo) {
 			s.nodeCache.onNodeInfoUpdate(s, nodeinfo)
 		}); err != nil {
 			return err

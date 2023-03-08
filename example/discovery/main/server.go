@@ -22,6 +22,6 @@ func main() {
 
 	svr := discovery.NewServer()
 
-	svr.Start("127.0.0.1:8110", config)
+	svr.Start("127.0.0.1:18110", config)
 
 }

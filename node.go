@@ -10,7 +10,6 @@ import (
 	"io"
 	"math/rand"
 	"net"
-	"sort"
 	"sync"
 	"time"
 
@@ -87,108 +86,23 @@ func (cache *nodeCache) removeHarbor(harbor *node) {
 	}
 }
 
-func (cache *nodeCache) onNodeInfoUpdate(self *Node, nodeinfo []discovery.Node) {
+func (cache *nodeCache) onNodeInfoUpdate(self *Node, nodeinfo discovery.DiscoveryInfo) {
 
 	defer cache.initOnce.Do(func() {
 		logger.Debug("init ok")
 		close(cache.initC)
 	})
 
-	updates := []discovery.Node{}
-
-	for _, v := range nodeinfo {
-		if v.Export || v.Addr.LogicAddr().Cluster() == cache.localAddr.Cluster() {
-			//Export节点与自身cluster相同的节点才需要处理
-			updates = append(updates, v)
-		} else if cache.localAddr.Type() == addr.HarbarType && v.Addr.LogicAddr().Type() == addr.HarbarType {
-			//当前节点是harbor,则不同cluster的harbor节点也需要处理
-			updates = append(updates, v)
-		}
-	}
-
 	cache.Lock()
 	defer cache.Unlock()
 
-	locals := []*node{}
-	for _, v := range cache.allnodes {
-		locals = append(locals, v)
-	}
-
-	sort.Slice(locals, func(l int, r int) bool {
-		return locals[l].addr.LogicAddr() < locals[r].addr.LogicAddr()
-	})
-
-	sort.Slice(updates, func(l int, r int) bool {
-		return updates[l].Addr.LogicAddr() < updates[r].Addr.LogicAddr()
-	})
-
-	i := 0
-	j := 0
-
-	for i < len(updates) && j < len(locals) {
-		nodej := locals[j]
-		nodei := updates[i]
-
-		if nodei.Addr.LogicAddr() == nodej.addr.LogicAddr() {
-			if nodei.Addr.NetAddr().String() != nodej.addr.NetAddr().String() {
-				//网络地址发生变更
-				if nodej.addr.LogicAddr() == cache.localAddr {
-					go self.Stop()
-					return
-				} else {
-					nodej.closeSocket()
-					nodej.addr.UpdateNetAddr(nodei.Addr.NetAddr())
-				}
-			}
-
-			if nodei.Available {
-				if !nodej.available {
-					nodej.available = true
-					if nodej.addr.LogicAddr().Type() != addr.HarbarType {
-						cache.addNode(nodej)
-					} else {
-						cache.addHarbor(nodej)
-					}
-				}
-			} else {
-				if nodej.available {
-					nodej.available = false
-					if nodej.addr.LogicAddr().Type() != addr.HarbarType {
-						cache.removeNode(nodej)
-					} else {
-						cache.removeHarbor(nodej)
-					}
-				}
-			}
-			i++
-			j++
-		} else if nodei.Addr.LogicAddr() > nodej.addr.LogicAddr() {
-			//local  1 2 3 4 5 6
-			//update 1 2 4 5 6
-			//移除节点
-			if nodej.addr.LogicAddr() == cache.localAddr {
-				go self.Stop()
-				return
-			} else {
-				delete(cache.allnodes, nodej.addr.LogicAddr())
-				if nodej.available {
-					if nodej.addr.LogicAddr().Type() != addr.HarbarType {
-						cache.removeNode(nodej)
-					} else {
-						cache.removeHarbor(nodej)
-					}
-				}
-				nodej.closeSocket()
-			}
-			j++
-		} else {
-			//local  1 2 4 5 6
-			//update 1 2 3 4 5 6
-			//添加节点
+	for _, v := range nodeinfo.Add {
+		if v.Export || v.Addr.LogicAddr().Cluster() == cache.localAddr.Cluster() ||
+			(cache.localAddr.Type() == addr.HarbarType && v.Addr.LogicAddr().Type() == addr.HarbarType) {
 			n := &node{
-				addr:       nodei.Addr,
+				addr:       v.Addr,
 				pendingMsg: list.New(),
-				available:  nodei.Available,
+				available:  v.Available,
 			}
 			cache.allnodes[n.addr.LogicAddr()] = n
 			if n.available {
@@ -198,41 +112,65 @@ func (cache *nodeCache) onNodeInfoUpdate(self *Node, nodeinfo []discovery.Node) 
 					cache.addHarbor(n)
 				}
 			}
-			i++
 		}
 	}
 
-	for _, v := range updates[i:] {
-		n := &node{
-			addr:       v.Addr,
-			pendingMsg: list.New(),
-			available:  v.Available,
-		}
-		cache.allnodes[n.addr.LogicAddr()] = n
-		if n.available {
-			if n.addr.LogicAddr().Type() != addr.HarbarType {
-				cache.addNode(n)
+	for _, v := range nodeinfo.Remove {
+		if v.Export || v.Addr.LogicAddr().Cluster() == cache.localAddr.Cluster() ||
+			(cache.localAddr.Type() == addr.HarbarType && v.Addr.LogicAddr().Type() == addr.HarbarType) {
+			if v.Addr.LogicAddr() == cache.localAddr {
+				go self.Stop()
+				return
 			} else {
-				cache.addHarbor(n)
+				n := cache.allnodes[v.Addr.LogicAddr()]
+				delete(cache.allnodes, n.addr.LogicAddr())
+				if n.available {
+					if n.addr.LogicAddr().Type() != addr.HarbarType {
+						cache.removeNode(n)
+					} else {
+						cache.removeHarbor(n)
+					}
+				}
+				n.closeSocket()
 			}
 		}
 	}
 
-	for _, v := range locals[j:] {
-		//移除节点
-		if v.addr.LogicAddr() == cache.localAddr {
-			go self.Stop()
-			return
-		} else {
-			delete(cache.allnodes, v.addr.LogicAddr())
-			if v.available {
-				if v.addr.LogicAddr().Type() != addr.HarbarType {
-					cache.removeNode(v)
+	for _, v := range nodeinfo.Update {
+		if v.Export || v.Addr.LogicAddr().Cluster() == cache.localAddr.Cluster() ||
+			(cache.localAddr.Type() == addr.HarbarType && v.Addr.LogicAddr().Type() == addr.HarbarType) {
+			n := cache.allnodes[v.Addr.LogicAddr()]
+
+			if v.Addr.NetAddr().String() != n.addr.NetAddr().String() {
+				//网络地址发生变更
+				if n.addr.LogicAddr() == cache.localAddr {
+					go self.Stop()
+					return
 				} else {
-					cache.removeHarbor(v)
+					n.closeSocket()
+					n.addr.UpdateNetAddr(v.Addr.NetAddr())
 				}
 			}
-			v.closeSocket()
+
+			if v.Available {
+				if !n.available {
+					n.available = true
+					if n.addr.LogicAddr().Type() != addr.HarbarType {
+						cache.addNode(n)
+					} else {
+						cache.addHarbor(n)
+					}
+				}
+			} else {
+				if n.available {
+					n.available = false
+					if n.addr.LogicAddr().Type() != addr.HarbarType {
+						cache.removeNode(n)
+					} else {
+						cache.removeHarbor(n)
+					}
+				}
+			}
 		}
 	}
 }

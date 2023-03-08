@@ -25,7 +25,7 @@ func main() {
 	echo.Register(&echoService{})
 
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")
-	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
+	clustergo.Start(discovery.NewClient("127.0.0.1:18110"), localaddr)
 
 	clustergo.Wait()
 

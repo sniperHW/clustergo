@@ -6,15 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
 	"log"
 
-	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/buffer"
 	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/netgo"
 )
 
 type Node struct {
@@ -272,6 +273,7 @@ func (svr *discoverySvr) Start(service string, config []*Node) error {
 
 type discoverCli struct {
 	svrService string
+	nodes      []discovery.Node
 }
 
 func NewClient(svr string) *discoverCli {
@@ -281,7 +283,7 @@ func NewClient(svr string) *discoverCli {
 }
 
 // 订阅变更
-func (c *discoverCli) Subscribe(updateCB func([]discovery.Node)) error {
+func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 	dialer := &net.Dialer{}
 	for {
 		if conn, err := dialer.Dial("tcp", c.svrService); err == nil {
@@ -297,18 +299,60 @@ func (c *discoverCli) Subscribe(updateCB func([]discovery.Node)) error {
 				//log.Println("socket close")
 				go c.Subscribe(updateCB)
 			}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
-				nodes := []discovery.Node{}
+				locals := c.nodes
+				updates := []discovery.Node{}
 				for _, v := range packet.(*NodeInfo).Nodes {
 					if address, err := addr.MakeAddr(v.LogicAddr, v.NetAddr); err == nil {
-						nodes = append(nodes, discovery.Node{
+						updates = append(updates, discovery.Node{
 							Export:    v.Export,
 							Available: v.Available,
 							Addr:      address,
 						})
 					}
 				}
+
+				sort.Slice(updates, func(l int, r int) bool {
+					return updates[l].Addr.LogicAddr() < updates[r].Addr.LogicAddr()
+				})
+
+				var nodeInfo discovery.DiscoveryInfo
+
+				i := 0
+				j := 0
+
+				for i < len(updates) && j < len(locals) {
+					nodej := locals[j]
+					nodei := updates[i]
+
+					if nodei.Addr.LogicAddr() == nodej.Addr.LogicAddr() {
+						if nodei.Addr.NetAddr().String() != nodej.Addr.NetAddr().String() ||
+							nodei.Available != nodej.Available {
+							nodeInfo.Update = append(nodeInfo.Update, nodei)
+						}
+						i++
+						j++
+					} else if nodei.Addr.LogicAddr() > nodej.Addr.LogicAddr() {
+						//local  1 2 3 4 5 6
+						//update 1 2 4 5 6
+						//移除节点
+						nodeInfo.Remove = append(nodeInfo.Remove, nodej)
+						j++
+					} else {
+						//local  1 2 4 5 6
+						//update 1 2 3 4 5 6
+						//添加节点
+						nodeInfo.Add = append(nodeInfo.Add, nodei)
+						i++
+					}
+				}
+
+				nodeInfo.Add = append(nodeInfo.Add, updates[i:]...)
+
+				nodeInfo.Remove = append(nodeInfo.Remove, locals[j:]...)
+
+				c.nodes = updates
 				//log.Println("cli on packet", packet.(*NodeInfo).Nodes)
-				updateCB(nodes)
+				updateCB(nodeInfo)
 				return nil
 			}).Recv()
 			as.Send(&Subscribe{})
