@@ -71,14 +71,14 @@ func (etcd *Discovery) subscribe(cb func(discovery.DiscoveryInfo)) {
 				}
 				cb(nodeinfo)
 
-				watchCh := cli.Watch(context.Background(), etcd.Prefix, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.GetRevision()))
+				watchCh := cli.Watch(context.Background(), etcd.Prefix, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.GetRevision()+1))
 
 				for v := range watchCh {
 					if v.Canceled {
 						break
 					}
-					var nodeinfo discovery.DiscoveryInfo
 					for _, e := range v.Events {
+						var nodeinfo discovery.DiscoveryInfo
 						key := etcd.fetchLogicAddr(string(e.Kv.Key))
 						switch e.Type {
 						case clientv3.EventTypePut:
@@ -90,13 +90,13 @@ func (etcd *Discovery) subscribe(cb func(discovery.DiscoveryInfo)) {
 										Available: n.Available,
 										Export:    n.Export,
 									}
-
 									if _, ok := etcd.local[key]; ok {
 										nodeinfo.Update = append(nodeinfo.Update, nn)
 									} else {
 										nodeinfo.Add = append(nodeinfo.Add, nn)
 									}
 									etcd.local[key] = nn
+									cb(nodeinfo)
 								} else {
 									etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
 								}
@@ -107,10 +107,10 @@ func (etcd *Discovery) subscribe(cb func(discovery.DiscoveryInfo)) {
 							if n, ok := etcd.local[key]; ok {
 								delete(etcd.local, key)
 								nodeinfo.Remove = append(nodeinfo.Remove, n)
+								cb(nodeinfo)
 							}
 						}
 					}
-					cb(nodeinfo)
 				}
 				cli.Close()
 			}

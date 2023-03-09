@@ -20,7 +20,9 @@ func main() {
 	}
 
 	discoveryCli.Subscribe(func(di discovery.DiscoveryInfo) {
-		fmt.Println(di)
+		fmt.Println("add", di.Add)
+		fmt.Println("update", di.Update)
+		fmt.Println("remove", di.Remove)
 	})
 
 	ch := make(chan struct{})
