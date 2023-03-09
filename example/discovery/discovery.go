@@ -60,7 +60,6 @@ type codec struct {
 }
 
 func (cc *codec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
-	//log.Println("Encode", o)
 	if buff, err := json.Marshal(o); err != nil {
 		log.Println("json.Marshal error:", err)
 		return buffs, 0
@@ -82,10 +81,6 @@ func (cc *codec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			log.Println("invaild packet")
 			return buffs, 0
 		}
-		//log.Println(b, buff, len(b)+len(buff))
-		//buffs = append(buffs, b, buff)
-		//log.Println(buffs)
-		//return buffs, len(b) + len(buff)
 		return append(buffs, b, buff), len(b) + len(buff)
 	}
 }
@@ -287,7 +282,6 @@ func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 	dialer := &net.Dialer{}
 	for {
 		if conn, err := dialer.Dial("tcp", c.svrService); err == nil {
-			//log.Println("dial discover ok")
 			cc := &codec{
 				buff: make([]byte, 65535),
 			}
@@ -296,7 +290,6 @@ func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 					Codec:    cc,
 					AutoRecv: true,
 				}).SetCloseCallback(func(_ *netgo.AsynSocket, _ error) {
-				//log.Println("socket close")
 				go c.Subscribe(updateCB)
 			}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
 				locals := c.nodes
@@ -351,14 +344,12 @@ func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 				nodeInfo.Remove = append(nodeInfo.Remove, locals[j:]...)
 
 				c.nodes = updates
-				//log.Println("cli on packet", packet.(*NodeInfo).Nodes)
 				updateCB(nodeInfo)
 				return nil
 			}).Recv()
 			as.Send(&Subscribe{})
 			return nil
 		} else {
-			//log.Println("dial failed", err)
 			time.Sleep(time.Second)
 		}
 	}

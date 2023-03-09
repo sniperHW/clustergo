@@ -17,8 +17,6 @@ type DiscoveryInfo struct {
 }
 
 type Discovery interface {
-	//获取节点信息
-	//LoadNodeInfo() ([]Node, error)
 	//订阅变更
 	Subscribe(func(DiscoveryInfo)) error
 }
