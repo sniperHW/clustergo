@@ -19,4 +19,5 @@ type DiscoveryInfo struct {
 type Discovery interface {
 	//订阅变更
 	Subscribe(func(DiscoveryInfo)) error
+	Close()
 }

@@ -1,10 +1,10 @@
 package ss
 
 import (
-	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec"
 	"github.com/sniperHW/clustergo/codec/buffer"
+	"github.com/sniperHW/rpcgo"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,7 +22,9 @@ const (
 	RpcReq          = 0x10 //RPC请求
 	RpcResp         = 0x18 //RPC响应
 	MaskMessageType = 0x38
-	//Compress        = 0x80
+)
+
+var (
 	MaxPacketSize = 1024 * 4
 )
 

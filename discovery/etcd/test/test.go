@@ -12,7 +12,10 @@ import (
 func main() {
 
 	discoveryCli := etcd.Discovery{
-		Prefix: "/test/",
+		PrefixConfig: "/test/",
+		PrefixAlive:  "/alive/",
+		LogicAddr:    "1.1.1",
+		TTL:          time.Second * 10,
 		Cfg: clientv3.Config{
 			Endpoints:   []string{"localhost:2379"},
 			DialTimeout: time.Second * 5,

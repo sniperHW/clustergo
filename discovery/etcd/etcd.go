@@ -3,7 +3,10 @@ package etcd
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,108 +24,310 @@ type Node struct {
 }
 
 type Discovery struct {
-	local  map[string]discovery.Node
-	once   sync.Once
-	Cfg    clientv3.Config
-	Prefix string
-	Logger clustergo.Logger
+	sync.Mutex
+	configuration  map[string]discovery.Node //配置中的节点
+	alive          map[string]struct{}       //活动节点
+	once           sync.Once
+	Cfg            clientv3.Config
+	PrefixConfig   string
+	PrefixAlive    string
+	LogicAddr      string
+	Logger         clustergo.Logger
+	TTL            time.Duration
+	rversionConfig int64
+	rversionAlive  int64
+	cb             func(discovery.DiscoveryInfo)
+	leaseID        clientv3.LeaseID
+	watchConfig    clientv3.WatchChan
+	watchAlive     clientv3.WatchChan
+	leaseCh        <-chan *clientv3.LeaseKeepAliveResponse
+	closeFunc      context.CancelFunc
+	closed         bool
 }
 
-func (ectd Discovery) fetchLogicAddr(str string) string {
-	if len(str) <= len(ectd.Prefix) {
-		return ""
+func (ectd *Discovery) fetchLogicAddr(str string) string {
+	v := strings.Split(str, "/")
+	if len(v) > 0 {
+		return v[len(v)-1]
 	} else {
-		return str[len(ectd.Prefix):]
+		return ""
 	}
 }
 
-func (etcd *Discovery) subscribe(cb func(discovery.DiscoveryInfo)) {
-	for {
-		cli, err := clientv3.New(etcd.Cfg)
-		if err != nil {
-			etcd.errorf("clientv3.New() error:%v", err)
-			time.Sleep(time.Millisecond * 100)
-		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			resp, err := cli.Get(ctx, etcd.Prefix, clientv3.WithPrefix())
-			cancel()
-			if err != nil {
-				cli.Close()
-				etcd.errorf("cli.Get() error:%v", err)
+func (etcd *Discovery) fetchConfiguration(ctx context.Context, cli *clientv3.Client) error {
+	etcd.configuration = map[string]discovery.Node{}
+	resp, err := cli.Get(ctx, etcd.PrefixConfig, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+
+	for _, v := range resp.Kvs {
+		var n Node
+		if err := json.Unmarshal(v.Value, &n); err == nil && n.LogicAddr == etcd.fetchLogicAddr(string(v.Key)) {
+			if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
+				nn := discovery.Node{
+					Addr:      address,
+					Available: n.Available,
+					Export:    n.Export,
+				}
+				etcd.configuration[nn.Addr.LogicAddr().String()] = nn
 			} else {
+				etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
+			}
+		} else if err != nil {
+			etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(v.Key), string(v.Value))
+		}
+	}
+
+	etcd.rversionConfig = resp.Header.GetRevision()
+	return nil
+}
+
+func (etcd *Discovery) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
+	etcd.alive = map[string]struct{}{}
+	resp, err := cli.Get(ctx, etcd.PrefixAlive, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+
+	for _, v := range resp.Kvs {
+		key := etcd.fetchLogicAddr(string(v.Key))
+		etcd.alive[key] = struct{}{}
+		if key == etcd.LogicAddr {
+			etcd.leaseID = clientv3.LeaseID(v.Lease)
+		}
+	}
+
+	etcd.rversionAlive = resp.Header.GetRevision()
+
+	return nil
+}
+
+func (etcd *Discovery) watch(ctx context.Context, cli *clientv3.Client) (err error) {
+
+	if etcd.leaseCh == nil {
+		etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
+		if err != nil {
+			return err
+		}
+	}
+
+	if etcd.watchConfig == nil {
+		etcd.watchConfig = cli.Watch(ctx, etcd.PrefixConfig, clientv3.WithPrefix(), clientv3.WithRev(etcd.rversionConfig+1))
+	}
+
+	if etcd.watchAlive == nil {
+		etcd.watchAlive = cli.Watch(ctx, etcd.PrefixAlive, clientv3.WithPrefix(), clientv3.WithRev(etcd.rversionAlive+1))
+	}
+
+	for {
+		select {
+		case _, ok := <-etcd.leaseCh:
+			if !ok {
+				if respLeaseGrant, err := cli.Lease.Grant(ctx, int64(etcd.TTL/time.Second)); err != nil {
+					return err
+				} else {
+					etcd.leaseID = respLeaseGrant.ID
+					_, err = cli.Put(ctx, fmt.Sprintf("%s%s", etcd.PrefixAlive, etcd.LogicAddr), fmt.Sprintf("%x", respLeaseGrant.ID), clientv3.WithLease(respLeaseGrant.ID))
+					if err != nil {
+						return err
+					}
+					etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		case v := <-etcd.watchConfig:
+			if v.Canceled {
+				etcd.watchConfig = nil
+				return v.Err()
+			}
+			etcd.rversionConfig = v.Header.GetRevision()
+			for _, e := range v.Events {
 				var nodeinfo discovery.DiscoveryInfo
-				for _, v := range resp.Kvs {
+				key := etcd.fetchLogicAddr(string(e.Kv.Key))
+				switch e.Type {
+				case clientv3.EventTypePut:
 					var n Node
-					if err := json.Unmarshal(v.Value, &n); err == nil && n.LogicAddr == etcd.fetchLogicAddr(string(v.Key)) {
+					if err := json.Unmarshal(e.Kv.Value, &n); err == nil && n.LogicAddr == key {
 						if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
 							nn := discovery.Node{
-								Addr:      address,
-								Available: n.Available,
-								Export:    n.Export,
+								Addr:   address,
+								Export: n.Export,
 							}
-							etcd.local[nn.Addr.LogicAddr().String()] = nn
-							nodeinfo.Add = append(nodeinfo.Add, nn)
+
+							if _, ok := etcd.alive[key]; ok && n.Available {
+								nn.Available = true
+							}
+
+							if _, ok := etcd.configuration[key]; ok {
+								nodeinfo.Update = append(nodeinfo.Update, nn)
+							} else {
+								nodeinfo.Add = append(nodeinfo.Add, nn)
+							}
+
+							etcd.configuration[key] = nn
+
+							etcd.cb(nodeinfo)
 						} else {
 							etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
 						}
 					} else if err != nil {
-						etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(v.Key), string(v.Value))
+						etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(e.Kv.Key), string(e.Kv.Value))
+					}
+				case clientv3.EventTypeDelete:
+					if n, ok := etcd.configuration[key]; ok {
+						delete(etcd.configuration, key)
+						nodeinfo.Remove = append(nodeinfo.Remove, n)
+						etcd.cb(nodeinfo)
 					}
 				}
-				cb(nodeinfo)
-
-				watchCh := cli.Watch(context.Background(), etcd.Prefix, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.GetRevision()+1))
-
-				for v := range watchCh {
-					if v.Canceled {
-						break
+			}
+		case v := <-etcd.watchAlive:
+			if v.Canceled {
+				etcd.watchAlive = nil
+				return v.Err()
+			}
+			etcd.rversionAlive = v.Header.GetRevision()
+			for _, e := range v.Events {
+				var nodeinfo discovery.DiscoveryInfo
+				key := etcd.fetchLogicAddr(string(e.Kv.Key))
+				switch e.Type {
+				case clientv3.EventTypePut:
+					etcd.alive[key] = struct{}{}
+					if n, ok := etcd.configuration[key]; ok && n.Available {
+						nodeinfo.Update = append(nodeinfo.Update, n)
+						etcd.cb(nodeinfo)
 					}
-					for _, e := range v.Events {
-						var nodeinfo discovery.DiscoveryInfo
-						key := etcd.fetchLogicAddr(string(e.Kv.Key))
-						switch e.Type {
-						case clientv3.EventTypePut:
-							var n Node
-							if err := json.Unmarshal(e.Kv.Value, &n); err == nil && n.LogicAddr == key {
-								if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
-									nn := discovery.Node{
-										Addr:      address,
-										Available: n.Available,
-										Export:    n.Export,
-									}
-									if _, ok := etcd.local[key]; ok {
-										nodeinfo.Update = append(nodeinfo.Update, nn)
-									} else {
-										nodeinfo.Add = append(nodeinfo.Add, nn)
-									}
-									etcd.local[key] = nn
-									cb(nodeinfo)
-								} else {
-									etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
-								}
-							} else if err != nil {
-								etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(e.Kv.Key), string(e.Kv.Value))
-							}
-						case clientv3.EventTypeDelete:
-							if n, ok := etcd.local[key]; ok {
-								delete(etcd.local, key)
-								nodeinfo.Remove = append(nodeinfo.Remove, n)
-								cb(nodeinfo)
-							}
-						}
+				case clientv3.EventTypeDelete:
+					delete(etcd.alive, key)
+					if n, ok := etcd.configuration[key]; ok {
+						n.Available = false
+						nodeinfo.Update = append(nodeinfo.Update, n)
+						etcd.cb(nodeinfo)
 					}
 				}
-				cli.Close()
 			}
 		}
 	}
 }
 
+func (etcd *Discovery) subscribe(ctx context.Context, cli *clientv3.Client) {
+	var err error
+	if etcd.leaseID == 0 {
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
+		//获取配置
+		if err = etcd.fetchConfiguration(ctxWithTimeout, cli); err != nil {
+			cancel()
+			etcd.errorf("fetchConfiguration() error:%v", err)
+			return
+		}
+
+		//获取alive信息
+		if err = etcd.fetchAlive(ctxWithTimeout, cli); err != nil {
+			cancel()
+			etcd.errorf("fetchAlive() error:%v", err)
+			return
+		}
+
+		if etcd.leaseID == 0 {
+			//创建lease
+			if respLeaseGrant, err := cli.Lease.Grant(ctxWithTimeout, int64(etcd.TTL/time.Second)); err != nil {
+				cancel()
+				etcd.errorf("Lease.Grant() error:%v", err)
+				return
+			} else {
+				etcd.leaseID = respLeaseGrant.ID
+				_, err = cli.Put(ctxWithTimeout, fmt.Sprintf("%s%s", etcd.PrefixAlive, etcd.LogicAddr), fmt.Sprintf("%x", etcd.leaseID), clientv3.WithLease(etcd.leaseID))
+				if err != nil {
+					cancel()
+					etcd.errorf("alive put error:%v", err)
+					return
+				}
+			}
+		}
+		cancel()
+
+		var nodeinfo discovery.DiscoveryInfo
+		for k, v := range etcd.configuration {
+			if _, ok := etcd.alive[k]; ok && v.Available {
+				v.Available = true
+			} else {
+				v.Available = false
+			}
+			nodeinfo.Add = append(nodeinfo.Add, v)
+		}
+
+		etcd.cb(nodeinfo)
+	}
+
+	if err = etcd.watch(ctx, cli); err != nil {
+		etcd.errorf("watch err:%v", err)
+	} else {
+		log.Println("watch break with no error")
+	}
+}
+
+func (etcd *Discovery) Close() {
+	etcd.Lock()
+	defer etcd.Unlock()
+	if etcd.closed {
+		return
+	} else {
+		etcd.closed = true
+		if etcd.closeFunc != nil {
+			etcd.closeFunc()
+		}
+	}
+}
+
 func (etcd *Discovery) Subscribe(cb func(discovery.DiscoveryInfo)) error {
+
+	once := false
+
 	etcd.once.Do(func() {
-		etcd.local = map[string]discovery.Node{}
-		go etcd.subscribe(cb)
+		once = true
 	})
+
+	if once {
+		etcd.Lock()
+		defer etcd.Unlock()
+		if etcd.closed {
+			return errors.New("closed")
+		}
+
+		etcd.cb = cb
+		if etcd.TTL == 0 {
+			etcd.TTL = time.Second * 10
+		}
+
+		cli, err := clientv3.New(etcd.Cfg)
+		if err != nil {
+			etcd.errorf("clientv3.New() error:%v", err)
+			return err
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		etcd.closeFunc = cancel
+
+		done := ctx.Done()
+
+		go func() {
+			for {
+				etcd.subscribe(ctx, cli)
+				select {
+				case <-done:
+					cli.Close()
+					return
+				default:
+					time.Sleep(time.Millisecond * 100)
+				}
+			}
+		}()
+	}
+
 	return nil
 }
 

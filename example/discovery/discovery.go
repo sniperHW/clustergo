@@ -277,6 +277,10 @@ func NewClient(svr string) *discoverCli {
 	}
 }
 
+func (c *discoverCli) Close() {
+
+}
+
 // 订阅变更
 func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 	dialer := &net.Dialer{}
