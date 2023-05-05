@@ -52,8 +52,7 @@ func (ss *LengthPayloadPacketReceiver) Recv(readable netgo.ReadAble, deadline ti
 					buff := make([]byte, totalSize)
 					copy(buff, ss.Buff[ss.r:ss.w])
 					ss.Buff = buff
-				} else {
-					//空间足够容纳下一个包，
+				} else if ss.r > 0 {
 					copy(ss.Buff, ss.Buff[ss.r:ss.w])
 				}
 				ss.w = ss.w - ss.r
