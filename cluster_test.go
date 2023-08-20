@@ -76,6 +76,10 @@ func (d *localDiscovery) ModifyNode(modify *discovery.Node) {
 	}
 }
 
+func (d *localDiscovery) Close() {
+
+}
+
 func init() {
 	pb.Register(ss.Namespace, &ss.Echo{}, 1)
 	l := zap.NewZapLogger("sanguo_test.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
@@ -94,9 +98,7 @@ func TestSingleNode(t *testing.T) {
 		Available: true,
 	})
 
-	RPCCodec = &JsonCodec{}
-
-	s := newNode()
+	s := newNode(JsonCodec{})
 
 	assert.NotNil(t, s.Stop())
 	assert.NotNil(t, s.Wait())
@@ -146,9 +148,7 @@ func TestTwoNode(t *testing.T) {
 		Available: true,
 	})
 
-	RPCCodec = &JsonCodec{}
-
-	node1 := newNode()
+	node1 := newNode(JsonCodec{})
 	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -158,7 +158,7 @@ func TestTwoNode(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
-	node2 := newNode()
+	node2 := newNode(JsonCodec{})
 	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -227,9 +227,7 @@ func TestHarbor(t *testing.T) {
 		Available: true,
 	})
 
-	RPCCodec = &JsonCodec{}
-
-	node1 := newNode()
+	node1 := newNode(&JsonCodec{})
 	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -242,15 +240,15 @@ func TestHarbor(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := newNode()
+	node2 := newNode(JsonCodec{})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor1 := newNode()
+	harbor1 := newNode(JsonCodec{})
 	err = harbor1.Start(localDiscovery, harbor1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor2 := newNode()
+	harbor2 := newNode(JsonCodec{})
 	err = harbor2.Start(localDiscovery, harbor2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -318,9 +316,7 @@ func TestStream(t *testing.T) {
 		Available: true,
 	})
 
-	RPCCodec = &JsonCodec{}
-
-	node1 := newNode()
+	node1 := newNode(JsonCodec{})
 
 	node1.StartSmuxServer(func(s *smux.Stream) {
 		go func() {
@@ -334,7 +330,7 @@ func TestStream(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := newNode()
+	node2 := newNode(JsonCodec{})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -394,9 +390,7 @@ func TestBiDirectionDial(t *testing.T) {
 		Available: true,
 	})
 
-	RPCCodec = &JsonCodec{}
-
-	node1 := newNode()
+	node1 := newNode(JsonCodec{})
 
 	var wait sync.WaitGroup
 
@@ -407,7 +401,7 @@ func TestBiDirectionDial(t *testing.T) {
 		wait.Done()
 	})
 
-	node2 := newNode()
+	node2 := newNode(JsonCodec{})
 
 	node2.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
 		logger.Debug("message from ", from.String())
@@ -446,6 +440,9 @@ func TestBiDirectionDial(t *testing.T) {
 }
 
 func TestDefault(t *testing.T) {
+
+	RPCCodec = JsonCodec{}
+
 	localDiscovery := &localDiscovery{
 		nodes: map[addr.LogicAddr]*discovery.Node{},
 	}
@@ -462,8 +459,6 @@ func TestDefault(t *testing.T) {
 		Addr:      node2Addr,
 		Available: true,
 	})
-
-	RPCCodec = &JsonCodec{}
 
 	RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
@@ -493,7 +488,7 @@ func TestDefault(t *testing.T) {
 	_, err = OpenStream(node1Addr.LogicAddr())
 	assert.Equal(t, err.Error(), "cant't open stream to self")
 
-	node2 := newNode()
+	node2 := newNode(JsonCodec{})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 

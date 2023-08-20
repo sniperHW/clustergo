@@ -88,21 +88,21 @@ func (c *selfChannel) Peer() addr.LogicAddr {
 type JsonCodec struct {
 }
 
-func (c *JsonCodec) Encode(v interface{}) ([]byte, error) {
+func (c JsonCodec) Encode(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (c *JsonCodec) Decode(b []byte, v interface{}) error {
+func (c JsonCodec) Decode(b []byte, v interface{}) error {
 	return json.Unmarshal(b, v)
 }
 
 type PbCodec struct {
 }
 
-func (c *PbCodec) Encode(v interface{}) ([]byte, error) {
+func (c PbCodec) Encode(v interface{}) ([]byte, error) {
 	return proto.Marshal(v.(proto.Message))
 }
 
-func (c *PbCodec) Decode(b []byte, v interface{}) error {
+func (c PbCodec) Decode(b []byte, v interface{}) error {
 	return proto.Unmarshal(b, v.(proto.Message))
 }

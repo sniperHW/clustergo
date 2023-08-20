@@ -30,7 +30,7 @@ var (
 	ErrNetAddrMismatch = errors.New("net addr mismatch")
 )
 
-var RPCCodec rpcgo.Codec = &PbCodec{}
+var RPCCodec rpcgo.Codec = PbCodec{}
 
 var cecret_key []byte = []byte("sanguo_2022")
 
@@ -419,7 +419,7 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 	}
 }
 
-func newNode() *Node {
+func newNode(rpccodec rpcgo.Codec) *Node {
 	return &Node{
 		nodeCache: nodeCache{
 			allnodes: map[addr.LogicAddr]*node{},
@@ -427,8 +427,8 @@ func newNode() *Node {
 			harbors:  map[uint32][]*node{},
 			initC:    make(chan struct{}),
 		},
-		rpcSvr: rpcgo.NewServer(RPCCodec),
-		rpcCli: rpcgo.NewClient(RPCCodec),
+		rpcSvr: rpcgo.NewServer(rpccodec),
+		rpcCli: rpcgo.NewClient(rpccodec),
 		msgManager: msgManager{
 			msgHandlers: map[uint16]MsgHandler{},
 		},
@@ -442,7 +442,7 @@ var defaultOnce sync.Once
 
 func getDefault() *Node {
 	defaultOnce.Do(func() {
-		defaultInstance = newNode()
+		defaultInstance = newNode(RPCCodec)
 	})
 	return defaultInstance
 }
