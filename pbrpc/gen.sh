@@ -7,7 +7,7 @@ function make_proto(){
     for file in `ls ./proto`       	
     do
         if [ "${file##*.}"x = "proto"x ];then
-            protoc --go_out=./service "./proto/"$file
+            protoc --go_out=./ "./proto/"$file
         fi
     done
 }   

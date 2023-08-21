@@ -9,7 +9,7 @@ require (
 	github.com/xtaci/smux v1.5.17
 	go.etcd.io/etcd/client/v3 v3.5.7
 	go.uber.org/zap v1.24.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
@@ -42,5 +42,6 @@ require (
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c // indirect
 	google.golang.org/grpc v1.41.0 // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

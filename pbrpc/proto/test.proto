@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "../service/test";
+option go_package = "service/test";
 
 message request {
 	string msg = 1;
