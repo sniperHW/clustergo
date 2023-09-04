@@ -3,8 +3,8 @@ module github.com/sniperHW/clustergo
 go 1.19
 
 require (
-	github.com/sniperHW/netgo v0.0.0-20230107025550-0ab3b396e8ee
-	github.com/sniperHW/rpcgo v0.0.0-20230110032046-7ea60f243398
+	github.com/sniperHW/netgo v0.0.0-20230818153339-8ec00e3cd0a2
+	github.com/sniperHW/rpcgo v0.0.0-20230903050317-139edaa0aa21
 	github.com/stretchr/testify v1.8.0
 	github.com/xtaci/smux v1.5.17
 	go.etcd.io/etcd/client/v3 v3.5.7
@@ -42,6 +42,5 @@ require (
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c // indirect
 	google.golang.org/grpc v1.41.0 // indirect
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

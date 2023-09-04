@@ -274,10 +274,7 @@ func (n *node) onRelayMessage(self *Node, message *ss.RelayMessage) {
 			logger.Debugf(fmt.Sprintf("route message to target:%s failed", message.To().String()))
 			nextNode.sendMessage(context.TODO(), self, ss.NewMessage(message.From(), self.localAddr.LogicAddr(), &rpcgo.ResponseMsg{
 				Seq: rpcReq.Seq,
-				Err: &rpcgo.Error{
-					Code: rpcgo.ErrOther,
-					Err:  fmt.Sprintf("route message to target:%s failed", message.To().String()),
-				},
+				Err: rpcgo.NewError(rpcgo.ErrOther, fmt.Sprintf("route message to target:%s failed", message.To().String())),
 			}), time.Now().Add(time.Second))
 		}
 	}

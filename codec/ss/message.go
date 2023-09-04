@@ -2,10 +2,8 @@ package ss
 
 import (
 	"github.com/sniperHW/clustergo/addr"
-	"github.com/sniperHW/clustergo/codec"
 	"github.com/sniperHW/clustergo/codec/buffer"
 	"github.com/sniperHW/rpcgo"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -98,16 +96,10 @@ func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
 	if getMsgType(m.payload[4]) != RpcReq {
 		return nil
 	} else {
-		var req codec.RpcRequest
-		if err := proto.Unmarshal(m.payload[13:], &req); err != nil {
+		if req, err := rpcgo.DecodeRequest(m.payload[13:]); err != nil {
 			return nil
 		} else {
-			return &rpcgo.RequestMsg{
-				Seq:    req.Seq,
-				Method: req.Method,
-				Arg:    req.Arg,
-				Oneway: req.Oneway,
-			}
+			return req
 		}
 	}
 }

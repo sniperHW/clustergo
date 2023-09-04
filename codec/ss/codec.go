@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"net"
 
-	"reflect"
-
-	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec"
 	"github.com/sniperHW/clustergo/codec/buffer"
 	"github.com/sniperHW/clustergo/codec/pb"
+	"github.com/sniperHW/rpcgo"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,7 +33,7 @@ func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 	switch o := o.(type) {
 	case *Message:
-		var pbbytes []byte
+		var data []byte
 		var cmd uint32
 		var err error
 
@@ -43,11 +41,11 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 		switch msg := o.Payload().(type) {
 		case proto.Message:
-			if pbbytes, cmd, err = pb.Marshal(Namespace, msg); err != nil {
+			if data, cmd, err = pb.Marshal(Namespace, msg); err != nil {
 				return buffs, 0
 			}
 
-			payloadLen := sizeFlag + sizeToAndFrom + sizeCmd + len(pbbytes)
+			payloadLen := sizeFlag + sizeToAndFrom + sizeCmd + len(data)
 
 			totalLen := sizeLen + payloadLen
 
@@ -55,7 +53,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 				return buffs, 0
 			}
 
-			b := make([]byte, 0, totalLen-len(pbbytes))
+			b := make([]byte, 0, totalLen-len(data))
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -71,20 +69,13 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			//写cmd
 			b = buffer.AppendUint16(b, uint16(cmd))
 
-			return append(buffs, b, pbbytes), totalLen
+			return append(buffs, b, data), totalLen
 		case *rpcgo.RequestMsg:
-			req := &codec.RpcRequest{
-				Seq:    msg.Seq,
-				Method: msg.Method,
-				Arg:    msg.Arg,
-				Oneway: msg.Oneway,
-			}
-
-			if pbbytes, err = proto.Marshal(req); err != nil {
+			if data, err = rpcgo.EncodeRequest(msg); err != nil {
 				return buffs, 0
 			}
 
-			payloadLen := sizeFlag + sizeToAndFrom + len(pbbytes)
+			payloadLen := sizeFlag + sizeToAndFrom + len(data)
 
 			totalLen := sizeLen + payloadLen
 
@@ -92,7 +83,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 				return buffs, 0
 			}
 
-			b := make([]byte, 0, totalLen-len(pbbytes))
+			b := make([]byte, 0, totalLen-len(data))
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -105,24 +96,13 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			b = buffer.AppendUint32(b, uint32(o.To()))
 			b = buffer.AppendUint32(b, uint32(o.From()))
 
-			return append(buffs, b, pbbytes), totalLen
+			return append(buffs, b, data), totalLen
 		case *rpcgo.ResponseMsg:
-			resp := &codec.RpcResponse{
-				Seq: msg.Seq,
-				Ret: msg.Ret,
-			}
-
-			if msg.Err != nil {
-				resp.ErrCode = uint32(msg.Err.Code)
-				resp.ErrDesc = msg.Err.Err
-			}
-
-			if pbbytes, err = proto.Marshal(resp); err != nil {
-				panic(err)
+			if data, err = rpcgo.EncodeResponse(msg); err != nil {
 				return buffs, 0
 			}
 
-			payloadLen := sizeFlag + sizeToAndFrom + len(pbbytes)
+			payloadLen := sizeFlag + sizeToAndFrom + len(data)
 
 			totalLen := sizeLen + payloadLen
 
@@ -130,7 +110,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 				return buffs, 0
 			}
 
-			b := make([]byte, 0, totalLen-len(pbbytes))
+			b := make([]byte, 0, totalLen-len(data))
 
 			//写payload大小
 			b = buffer.AppendInt(b, payloadLen)
@@ -143,13 +123,12 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			b = buffer.AppendUint32(b, uint32(o.To()))
 			b = buffer.AppendUint32(b, uint32(o.From()))
 
-			return append(buffs, b, pbbytes), totalLen
+			return append(buffs, b, data), totalLen
 		}
 		return buffs, 0
 	case *RelayMessage:
 		return append(buffs, o.Payload()), len(o.Payload())
 	default:
-		panic(reflect.TypeOf(o).String())
 		return buffs, 0
 	}
 }
@@ -176,36 +155,16 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 				return NewMessage(to, from, msg, cmd), nil
 			}
 		case RpcReq:
-			data := ss.reader.GetAll()
-			var req codec.RpcRequest
-			if err := proto.Unmarshal(data, &req); err != nil {
+			if req, err := rpcgo.DecodeRequest(ss.reader.GetAll()); err != nil {
 				return nil, err
 			} else {
-				return NewMessage(to, from, &rpcgo.RequestMsg{
-					Seq:    req.Seq,
-					Method: req.Method,
-					Arg:    req.Arg,
-					Oneway: req.Oneway,
-				}), nil
+				return NewMessage(to, from, req), nil
 			}
 		case RpcResp:
-			data := ss.reader.GetAll()
-			var resp codec.RpcResponse
-			if err := proto.Unmarshal(data, &resp); err != nil {
+			if resp, err := rpcgo.DecodeResponse(ss.reader.GetAll()); err != nil {
 				return nil, err
 			} else {
-				r := &rpcgo.ResponseMsg{
-					Seq: resp.Seq,
-					Ret: resp.Ret,
-				}
-
-				if resp.ErrCode != 0 {
-					r.Err = &rpcgo.Error{
-						Code: int(resp.ErrCode),
-						Err:  resp.ErrDesc,
-					}
-				}
-				return NewMessage(to, from, r), nil
+				return NewMessage(to, from, resp), nil
 			}
 		default:
 			return nil, fmt.Errorf("invaild packet type")
