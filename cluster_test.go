@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -84,6 +85,76 @@ func init() {
 	pb.Register(ss.Namespace, &ss.Echo{}, 1)
 	l := zap.NewZapLogger("sanguo_test.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	InitLogger(l.Sugar())
+}
+
+func TestBenchmarkRPC(t *testing.T) {
+	localDiscovery := &localDiscovery{
+		nodes: map[addr.LogicAddr]*discovery.Node{},
+	}
+
+	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
+	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node1Addr,
+		Available: true,
+	})
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node2Addr,
+		Available: true,
+	})
+
+	node1 := newNode(JsonCodec{})
+	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+		logger.Debug(msg.(*ss.Echo).Msg)
+	})
+
+	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+	})
+
+	node2 := newNode(JsonCodec{})
+	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	logger.Debug("Start OK")
+
+	var resp string
+
+	err = node1.Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+
+	begtime := time.Now()
+
+	counter := int32(0)
+
+	var wait sync.WaitGroup
+
+	for i := 0; i < 25; i++ {
+		wait.Add(1)
+		go func() {
+			for atomic.AddInt32(&counter, 1) <= 100000 {
+				node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+			}
+			wait.Done()
+		}()
+	}
+
+	wait.Wait()
+
+	fmt.Println("10W call,use:", time.Now().Sub(begtime))
+
+	localDiscovery.RemoveNode(node1Addr.LogicAddr())
+	node1.Wait()
+
+	_, err = node2.GetAddrByType(1)
+	assert.NotNil(t, err)
+
+	localDiscovery.RemoveNode(node2Addr.LogicAddr())
+	node2.Wait()
 }
 
 func TestSingleNode(t *testing.T) {
