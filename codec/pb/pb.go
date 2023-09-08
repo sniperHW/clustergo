@@ -7,86 +7,55 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type reflectInfo struct {
-	tt   reflect.Type
-	name string
+type PbMeta struct {
+	namespace string
+	nameToID  map[string]uint32
+	idToMeta  map[uint32]reflect.Type //存放>65535的reflect.Type
+	metaArray [65535]reflect.Type     //1-65535直接通过数组下标获取reflect.Type
 }
 
-type pbMeta struct {
-	nameToID map[string]uint32
-	idToMeta map[uint32]reflectInfo
+var nameSpace = map[string]*PbMeta{}
+
+func (m *PbMeta) register(msg proto.Message, id uint32) error {
+	tt := reflect.TypeOf(msg)
+	name := tt.String()
+	if _, ok := m.nameToID[name]; ok {
+		return fmt.Errorf("%s already register to namespace:%s", name, m.namespace)
+	}
+
+	m.nameToID[name] = id
+
+	if id < uint32(len(m.metaArray)) {
+		m.metaArray[id] = tt
+	} else {
+		m.idToMeta[id] = tt
+	}
+
+	return nil
 }
 
-var nameSpace = map[string]pbMeta{}
-
-func newMessage(namespace string, id uint32) (msg proto.Message, err error) {
-	if ns, ok := nameSpace[namespace]; ok {
-		if mt, ok := ns.idToMeta[id]; ok {
-			msg = reflect.New(mt.tt.Elem()).Interface().(proto.Message)
+func (m *PbMeta) newMessage(id uint32) (msg proto.Message, err error) {
+	if id < uint32(len(m.metaArray)) {
+		tt := m.metaArray[id]
+		if tt == nil {
+			err = fmt.Errorf("invaild id:%d", id)
+		} else {
+			msg = reflect.New(tt.Elem()).Interface().(proto.Message)
+		}
+	} else {
+		if tt, ok := m.idToMeta[id]; ok {
+			msg = reflect.New(tt.Elem()).Interface().(proto.Message)
 		} else {
 			err = fmt.Errorf("invaild id:%d", id)
 		}
-	} else {
-		err = fmt.Errorf("invaild namespace:%s", namespace)
 	}
 	return
 }
 
-/*func GetNameByID(namespace string, id uint32) string {
-	var ns pbMeta
-	var ok bool
-	if ns, ok = nameSpace[namespace]; !ok {
-		return ""
-	}
-
-	if mt, ok := ns.idToMeta[id]; ok {
-		return mt.name
-	} else {
-		return ""
-	}
-}*/
-
-func GetCmd(namespace string, o proto.Message) uint32 {
-	if ns, ok := nameSpace[namespace]; ok {
-		return ns.nameToID[reflect.TypeOf(o).String()]
-	} else {
-		return 0
-	}
-}
-
-// 根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
-func Register(namespace string, msg proto.Message, id uint32) error {
-
-	var ns pbMeta
-	var ok bool
-
-	if ns, ok = nameSpace[namespace]; !ok {
-		ns = pbMeta{nameToID: map[string]uint32{}, idToMeta: map[uint32]reflectInfo{}}
-		nameSpace[namespace] = ns
-	}
-
-	tt := reflect.TypeOf(msg)
-	name := tt.String()
-	if _, ok = ns.nameToID[name]; ok {
-		return fmt.Errorf("%s already register to namespace:%s", name, namespace)
-	}
-
-	ns.nameToID[name] = id
-	ns.idToMeta[id] = reflectInfo{tt: tt, name: name}
-	return nil
-}
-
-func Marshal(namespace string, o interface{}) ([]byte, uint32, error) {
-
-	var ns pbMeta
+func (m *PbMeta) Marshal(o interface{}) ([]byte, uint32, error) {
 	var id uint32
 	var ok bool
-
-	if ns, ok = nameSpace[namespace]; !ok {
-		return nil, 0, fmt.Errorf("invaild namespace:%s", namespace)
-	}
-
-	if id, ok = ns.nameToID[reflect.TypeOf(o).String()]; !ok {
+	if id, ok = m.nameToID[reflect.TypeOf(o).String()]; !ok {
 		return nil, 0, fmt.Errorf("unregister type:%s", reflect.TypeOf(o).String())
 	}
 
@@ -99,8 +68,8 @@ func Marshal(namespace string, o interface{}) ([]byte, uint32, error) {
 	return data, id, nil
 }
 
-func Unmarshal(namespace string, id uint32, buff []byte) (msg proto.Message, err error) {
-	if msg, err = newMessage(namespace, id); err != nil {
+func (m *PbMeta) Unmarshal(id uint32, buff []byte) (msg proto.Message, err error) {
+	if msg, err = m.newMessage(id); err != nil {
 		return
 	}
 
@@ -111,4 +80,30 @@ func Unmarshal(namespace string, id uint32, buff []byte) (msg proto.Message, err
 	}
 
 	return
+}
+
+func GetCmd(namespace string, o proto.Message) uint32 {
+	if ns, ok := nameSpace[namespace]; ok {
+		return ns.nameToID[reflect.TypeOf(o).String()]
+	} else {
+		return 0
+	}
+}
+
+// 根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
+func Register(namespace string, msg proto.Message, id uint32) error {
+
+	var ns *PbMeta
+	var ok bool
+
+	if ns, ok = nameSpace[namespace]; !ok {
+		ns = &PbMeta{namespace: namespace, nameToID: map[string]uint32{}, idToMeta: map[uint32]reflect.Type{}}
+		nameSpace[namespace] = ns
+	}
+
+	return ns.register(msg, id)
+}
+
+func GetMeta(namespace string) *PbMeta {
+	return nameSpace[namespace]
 }

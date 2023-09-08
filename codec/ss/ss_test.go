@@ -3,13 +3,12 @@ package ss
 //go test -race -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 import (
-	"log"
 	"net"
 	"testing"
 	"time"
 
-	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/rpcgo"
 
 	"github.com/sniperHW/clustergo/codec/pb"
 	"github.com/stretchr/testify/assert"
@@ -46,9 +45,7 @@ func TestRPCResponse(t *testing.T) {
 		})
 
 		buffs, n = codec.Encode(buffs, msg)
-		log.Println(n)
-		assert.Equal(t, len(buffs[0]), n)
-		log.Println(buffs[0])
+		assert.Equal(t, len(buffs[0])+len(buffs[1]), n)
 	}
 
 	{
@@ -57,6 +54,7 @@ func TestRPCResponse(t *testing.T) {
 		r := &readable{
 			buff: buffs[0],
 		}
+		r.buff = append(r.buff, buffs[1]...)
 
 		pkt, err := codec.Recv(r, time.Time{})
 		assert.Nil(t, err)
@@ -88,9 +86,7 @@ func TestRPCRequest(t *testing.T) {
 		})
 
 		buffs, n = codec.Encode(buffs, msg)
-		log.Println(n)
-		assert.Equal(t, len(buffs[0]), n)
-		log.Println(buffs[0])
+		assert.Equal(t, len(buffs[0])+len(buffs[1]), n)
 	}
 
 	{
@@ -99,6 +95,7 @@ func TestRPCRequest(t *testing.T) {
 		r := &readable{
 			buff: buffs[0],
 		}
+		r.buff = append(r.buff, buffs[1]...)
 
 		pkt, err := codec.Recv(r, time.Time{})
 		assert.Nil(t, err)
@@ -127,9 +124,7 @@ func TestMessage(t *testing.T) {
 		msg := NewMessage(targetAddr, selfAddr, &Echo{Msg: "hello"})
 
 		buffs, n = codec.Encode(buffs, msg)
-		log.Println(n)
-		assert.Equal(t, len(buffs[0]), n)
-		log.Println(buffs[0])
+		assert.Equal(t, len(buffs[0])+len(buffs[1]), n)
 	}
 
 	{
@@ -138,7 +133,7 @@ func TestMessage(t *testing.T) {
 		r := &readable{
 			buff: buffs[0],
 		}
-
+		r.buff = append(r.buff, buffs[1]...)
 		pkt, err := codec.Recv(r, time.Time{})
 		assert.Nil(t, err)
 		assert.Equal(t, len(pkt), n-4)
@@ -170,9 +165,7 @@ func TestRelayMessage(t *testing.T) {
 		})
 
 		buffs, n = codec.Encode(buffs, msg)
-		log.Println(n)
-		assert.Equal(t, len(buffs[0]), n)
-		log.Println(buffs[0])
+		assert.Equal(t, len(buffs[0])+len(buffs[1]), n)
 	}
 
 	{
@@ -181,6 +174,7 @@ func TestRelayMessage(t *testing.T) {
 		r := &readable{
 			buff: buffs[0],
 		}
+		r.buff = append(r.buff, buffs[1]...)
 
 		pkt, err := codec.Recv(r, time.Time{})
 		assert.Nil(t, err)
@@ -192,7 +186,6 @@ func TestRelayMessage(t *testing.T) {
 		relayMessage, ok := message.(*RelayMessage)
 		assert.Equal(t, ok, true)
 		assert.Equal(t, n, len(relayMessage.Payload()))
-		log.Println(relayMessage.Payload())
 
 		rpcReq := relayMessage.GetRpcRequest()
 		assert.Equal(t, rpcReq.Seq, uint64(1))

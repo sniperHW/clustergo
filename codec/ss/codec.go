@@ -18,6 +18,7 @@ type SSCodec struct {
 	codec.LengthPayloadPacketReceiver
 	selfAddr addr.LogicAddr
 	reader   buffer.BufferReader
+	pbMeta   *pb.PbMeta
 }
 
 func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
@@ -27,6 +28,7 @@ func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 			MaxPacketSize: MaxPacketSize,
 		},
 		selfAddr: selfAddr,
+		pbMeta:   pb.GetMeta(Namespace),
 	}
 }
 
@@ -41,7 +43,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 
 		switch msg := o.Payload().(type) {
 		case proto.Message:
-			if data, cmd, err = pb.Marshal(Namespace, msg); err != nil {
+			if data, cmd, err = ss.pbMeta.Marshal(msg); err != nil {
 				return buffs, 0
 			}
 
@@ -149,7 +151,7 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 		case Msg:
 			cmd := ss.reader.GetUint16()
 			data := ss.reader.GetAll()
-			if msg, err := pb.Unmarshal(Namespace, uint32(cmd), data); err != nil {
+			if msg, err := ss.pbMeta.Unmarshal(uint32(cmd), data); err != nil {
 				return nil, err
 			} else {
 				return NewMessage(to, from, msg, cmd), nil
