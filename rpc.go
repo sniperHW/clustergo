@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type SanguoRPCChannel interface {
+type RPCChannel interface {
 	Peer() addr.LogicAddr
 }
 
