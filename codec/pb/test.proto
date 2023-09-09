@@ -1,0 +1,268 @@
+syntax = "proto3";
+
+option go_package = "../pb";
+
+message Echo1 {
+	string msg = 1;
+}
+
+message Echo2 {
+	string msg = 1;
+}
+
+message Echo3 {
+	string msg = 1;
+}
+
+message Echo4 {
+	string msg = 1;
+}
+
+message Echo5 {
+	string msg = 1;
+}
+
+message Echo6 {
+	string msg = 1;
+}
+
+message Echo7 {
+	string msg = 1;
+}
+
+message Echo8 {
+	string msg = 1;
+}
+
+message Echo9 {
+	string msg = 1;
+}
+
+message Echo10 {
+	string msg = 1;
+}
+
+message Echo11 {
+	string msg = 1;
+}
+
+message Echo12 {
+	string msg = 1;
+}
+
+message Echo13 {
+	string msg = 1;
+}
+
+message Echo14 {
+	string msg = 1;
+}
+
+message Echo15 {
+	string msg = 1;
+}
+
+message Echo16 {
+	string msg = 1;
+}
+
+message Echo17 {
+	string msg = 1;
+}
+
+message Echo18 {
+	string msg = 1;
+}
+
+message Echo19 {
+	string msg = 1;
+}
+
+message Echo20 {
+	string msg = 1;
+}
+
+message Echo21 {
+	string msg = 1;
+}
+
+message Echo22 {
+	string msg = 1;
+}
+
+message Echo23 {
+	string msg = 1;
+}
+
+message Echo24 {
+	string msg = 1;
+}
+
+message Echo25 {
+	string msg = 1;
+}
+
+message Echo26 {
+	string msg = 1;
+}
+
+message Echo27 {
+	string msg = 1;
+}
+
+message Echo28 {
+	string msg = 1;
+}
+
+message Echo29 {
+	string msg = 1;
+}
+
+message Echo30 {
+	string msg = 1;
+}
+
+message Echo31 {
+	string msg = 1;
+}
+
+message Echo32 {
+	string msg = 1;
+}
+
+message Echo33 {
+	string msg = 1;
+}
+
+message Echo34 {
+	string msg = 1;
+}
+
+message Echo35 {
+	string msg = 1;
+}
+
+message Echo36 {
+	string msg = 1;
+}
+
+message Echo37 {
+	string msg = 1;
+}
+
+message Echo38 {
+	string msg = 1;
+}
+
+message Echo39 {
+	string msg = 1;
+}
+
+message Echo40 {
+	string msg = 1;
+}
+
+message Echo41 {
+	string msg = 1;
+}
+
+message Echo42 {
+	string msg = 1;
+}
+
+message Echo43 {
+	string msg = 1;
+}
+
+message Echo44 {
+	string msg = 1;
+}
+
+message Echo45 {
+	string msg = 1;
+}
+
+message Echo46 {
+	string msg = 1;
+}
+
+message Echo47 {
+	string msg = 1;
+}
+
+message Echo48 {
+	string msg = 1;
+}
+
+message Echo49 {
+	string msg = 1;
+}
+
+message Echo50 {
+	string msg = 1;
+}
+
+message Echo51 {
+	string msg = 1;
+}
+
+message Echo52 {
+	string msg = 1;
+}
+
+message Echo53 {
+	string msg = 1;
+}
+
+message Echo54 {
+	string msg = 1;
+}
+
+message Echo55 {
+	string msg = 1;
+}
+
+message Echo56 {
+	string msg = 1;
+}
+
+message Echo57 {
+	string msg = 1;
+}
+
+message Echo58 {
+	string msg = 1;
+}
+
+message Echo59 {
+	string msg = 1;
+}
+
+message Echo60 {
+	string msg = 1;
+}
+
+message Echo61 {
+	string msg = 1;
+}
+
+message Echo62 {
+	string msg = 1;
+}
+
+message Echo63 {
+	string msg = 1;
+}
+
+message Echo64 {
+	string msg = 1;
+}
+
+message Echo65 {
+	string msg = 1;
+}
+
+message Echo66 {
+	string msg = 1;
+}
+

@@ -7,14 +7,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const maxArraySize = 65536
+
 type PbMeta struct {
 	namespace string
 	nameToID  map[string]uint32
 	idToMeta  map[uint32]reflect.Type //存放>65535的reflect.Type
-	metaArray [65535]reflect.Type     //1-65535直接通过数组下标获取reflect.Type
+	metaArray []reflect.Type          //0-65535直接通过数组下标获取reflect.Type
 }
 
 var nameSpace = map[string]*PbMeta{}
+
+func getArraySize(id uint32) int {
+	for i := 1; i <= 64; i++ {
+		s := i * 1024
+		if int(id) < s {
+			return s
+		}
+	}
+	return 0
+}
 
 func (m *PbMeta) register(msg proto.Message, id uint32) error {
 	tt := reflect.TypeOf(msg)
@@ -25,7 +37,12 @@ func (m *PbMeta) register(msg proto.Message, id uint32) error {
 
 	m.nameToID[name] = id
 
-	if id < uint32(len(m.metaArray)) {
+	if id < maxArraySize {
+		if int(id) >= len(m.metaArray) {
+			metaArray := make([]reflect.Type, getArraySize(id))
+			copy(metaArray, m.metaArray)
+			m.metaArray = metaArray
+		}
 		m.metaArray[id] = tt
 	} else {
 		m.idToMeta[id] = tt
