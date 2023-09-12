@@ -16,10 +16,11 @@ const (
 )
 
 const (
-	Msg             = 0x8  //普通消息
-	RpcReq          = 0x10 //RPC请求
-	RpcResp         = 0x18 //RPC响应
-	MaskMessageType = 0x38
+	PbMsg           = 0x1 //Pb消息
+	BinMsg          = 0x2 //二进制消息
+	RpcReq          = 0x3 //RPC请求
+	RpcResp         = 0x4 //RPC响应
+	MaskMessageType = 0x7
 )
 
 var (
@@ -27,7 +28,7 @@ var (
 )
 
 func setMsgType(flag *byte, tt byte) {
-	if tt == Msg || tt == RpcReq || tt == RpcResp {
+	if tt == PbMsg || tt == RpcReq || tt == RpcResp {
 		*flag |= tt
 	}
 }
