@@ -10,6 +10,13 @@ clustergo是一个简单的网络游戏服务端框架。可以快速构建服�
 
 各节点使用一个32位逻辑地址标识，逻辑地址被分为3段，高12位表示服务器组，中8位表示节点类型(255保留给harbor使用),低12位表示进程id。
 
+## 消息投递与处理
+
+cluster支持在节点之间传递protobuf消息和raw binary消息。如果只需要使用protobuf可以使用默认的SendPbMessage和RegisterPbMessageHandler。
+
+如果需要支持不同的消息格式，可以使用SendBinMessage和RegisterBinMessageHandler自己处理消息的编码和解码。
+
+
 ## rpc
 
 clustergo默认采用pbrpc
