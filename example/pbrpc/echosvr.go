@@ -16,7 +16,7 @@ type echoService struct {
 func (e *echoService) OnCall(ctx context.Context, replyer *echo.Replyer, request *echo.Request) {
 	from := replyer.Channel().(clustergo.RPCChannel).Peer() //获取请求的对端逻辑地址
 	clustergo.Log().Debug("from:", from.String(), ",echo:", request.Msg)
-	replyer.Reply(&echo.Response{Msg: request.Msg}, nil)
+	replyer.Reply(&echo.Response{Msg: request.Msg})
 }
 
 func main() {

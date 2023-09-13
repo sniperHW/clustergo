@@ -111,7 +111,7 @@ func TestBenchmarkRPC(t *testing.T) {
 	})
 
 	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
-		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
 	node2 := newNode(JsonCodec{})
@@ -183,7 +183,7 @@ func TestSingleNode(t *testing.T) {
 
 	s.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
-		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
 	err := s.Start(localDiscovery, localAddr.LogicAddr())
@@ -226,7 +226,7 @@ func TestTwoNode(t *testing.T) {
 
 	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
-		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
 	node2 := newNode(JsonCodec{})
@@ -305,7 +305,7 @@ func TestHarbor(t *testing.T) {
 
 	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
-		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
@@ -537,7 +537,7 @@ func TestDefault(t *testing.T) {
 
 	RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
-		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
 	RegisterBinMessageHandler(10, func(_ addr.LogicAddr, msg []byte) {

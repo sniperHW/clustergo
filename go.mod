@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/sniperHW/netgo v0.0.0-20230818153339-8ec00e3cd0a2
-	github.com/sniperHW/rpcgo v0.0.0-20230903050317-139edaa0aa21
+	github.com/sniperHW/rpcgo v0.0.0-20230913043921-f8b55efe5773
 	github.com/stretchr/testify v1.8.0
 	github.com/xtaci/smux v1.5.17
 	go.etcd.io/etcd/client/v3 v3.5.7
@@ -19,7 +19,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.9 // indirect
