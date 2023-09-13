@@ -89,21 +89,13 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			setMsgType(&flag, PbMsg)
 			return ss.encode(buffs, o, uint16(cmd), flag, data)
 		case *rpcgo.RequestMsg:
-			if data, err = rpcgo.EncodeRequest(msg); err != nil {
-				return buffs, 0
-			}
-
 			//设置RPC请求标记
 			setMsgType(&flag, RpcReq)
-
-			return ss.encode(buffs, o, 0, flag, data)
+			return ss.encode(buffs, o, 0, flag, rpcgo.EncodeRequest(msg))
 		case *rpcgo.ResponseMsg:
-			if data, err = rpcgo.EncodeResponse(msg); err != nil {
-				return buffs, 0
-			}
 			//设置RPC响应标记
 			setMsgType(&flag, RpcResp)
-			return ss.encode(buffs, o, 0, flag, data)
+			return ss.encode(buffs, o, 0, flag, rpcgo.EncodeResponse(msg))
 		}
 		return buffs, 0
 	case *RelayMessage:
