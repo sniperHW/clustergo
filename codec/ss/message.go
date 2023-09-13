@@ -28,7 +28,8 @@ var (
 )
 
 func setMsgType(flag *byte, tt byte) {
-	if tt == PbMsg || tt == RpcReq || tt == RpcResp {
+	switch tt {
+	case PbMsg, BinMsg, RpcReq, RpcResp:
 		*flag |= tt
 	}
 }

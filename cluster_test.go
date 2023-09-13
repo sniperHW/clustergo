@@ -106,7 +106,7 @@ func TestBenchmarkRPC(t *testing.T) {
 	})
 
 	node1 := newNode(JsonCodec{})
-	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+	node1.RegisterPbMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
@@ -173,11 +173,11 @@ func TestSingleNode(t *testing.T) {
 
 	assert.NotNil(t, s.Stop())
 	assert.NotNil(t, s.Wait())
-	assert.NotNil(t, s.SendMessage(localAddr.LogicAddr(), &ss.Echo{
+	assert.NotNil(t, s.SendPbMessage(localAddr.LogicAddr(), &ss.Echo{
 		Msg: "hello",
 	}))
 
-	s.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+	s.RegisterPbMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
@@ -189,7 +189,7 @@ func TestSingleNode(t *testing.T) {
 	err := s.Start(localDiscovery, localAddr.LogicAddr())
 	assert.Nil(t, err)
 
-	s.SendMessage(localAddr.LogicAddr(), &ss.Echo{
+	s.SendPbMessage(localAddr.LogicAddr(), &ss.Echo{
 		Msg: "hello",
 	})
 
@@ -220,7 +220,7 @@ func TestTwoNode(t *testing.T) {
 	})
 
 	node1 := newNode(JsonCodec{})
-	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+	node1.RegisterPbMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
@@ -244,7 +244,7 @@ func TestTwoNode(t *testing.T) {
 	err = node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
+	node2.SendPbMessage(node1Addr.LogicAddr(), &ss.Echo{
 		Msg: "hello",
 	})
 
@@ -299,7 +299,7 @@ func TestHarbor(t *testing.T) {
 	})
 
 	node1 := newNode(&JsonCodec{})
-	node1.RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+	node1.RegisterPbMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
@@ -331,7 +331,7 @@ func TestHarbor(t *testing.T) {
 		}
 	}
 
-	node1.SendMessage(type1Addr, &ss.Echo{
+	node1.SendPbMessage(type1Addr, &ss.Echo{
 		Msg: "hello",
 	})
 
@@ -467,14 +467,14 @@ func TestBiDirectionDial(t *testing.T) {
 
 	wait.Add(2)
 
-	node1.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+	node1.RegisterPbMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
 		logger.Debug("message from ", from.String())
 		wait.Done()
 	})
 
 	node2 := newNode(JsonCodec{})
 
-	node2.RegisterMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
+	node2.RegisterPbMessageHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
 		logger.Debug("message from ", from.String())
 		wait.Done()
 	})
@@ -489,13 +489,13 @@ func TestBiDirectionDial(t *testing.T) {
 
 	//双方同时向对方发消息，使得两边同时dial,最终两节点之间应该只能成功建立一条通信连接
 	go func() {
-		node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
+		node2.SendPbMessage(node1Addr.LogicAddr(), &ss.Echo{
 			Msg: "hello",
 		})
 	}()
 
 	go func() {
-		node1.SendMessage(node2Addr.LogicAddr(), &ss.Echo{
+		node1.SendPbMessage(node2Addr.LogicAddr(), &ss.Echo{
 			Msg: "hello",
 		})
 	}()
@@ -531,7 +531,7 @@ func TestDefault(t *testing.T) {
 		Available: true,
 	})
 
-	RegisterMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
+	RegisterPbMessageHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
@@ -540,11 +540,17 @@ func TestDefault(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg), nil)
 	})
 
+	RegisterBinMessageHandler(10, func(_ addr.LogicAddr, msg []byte) {
+		logger.Debug(string(msg))
+	})
+
 	err := Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
 	//向自身发送消息
-	SendMessage(node1Addr.LogicAddr(), &ss.Echo{Msg: "hello"})
+	SendPbMessage(node1Addr.LogicAddr(), &ss.Echo{Msg: "hello"})
+
+	SendBinMessage(node1Addr.LogicAddr(), 10, []byte("binMessage"))
 
 	//调用自身hello
 	var resp string
@@ -565,9 +571,12 @@ func TestDefault(t *testing.T) {
 
 	Log().Debug("Start OK")
 
-	node2.SendMessage(node1Addr.LogicAddr(), &ss.Echo{
+	node2.SendPbMessage(node1Addr.LogicAddr(), &ss.Echo{
 		Msg: "hello",
 	})
+
+	logger.Debug("send bin")
+	node2.SendBinMessage(node1Addr.LogicAddr(), 10, []byte("binMessage"))
 
 	node3Addr, _ := addr.MakeAddr("1.2.1", "localhost:18113")
 

@@ -40,21 +40,19 @@ type loginReq struct {
 	IsStream  bool   `json:"IsStream,omitempty"`
 }
 
-type MsgHandler func(addr.LogicAddr, proto.Message)
+type msgHandler struct {
+	pbHandler  func(addr.LogicAddr, proto.Message)
+	binHandler func(addr.LogicAddr, []byte)
+}
 
 type msgManager struct {
 	sync.RWMutex
-	msgHandlers map[uint16]MsgHandler
+	msgHandlers map[uint16]msgHandler
 }
 
-func (m *msgManager) register(cmd uint16, handler MsgHandler) {
+func (m *msgManager) register(cmd uint16, handler msgHandler) {
 	m.Lock()
 	defer m.Unlock()
-
-	if nil == handler {
-		logger.Errorf("Register %d failed: handler is nil\n", cmd)
-		return
-	}
 	_, ok := m.msgHandlers[cmd]
 	if ok {
 		logger.Errorf("Register %d failed: duplicate handler\n", cmd)
@@ -64,7 +62,7 @@ func (m *msgManager) register(cmd uint16, handler MsgHandler) {
 	m.msgHandlers[cmd] = handler
 }
 
-func pcall(handler MsgHandler, from addr.LogicAddr, cmd uint16, msg proto.Message) {
+func (m *msgHandler) callPb(from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
@@ -72,15 +70,45 @@ func pcall(handler MsgHandler, from addr.LogicAddr, cmd uint16, msg proto.Messag
 			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
 		}
 	}()
-	handler(from, msg)
+	m.pbHandler(from, msg)
 }
 
-func (m *msgManager) dispatch(from addr.LogicAddr, cmd uint16, msg proto.Message) {
+func (m *msgHandler) callBin(from addr.LogicAddr, cmd uint16, msg []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 65535)
+			l := runtime.Stack(buf, false)
+			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
+		}
+	}()
+	m.binHandler(from, msg)
+}
+
+func (m *msgManager) dispatchPb(from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	m.RLock()
 	handler, ok := m.msgHandlers[cmd]
 	m.RUnlock()
 	if ok {
-		pcall(handler, from, cmd, msg)
+		if handler.pbHandler == nil {
+			logger.Errorf("cmd:%d pb handler is nil\n", cmd)
+		} else {
+			handler.callPb(from, cmd, msg)
+		}
+	} else {
+		logger.Errorf("unkonw cmd:%d\n", cmd)
+	}
+}
+
+func (m *msgManager) dispatchBin(from addr.LogicAddr, cmd uint16, msg []byte) {
+	m.RLock()
+	handler, ok := m.msgHandlers[cmd]
+	m.RUnlock()
+	if ok {
+		if handler.binHandler == nil {
+			logger.Errorf("cmd:%d bin handler is nil\n", cmd)
+		} else {
+			handler.callBin(from, cmd, msg)
+		}
 	} else {
 		logger.Errorf("unkonw cmd:%d\n", cmd)
 	}
@@ -171,17 +199,32 @@ func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err erro
 	return addr, err
 }
 
-func (s *Node) RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
-	if cmd := pb.GetCmd(ss.Namespace, msg); cmd != 0 {
-		s.msgManager.register(uint16(cmd), handler)
+func (s *Node) RegisterPbMessageHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) {
+	if handler == nil {
+		return
 	}
+	if cmd := pb.GetCmd(ss.Namespace, msg); cmd != 0 {
+		s.msgManager.register(uint16(cmd), msgHandler{
+			pbHandler: handler,
+		})
+	}
+}
+
+func (s *Node) RegisterBinMessageHandler(cmd uint16, handler func(addr.LogicAddr, []byte)) {
+	if handler == nil {
+		return
+	}
+
+	s.msgManager.register(uint16(cmd), msgHandler{
+		binHandler: handler,
+	})
 }
 
 func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Node) SendMessage(to addr.LogicAddr, msg proto.Message) error {
+func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
 	select {
 	case <-s.die:
 		return errors.New("server die")
@@ -190,7 +233,27 @@ func (s *Node) SendMessage(to addr.LogicAddr, msg proto.Message) error {
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.dispatchMessage(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
+		s.msgManager.dispatchBin(to, cmd, msg)
+	} else {
+		if n := s.getNodeByLogicAddr(to); n != nil {
+			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), time.Now().Add(time.Second))
+		} else {
+			return fmt.Errorf("target:%s not found", to.String())
+		}
+	}
+	return nil
+}
+
+func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
+	select {
+	case <-s.die:
+		return errors.New("server die")
+	case <-s.started:
+	default:
+		return errors.New("server not start")
+	}
+	if to == s.localAddr.LogicAddr() {
+		s.msgManager.dispatchPb(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
@@ -239,10 +302,6 @@ func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method st
 			return nil, nil
 		}
 	}
-}
-
-func (s *Node) dispatchMessage(from addr.LogicAddr, cmd uint16, msg proto.Message) {
-	s.msgManager.dispatch(from, cmd, msg)
 }
 
 func (s *Node) Stop() error {
@@ -430,7 +489,7 @@ func newNode(rpccodec rpcgo.Codec) *Node {
 		rpcSvr: rpcgo.NewServer(rpccodec),
 		rpcCli: rpcgo.NewClient(rpccodec),
 		msgManager: msgManager{
-			msgHandlers: map[uint16]MsgHandler{},
+			msgHandlers: map[uint16]msgHandler{},
 		},
 		die:     make(chan struct{}),
 		started: make(chan struct{}),
@@ -463,16 +522,24 @@ func Wait() error {
 	return getDefault().Wait()
 }
 
-func RegisterMessageHandler(msg proto.Message, handler MsgHandler) {
-	getDefault().RegisterMessageHandler(msg, handler)
+func RegisterPbMessageHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) {
+	getDefault().RegisterPbMessageHandler(msg, handler)
+}
+
+func RegisterBinMessageHandler(cmd uint16, handler func(addr.LogicAddr, []byte)) {
+	getDefault().RegisterBinMessageHandler(cmd, handler)
 }
 
 func RegisterRPC(name string, method interface{}) error {
 	return getDefault().RegisterRPC(name, method)
 }
 
-func SendMessage(to addr.LogicAddr, msg proto.Message) {
-	getDefault().SendMessage(to, msg)
+func SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
+	return getDefault().SendPbMessage(to, msg)
+}
+
+func SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
+	return getDefault().SendBinMessage(to, cmd, msg)
 }
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {

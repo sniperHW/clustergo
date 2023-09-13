@@ -32,7 +32,7 @@ func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 	}
 }
 
-func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint32, flag byte, data []byte) (net.Buffers, int) {
+func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint16, flag byte, data []byte) (net.Buffers, int) {
 	payloadLen := sizeFlag + sizeToAndFrom + len(data)
 
 	if cmd != 0 {
@@ -58,7 +58,7 @@ func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint32, flag byte, 
 
 	if cmd != 0 {
 		//写cmd
-		b = buffer.AppendUint16(b, uint16(cmd))
+		b = buffer.AppendUint16(b, cmd)
 	}
 
 	return append(buffs, b, data), totalLen
@@ -68,7 +68,6 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 	switch o := o.(type) {
 	case *Message:
 		var data []byte
-		var cmd uint32
 		var err error
 
 		flag := byte(0)
@@ -80,14 +79,15 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			}
 			//设置Bin消息标记
 			setMsgType(&flag, BinMsg)
-			return ss.encode(buffs, o, cmd, flag, msg)
+			return ss.encode(buffs, o, o.cmd, flag, msg)
 		case proto.Message:
+			var cmd uint32
 			if data, cmd, err = ss.pbMeta.Marshal(msg); err != nil {
 				return buffs, 0
 			}
 			//设置Pb消息标记
 			setMsgType(&flag, PbMsg)
-			return ss.encode(buffs, o, cmd, flag, data)
+			return ss.encode(buffs, o, uint16(cmd), flag, data)
 		case *rpcgo.RequestMsg:
 			if data, err = rpcgo.EncodeRequest(msg); err != nil {
 				return buffs, 0
@@ -96,14 +96,14 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			//设置RPC请求标记
 			setMsgType(&flag, RpcReq)
 
-			return ss.encode(buffs, o, cmd, flag, data)
+			return ss.encode(buffs, o, 0, flag, data)
 		case *rpcgo.ResponseMsg:
 			if data, err = rpcgo.EncodeResponse(msg); err != nil {
 				return buffs, 0
 			}
 			//设置RPC响应标记
 			setMsgType(&flag, RpcResp)
-			return ss.encode(buffs, o, cmd, flag, data)
+			return ss.encode(buffs, o, 0, flag, data)
 		}
 		return buffs, 0
 	case *RelayMessage:
@@ -122,7 +122,6 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 	flag := ss.reader.GetByte()
 	to := addr.LogicAddr(ss.reader.GetUint32())
 	from := addr.LogicAddr(ss.reader.GetUint32())
-
 	if ss.isTarget(to) {
 		//当前节点是数据包的目标接收方
 		switch getMsgType(flag) {
