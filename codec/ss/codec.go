@@ -1,6 +1,7 @@
 package ss
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 
@@ -45,16 +46,21 @@ func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint16, flag byte, 
 		return buffs, 0
 	}
 
-	b := make([]byte, 0, totalLen-len(data))
+	b := make([]byte, 13, totalLen-len(data))
 
 	//写payload大小
-	b = buffer.AppendInt(b, payloadLen)
+
+	//b = buffer.AppendInt(b, payloadLen)
+	binary.BigEndian.PutUint32(b, uint32(payloadLen))
 
 	//写flag
-	b = buffer.AppendByte(b, flag)
+	//b = buffer.AppendByte(b, flag)
+	b[4] = flag
 
-	b = buffer.AppendUint32(b, uint32(m.To()))
-	b = buffer.AppendUint32(b, uint32(m.From()))
+	//b = buffer.AppendUint32(b, uint32(m.To()))
+	//b = buffer.AppendUint32(b, uint32(m.From()))
+	binary.BigEndian.PutUint32(b[5:], uint32(m.To()))
+	binary.BigEndian.PutUint32(b[9:], uint32(m.From()))
 
 	if cmd != 0 {
 		//写cmd

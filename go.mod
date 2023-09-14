@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/sniperHW/netgo v0.0.0-20230818153339-8ec00e3cd0a2
-	github.com/sniperHW/rpcgo v0.0.0-20230913043921-f8b55efe5773
+	github.com/sniperHW/rpcgo v0.0.0-20230913143642-2df58a1e2de8
 	github.com/stretchr/testify v1.8.0
 	github.com/xtaci/smux v1.5.17
 	go.etcd.io/etcd/client/v3 v3.5.7

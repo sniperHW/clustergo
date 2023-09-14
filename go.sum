@@ -74,8 +74,8 @@ github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/sniperHW/netgo v0.0.0-20230818153339-8ec00e3cd0a2 h1:A/tuB4XdFbApRJKYY14ZnzMlEvNDxap6WDWCZbZOzC0=
 github.com/sniperHW/netgo v0.0.0-20230818153339-8ec00e3cd0a2/go.mod h1:5XP+qSGWoPip7z6RNZQxr3oDJqclD/4zx57dxaSa5Zc=
-github.com/sniperHW/rpcgo v0.0.0-20230913043921-f8b55efe5773 h1:h9JeD14dmUyZfl8LFlxRIK+5sD8AmqkiWiQ+QL834YU=
-github.com/sniperHW/rpcgo v0.0.0-20230913043921-f8b55efe5773/go.mod h1:AdaAap9yKZFZaNpN0dMNU+FO9b6qRpbVlmS356FDGY4=
+github.com/sniperHW/rpcgo v0.0.0-20230913143642-2df58a1e2de8 h1:WhsHbU0+81xYM/uR20xlTVRnigl80xYBvPtLpQhCbpE=
+github.com/sniperHW/rpcgo v0.0.0-20230913143642-2df58a1e2de8/go.mod h1:AdaAap9yKZFZaNpN0dMNU+FO9b6qRpbVlmS356FDGY4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
