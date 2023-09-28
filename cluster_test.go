@@ -145,7 +145,7 @@ func TestBenchmarkRPC(t *testing.T) {
 
 	wait.Wait()
 
-	fmt.Println("10W call,use:", time.Now().Sub(begtime))
+	fmt.Println("10W call,use:", time.Since(begtime))
 
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	node1.Wait()
