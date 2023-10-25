@@ -349,14 +349,9 @@ func TestHarbor(t *testing.T) {
 	//将harbor1移除
 	localDiscovery.RemoveNode(harbor1Addr.LogicAddr())
 
-	c := make(chan struct{})
-	node2.CallWithCallback(type1Addr, time.Now().Add(time.Second), "hello", "sniperHW", &resp, func(resp interface{}, err error) {
-		assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
-		logger.Debug(err)
-		close(c)
-	})
-
-	<-c
+	err = node2.Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
+	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
+	logger.Debug(err)
 
 	node1.Stop()
 	node2.Stop()
@@ -557,10 +552,6 @@ func TestDefault(t *testing.T) {
 	err = Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
-
-	CallWithCallback(node1Addr.LogicAddr(), time.Now().Add(time.Second), "hello", "sniperHW", &resp, func(resp interface{}, err error) {
-		logger.Debug(resp)
-	})
 
 	_, err = OpenStream(node1Addr.LogicAddr())
 	assert.Equal(t, err.Error(), "cant't open stream to self")

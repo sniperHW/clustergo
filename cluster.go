@@ -247,27 +247,6 @@ func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg i
 	}
 }
 
-func (s *Node) CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) (func() bool, error) {
-	select {
-	case <-s.die:
-		return nil, rpcgo.NewError(rpcgo.ErrSend, "server die")
-	case <-s.started:
-	default:
-		return nil, rpcgo.NewError(rpcgo.ErrSend, "server not start")
-	}
-
-	if to == s.localAddr.LogicAddr() {
-		return s.rpcCli.CallWithCallback(&selfChannel{self: s}, deadline, method, arg, ret, cb)
-	} else {
-		if n := s.getNodeByLogicAddr(to); n != nil {
-			return s.rpcCli.CallWithCallback(&rpcChannel{peer: to, node: n, self: s}, deadline, method, arg, ret, cb)
-		} else {
-			go cb(nil, rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String())))
-			return nil, nil
-		}
-	}
-}
-
 func (s *Node) Stop() error {
 	select {
 	case <-s.started:
@@ -509,10 +488,6 @@ func SendBinMessage(to addr.LogicAddr, msg []byte) error {
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
 	return getDefault().Call(ctx, to, method, arg, ret)
-}
-
-func CallWithCallback(to addr.LogicAddr, deadline time.Time, method string, arg interface{}, ret interface{}, cb func(interface{}, error)) (func() bool, error) {
-	return getDefault().CallWithCallback(to, deadline, method, arg, ret, cb)
 }
 
 func StartSmuxServer(onNewStream func(*smux.Stream)) {
