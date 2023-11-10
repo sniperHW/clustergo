@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/rpcgo"
 	"context"
-	"time"
 )
 
 type Replyer struct {
@@ -40,21 +39,3 @@ func Call(ctx context.Context, peer addr.LogicAddr,arg *Request) (*Response,erro
 	err := clustergo.Call(ctx,peer,"test",arg,&resp)
 	return &resp,err
 }
-
-func CallWithCallback(peer addr.LogicAddr,deadline time.Time,arg *Request,cb func(*Response,error)) (func() bool,error) {
-	var resp Response
-	var fn func(interface{}, error)
-	if cb != nil {
-		fn = func (ret interface{}, err error){
-			if ret != nil {
-				cb(ret.(*Response),err)
-			} else {
-				cb(nil,err)
-			}
-		}
-	}
-
-
-	return clustergo.CallWithCallback(peer,deadline,"test",arg,&resp,fn) 		
-}
-
