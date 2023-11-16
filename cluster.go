@@ -98,7 +98,7 @@ type Node struct {
 	started         chan struct{}
 	smuxSessions    sync.Map
 	onNewStream     atomic.Value
-	onBinaryMessage func(addr.LogicAddr, []byte)
+	onBinaryMessage func(addr.LogicAddr, uint16, []byte)
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
@@ -180,7 +180,7 @@ func (s *Node) RegisterPbHandler(msg proto.Message, handler func(addr.LogicAddr,
 	}
 }
 
-func (s *Node) OnBinaryMessage(handler func(addr.LogicAddr, []byte)) {
+func (s *Node) OnBinaryMessage(handler func(addr.LogicAddr, uint16, []byte)) {
 	s.onBinaryMessage = handler
 }
 
@@ -188,7 +188,7 @@ func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Node) SendBinMessage(to addr.LogicAddr, msg []byte) error {
+func (s *Node) SendBinMessage(to addr.LogicAddr, msg []byte, cmd ...uint16) error {
 	select {
 	case <-s.die:
 		return errors.New("server die")
@@ -197,10 +197,14 @@ func (s *Node) SendBinMessage(to addr.LogicAddr, msg []byte) error {
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.onBinaryMessage(to, msg)
+		if len(cmd) > 0 {
+			s.onBinaryMessage(to, cmd[0], msg)
+		} else {
+			s.onBinaryMessage(to, 0, msg)
+		}
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
+			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd...), time.Now().Add(time.Second))
 		} else {
 			return fmt.Errorf("target:%s not found", to.String())
 		}
@@ -436,7 +440,7 @@ func newNode(rpccodec rpcgo.Codec) *Node {
 		},
 		die:             make(chan struct{}),
 		started:         make(chan struct{}),
-		onBinaryMessage: func(addr.LogicAddr, []byte) {},
+		onBinaryMessage: func(addr.LogicAddr, uint16, []byte) {},
 	}
 }
 
@@ -470,7 +474,7 @@ func RegisterPbMessageHandler(msg proto.Message, handler func(addr.LogicAddr, pr
 	getDefault().RegisterPbHandler(msg, handler)
 }
 
-func OnBinaryMessage(handler func(addr.LogicAddr, []byte)) {
+func OnBinaryMessage(handler func(addr.LogicAddr, uint16, []byte)) {
 	getDefault().OnBinaryMessage(handler)
 }
 
@@ -482,8 +486,8 @@ func SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
 	return getDefault().SendPbMessage(to, msg)
 }
 
-func SendBinMessage(to addr.LogicAddr, msg []byte) error {
-	return getDefault().SendBinMessage(to, msg)
+func SendBinMessage(to addr.LogicAddr, msg []byte, cmd ...uint16) error {
+	return getDefault().SendBinMessage(to, msg, cmd...)
 }
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {

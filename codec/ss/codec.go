@@ -36,7 +36,7 @@ func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint16, flag byte, data []byte) (net.Buffers, int) {
 	payloadLen := sizeFlag + sizeToAndFrom + len(data)
 
-	if flag == PbMsg {
+	if flag == PbMsg || flag == BinMsg {
 		payloadLen += sizeCmd
 	}
 
@@ -57,7 +57,7 @@ func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint16, flag byte, 
 	binary.BigEndian.PutUint32(b[5:], uint32(m.To()))
 	binary.BigEndian.PutUint32(b[9:], uint32(m.From()))
 
-	if flag == PbMsg {
+	if flag == PbMsg || flag == BinMsg {
 		//写cmd
 		b = buffer.AppendUint16(b, cmd)
 	}
@@ -80,7 +80,7 @@ func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 			}
 			//设置Bin消息标记
 			setMsgType(&flag, BinMsg)
-			return ss.encode(buffs, o, 0, flag, msg)
+			return ss.encode(buffs, o, o.cmd, flag, msg)
 		case proto.Message:
 			var cmd uint32
 			if data, cmd, err = ss.pbMeta.Marshal(msg); err != nil {
@@ -119,7 +119,9 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 		//当前节点是数据包的目标接收方
 		switch getMsgType(flag) {
 		case BinMsg:
-			return NewMessage(to, from, ss.reader.GetAll()), nil
+			cmd := ss.reader.GetUint16()
+			data := ss.reader.GetAll()
+			return NewMessage(to, from, data, cmd), nil
 		case PbMsg:
 			cmd := ss.reader.GetUint16()
 			data := ss.reader.GetAll()

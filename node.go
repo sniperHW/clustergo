@@ -287,7 +287,7 @@ func (n *node) onMessage(self *Node, msg interface{}) {
 		case proto.Message:
 			self.msgManager.dispatchPb(msg.From(), msg.Cmd(), m)
 		case []byte:
-			self.onBinaryMessage(msg.From(), m)
+			self.onBinaryMessage(msg.From(), msg.Cmd(), m)
 		case *rpcgo.RequestMsg:
 			self.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n, self: self}, m)
 		case *rpcgo.ResponseMsg:

@@ -535,8 +535,8 @@ func TestDefault(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
-	OnBinaryMessage(func(_ addr.LogicAddr, msg []byte) {
-		logger.Debug(string(msg))
+	OnBinaryMessage(func(from addr.LogicAddr, cmd uint16, msg []byte) {
+		logger.Debugf("from:%v,cmd:%d,msg:%v", from.String(), cmd, string(msg))
 	})
 
 	err := Start(localDiscovery, node1Addr.LogicAddr())
@@ -545,7 +545,7 @@ func TestDefault(t *testing.T) {
 	//向自身发送消息
 	SendPbMessage(node1Addr.LogicAddr(), &ss.Echo{Msg: "hello"})
 
-	SendBinMessage(node1Addr.LogicAddr(), []byte("binMessage"))
+	SendBinMessage(node1Addr.LogicAddr(), []byte("binMessage"), 1)
 
 	//调用自身hello
 	var resp string
@@ -567,7 +567,7 @@ func TestDefault(t *testing.T) {
 	})
 
 	logger.Debug("send bin")
-	node2.SendBinMessage(node1Addr.LogicAddr(), []byte("binMessage"))
+	node2.SendBinMessage(node1Addr.LogicAddr(), []byte("binMessage"), 2)
 
 	node3Addr, _ := addr.MakeAddr("1.2.1", "localhost:18113")
 
