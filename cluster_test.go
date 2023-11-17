@@ -105,7 +105,7 @@ func TestBenchmarkRPC(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newNode(JsonCodec{})
+	node1 := NewClusterNode(JsonCodec{})
 	node1.RegisterPbHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -114,7 +114,7 @@ func TestBenchmarkRPC(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
-	node2 := newNode(JsonCodec{})
+	node2 := NewClusterNode(JsonCodec{})
 	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -169,7 +169,7 @@ func TestSingleNode(t *testing.T) {
 		Available: true,
 	})
 
-	s := newNode(JsonCodec{})
+	s := NewClusterNode(JsonCodec{})
 
 	assert.NotNil(t, s.Stop())
 	assert.NotNil(t, s.Wait())
@@ -219,7 +219,7 @@ func TestTwoNode(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newNode(JsonCodec{})
+	node1 := NewClusterNode(JsonCodec{})
 	node1.RegisterPbHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -229,7 +229,7 @@ func TestTwoNode(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
-	node2 := newNode(JsonCodec{})
+	node2 := NewClusterNode(JsonCodec{})
 	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -298,7 +298,7 @@ func TestHarbor(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newNode(&JsonCodec{})
+	node1 := NewClusterNode(&JsonCodec{})
 	node1.RegisterPbHandler(&ss.Echo{}, func(_ addr.LogicAddr, msg proto.Message) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
@@ -311,15 +311,15 @@ func TestHarbor(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := newNode(JsonCodec{})
+	node2 := NewClusterNode(JsonCodec{})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor1 := newNode(JsonCodec{})
+	harbor1 := NewClusterNode(JsonCodec{})
 	err = harbor1.Start(localDiscovery, harbor1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	harbor2 := newNode(JsonCodec{})
+	harbor2 := NewClusterNode(JsonCodec{})
 	err = harbor2.Start(localDiscovery, harbor2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -382,7 +382,7 @@ func TestStream(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newNode(JsonCodec{})
+	node1 := NewClusterNode(JsonCodec{})
 
 	node1.StartSmuxServer(func(s *smux.Stream) {
 		go func() {
@@ -396,7 +396,7 @@ func TestStream(t *testing.T) {
 	err := node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2 := newNode(JsonCodec{})
+	node2 := NewClusterNode(JsonCodec{})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 
@@ -456,7 +456,7 @@ func TestBiDirectionDial(t *testing.T) {
 		Available: true,
 	})
 
-	node1 := newNode(JsonCodec{})
+	node1 := NewClusterNode(JsonCodec{})
 
 	var wait sync.WaitGroup
 
@@ -467,7 +467,7 @@ func TestBiDirectionDial(t *testing.T) {
 		wait.Done()
 	})
 
-	node2 := newNode(JsonCodec{})
+	node2 := NewClusterNode(JsonCodec{})
 
 	node2.RegisterPbHandler(&ss.Echo{}, func(from addr.LogicAddr, msg proto.Message) {
 		logger.Debug("message from ", from.String())
@@ -556,7 +556,7 @@ func TestDefault(t *testing.T) {
 	_, err = OpenStream(node1Addr.LogicAddr())
 	assert.Equal(t, err.Error(), "cant't open stream to self")
 
-	node2 := newNode(JsonCodec{})
+	node2 := NewClusterNode(JsonCodec{})
 	err = node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
 

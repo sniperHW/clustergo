@@ -425,7 +425,7 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 	}
 }
 
-func newNode(rpccodec rpcgo.Codec) *Node {
+func NewClusterNode(rpccodec rpcgo.Codec) *Node {
 	return &Node{
 		nodeCache: nodeCache{
 			allnodes: map[addr.LogicAddr]*node{},
@@ -449,7 +449,7 @@ var defaultOnce sync.Once
 
 func getDefault() *Node {
 	defaultOnce.Do(func() {
-		defaultInstance = newNode(RPCCodec)
+		defaultInstance = NewClusterNode(RPCCodec)
 	})
 	return defaultInstance
 }
