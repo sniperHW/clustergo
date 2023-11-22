@@ -285,9 +285,9 @@ func (n *node) onMessage(self *Node, msg interface{}) {
 	case *ss.Message:
 		switch m := msg.Payload().(type) {
 		case proto.Message:
-			self.msgManager.dispatchPb(msg.From(), msg.Cmd(), m)
+			self.msgManager.dispatchProto(msg.From(), msg.Cmd(), m)
 		case []byte:
-			self.onBinaryMessage(msg.From(), msg.Cmd(), m)
+			self.msgManager.dispatchBinary(msg.From(), msg.Cmd(), m)
 		case *rpcgo.RequestMsg:
 			self.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n, self: self}, m)
 		case *rpcgo.ResponseMsg:
