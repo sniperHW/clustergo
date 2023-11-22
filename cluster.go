@@ -485,7 +485,7 @@ func NewClusterNode(rpccodec rpcgo.Codec) *Node {
 var defaultInstance *Node
 var defaultOnce sync.Once
 
-func getDefault() *Node {
+func GetDefaultNode() *Node {
 	defaultOnce.Do(func() {
 		defaultInstance = NewClusterNode(RPCCodec)
 	})
@@ -493,49 +493,49 @@ func getDefault() *Node {
 }
 
 func Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {
-	return getDefault().Start(discovery, localAddr)
+	return GetDefaultNode().Start(discovery, localAddr)
 }
 
 func GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
-	return getDefault().GetAddrByType(tt, n...)
+	return GetDefaultNode().GetAddrByType(tt, n...)
 }
 
 func Stop() error {
-	return getDefault().Stop()
+	return GetDefaultNode().Stop()
 }
 
 func Wait() error {
-	return getDefault().Wait()
+	return GetDefaultNode().Wait()
 }
 
 func RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) {
-	getDefault().RegisterProtoHandler(msg, handler)
+	GetDefaultNode().RegisterProtoHandler(msg, handler)
 }
 
 func RegisterBinaryHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) {
-	getDefault().RegisterBinrayHandler(cmd, handler)
+	GetDefaultNode().RegisterBinrayHandler(cmd, handler)
 }
 
 func RegisterRPC(name string, method interface{}) error {
-	return getDefault().RegisterRPC(name, method)
+	return GetDefaultNode().RegisterRPC(name, method)
 }
 
 func SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
-	return getDefault().SendPbMessage(to, msg)
+	return GetDefaultNode().SendPbMessage(to, msg)
 }
 
 func SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
-	return getDefault().SendBinMessage(to, cmd, msg)
+	return GetDefaultNode().SendBinMessage(to, cmd, msg)
 }
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
-	return getDefault().Call(ctx, to, method, arg, ret)
+	return GetDefaultNode().Call(ctx, to, method, arg, ret)
 }
 
 func StartSmuxServer(onNewStream func(*smux.Stream)) {
-	getDefault().StartSmuxServer(onNewStream)
+	GetDefaultNode().StartSmuxServer(onNewStream)
 }
 
 func OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
-	return getDefault().OpenStream(peer)
+	return GetDefaultNode().OpenStream(peer)
 }
