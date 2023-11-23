@@ -242,7 +242,9 @@ func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.msgManager.dispatchBinary(to, cmd, msg)
+		go func() {
+			s.msgManager.dispatchBinary(to, cmd, msg)
+		}()
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), time.Now().Add(time.Second))
@@ -262,7 +264,9 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.msgManager.dispatchProto(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
+		go func() {
+			s.msgManager.dispatchProto(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
+		}()
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
