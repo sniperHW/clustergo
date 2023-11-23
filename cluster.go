@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -210,20 +211,22 @@ func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err erro
 	return addr, err
 }
 
-func (s *Node) RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) {
+func (s *Node) RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) *Node {
 	if handler == nil {
-		return
+		logger.Panicf("RegisterBinrayHandler %s handler == nil", reflect.TypeOf(msg).Name())
 	}
 	if cmd := pb.GetCmd(ss.Namespace, msg); cmd != 0 {
 		s.msgManager.registerProto(uint16(cmd), handler)
 	}
+	return s
 }
 
-func (s *Node) RegisterBinrayHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) {
+func (s *Node) RegisterBinrayHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) *Node {
 	if handler == nil {
-		return
+		logger.Panicf("RegisterBinrayHandler %d handler == nil", cmd)
 	}
 	s.msgManager.registerBinary(uint16(cmd), handler)
+	return s
 }
 
 func (s *Node) RegisterRPC(name string, method interface{}) error {
@@ -244,7 +247,7 @@ func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), time.Now().Add(time.Second))
 		} else {
-			return fmt.Errorf("target:%s not found", to.String())
+			return ErrInvaildNode
 		}
 	}
 	return nil
@@ -264,7 +267,7 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
 		} else {
-			return fmt.Errorf("target:%s not found", to.String())
+			return ErrInvaildNode
 		}
 	}
 	return nil
@@ -284,7 +287,7 @@ func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg i
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			return s.rpcCli.Call(ctx, &rpcChannel{peer: to, node: n, self: s}, method, arg, ret)
 		} else {
-			return rpcgo.NewError(rpcgo.ErrSend, fmt.Sprintf("target:%s not found", to.String()))
+			return ErrInvaildNode
 		}
 	}
 }
@@ -508,12 +511,12 @@ func Wait() error {
 	return GetDefaultNode().Wait()
 }
 
-func RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) {
-	GetDefaultNode().RegisterProtoHandler(msg, handler)
+func RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) *Node {
+	return GetDefaultNode().RegisterProtoHandler(msg, handler)
 }
 
-func RegisterBinaryHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) {
-	GetDefaultNode().RegisterBinrayHandler(cmd, handler)
+func RegisterBinaryHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) *Node {
+	return GetDefaultNode().RegisterBinrayHandler(cmd, handler)
 }
 
 func RegisterRPC(name string, method interface{}) error {
