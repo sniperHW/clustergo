@@ -233,7 +233,7 @@ func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
+func (s *Node) sendBinMessage(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte, deadline time.Time) error {
 	select {
 	case <-s.die:
 		return errors.New("server die")
@@ -247,12 +247,20 @@ func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
 		}()
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), time.Now().Add(time.Second))
+			n.sendMessage(ctx, s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), deadline)
 		} else {
 			return ErrInvaildNode
 		}
 	}
 	return nil
+}
+
+func (s *Node) SendBinMessageContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
+	return s.sendBinMessage(ctx, to, cmd, msg, time.Time{})
+}
+
+func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
+	return s.sendBinMessage(context.TODO(), to, cmd, msg, time.Now().Add(time.Second))
 }
 
 func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
