@@ -267,12 +267,12 @@ func (n *node) onRelayMessage(self *Node, message *ss.RelayMessage) {
 	logger.Debugf("onRelayMessage self:%s %s->%s", self.localAddr.LogicAddr().String(), message.From().String(), message.To().String())
 	if nextNode := self.getNodeByLogicAddr(message.To()); nextNode != nil {
 		logger.Debugf("nextNode %s", nextNode.addr.LogicAddr())
-		nextNode.sendMessage(context.TODO(), self, message, time.Now().Add(time.Second))
+		nextNode.sendMessage(self, message, time.Now().Add(time.Second))
 	} else if rpcReq := message.GetRpcRequest(); rpcReq != nil && !rpcReq.Oneway {
 		//对于无法路由的rpc请求，返回错误响应
 		if nextNode = self.getNodeByLogicAddr(message.From()); nextNode != nil {
 			logger.Debugf(fmt.Sprintf("route message to target:%s failed", message.To().String()))
-			nextNode.sendMessage(context.TODO(), self, ss.NewMessage(message.From(), self.localAddr.LogicAddr(), &rpcgo.ResponseMsg{
+			nextNode.sendMessage(self, ss.NewMessage(message.From(), self.localAddr.LogicAddr(), &rpcgo.ResponseMsg{
 				Seq: rpcReq.Seq,
 				Err: rpcgo.NewError(rpcgo.ErrOther, fmt.Sprintf("route message to target:%s failed", message.To().String())),
 			}), time.Now().Add(time.Second))
@@ -300,7 +300,11 @@ func (n *node) onMessage(self *Node, msg interface{}) {
 
 func (n *node) onEstablish(self *Node, conn *net.TCPConn) {
 	codec := ss.NewCodec(self.localAddr.LogicAddr())
-	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn, codec), netgo.AsynSocketOption{Codec: codec, AutoRecv: true})
+	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn, codec), netgo.AsynSocketOption{
+		SendChanSize: SendChanSize,
+		Codec:        codec,
+		AutoRecv:     true,
+	})
 
 	n.socket.SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
 		if self.getNodeByLogicAddr(n.addr.LogicAddr()) != n {
@@ -321,16 +325,42 @@ func (n *node) onEstablish(self *Node, conn *net.TCPConn) {
 
 	for e := n.pendingMsg.Front(); e != nil; e = n.pendingMsg.Front() {
 		msg := n.pendingMsg.Remove(e).(*pendingMessage)
-		if !msg.deadline.IsZero() {
-			if now.Before(msg.deadline) {
-				n.socket.Send(msg.message, msg.deadline)
-			}
-		} else if msg.ctx != nil {
+		if msg.ctx != nil {
 			select {
 			case <-msg.ctx.Done():
 			default:
 				n.socket.SendWithContext(msg.ctx, msg.message)
 			}
+		} else if msg.deadline.IsZero() || now.Before(msg.deadline) {
+			n.socket.Send(msg.message, msg.deadline)
+		}
+	}
+}
+
+// 移除ctx.Done或到达deadline的消息
+func (n *node) removeFailedMsg(removeZero bool) {
+	now := time.Now()
+	e := n.pendingMsg.Front()
+	for e != nil {
+		m := e.Value.(*pendingMessage)
+		remove := false
+
+		if m.ctx != nil {
+			select {
+			case <-m.ctx.Done():
+				remove = true
+			default:
+			}
+		} else if (m.deadline.IsZero() && removeZero) || now.After(m.deadline) {
+			remove = true
+		}
+
+		if remove {
+			next := e.Next()
+			n.pendingMsg.Remove(e)
+			e = next
+		} else {
+			e = e.Next()
 		}
 	}
 }
@@ -339,33 +369,7 @@ func (n *node) dialError(self *Node) {
 	n.Lock()
 	defer n.Unlock()
 	if nil == n.socket {
-		now := time.Now()
-		e := n.pendingMsg.Front()
-		for e != nil {
-			m := e.Value.(*pendingMessage)
-			remove := false
-
-			if !m.deadline.IsZero() {
-				if now.After(m.deadline) {
-					remove = true
-				}
-			} else {
-				select {
-				case <-m.ctx.Done():
-					remove = true
-				default:
-				}
-			}
-
-			if remove {
-				next := e.Next()
-				n.pendingMsg.Remove(e)
-				e = next
-			} else {
-				e = e.Next()
-			}
-		}
-
+		n.removeFailedMsg(false)
 		if n.pendingMsg.Len() > 0 {
 			time.AfterFunc(time.Second, func() {
 				n.dial(self)
@@ -451,21 +455,56 @@ func (n *node) openStream(self *Node) (*smux.Stream, error) {
 	}
 }
 
-func (n *node) sendMessage(ctx context.Context, self *Node, msg interface{}, deadline time.Time) (err error) {
+func (n *node) sendMessage(self *Node, msg interface{}, deadline time.Time) (err error) {
 	n.Lock()
 	socket := n.socket
 	if socket != nil {
 		n.Unlock()
-		if deadline.IsZero() {
-			err = socket.SendWithContext(ctx, msg)
-		} else {
-			err = socket.Send(msg, deadline)
-		}
+		err = socket.Send(msg, deadline)
 	} else {
+		if n.pendingMsg.Len() >= MaxPendingMsgSize {
+			if !deadline.IsZero() {
+				//deadline.IsZero的包优先及最低，直接丢弃
+				return ErrPendingQueueFull
+			} else {
+				//尝试移除已经失效或deadline.IsZero的msg
+				n.removeFailedMsg(true)
+				if n.pendingMsg.Len() >= MaxPendingMsgSize {
+					return ErrPendingQueueFull
+				}
+			}
+		}
+
 		n.pendingMsg.PushBack(&pendingMessage{
 			message:  msg,
-			ctx:      ctx,
 			deadline: deadline,
+		})
+		//尝试与对端建立连接
+		if n.pendingMsg.Len() == 1 {
+			go n.dial(self)
+		}
+		n.Unlock()
+	}
+	return err
+}
+
+func (n *node) sendMessageWithContext(ctx context.Context, self *Node, msg interface{}) (err error) {
+	n.Lock()
+	socket := n.socket
+	if socket != nil {
+		n.Unlock()
+		err = socket.SendWithContext(ctx, msg)
+	} else {
+		if n.pendingMsg.Len() >= MaxPendingMsgSize {
+			//尝试移除已经失效或deadline.IsZero的msg
+			n.removeFailedMsg(true)
+			if n.pendingMsg.Len() >= MaxPendingMsgSize {
+				return ErrPendingQueueFull
+			}
+		}
+		n.pendingMsg.PushBack(&pendingMessage{
+			message: msg,
+			ctx:     ctx,
 		})
 		//尝试与对端建立连接
 		if n.pendingMsg.Len() == 1 {

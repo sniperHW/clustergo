@@ -26,9 +26,16 @@ import (
 )
 
 var (
-	ErrInvaildNode     = errors.New("invaild node")
-	ErrDuplicateConn   = errors.New("duplicate node connection")
-	ErrNetAddrMismatch = errors.New("net addr mismatch")
+	ErrInvaildNode      = errors.New("invaild node")
+	ErrDuplicateConn    = errors.New("duplicate node connection")
+	ErrNetAddrMismatch  = errors.New("net addr mismatch")
+	ErrPendingQueueFull = errors.New("pending queue full")
+)
+
+var (
+	SendChanSize       int           = 256                    //socket异步发送chan的大小
+	DefaultSendTimeout time.Duration = time.Millisecond * 200 //
+	MaxPendingMsgSize  int           = 1024                   //连接建立前待发送消息缓冲区的大小，一旦缓冲区满，发送将返回ErrPendingQueueFull
 )
 
 var RPCCodec rpcgo.Codec = PbCodec{}
@@ -233,7 +240,7 @@ func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Node) sendBinMessage(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte, deadline time.Time) error {
+func (s *Node) SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
 	select {
 	case <-s.die:
 		return errors.New("server die")
@@ -247,7 +254,7 @@ func (s *Node) sendBinMessage(ctx context.Context, to addr.LogicAddr, cmd uint16
 		}()
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessage(ctx, s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), deadline)
+			n.sendMessageWithContext(ctx, s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd))
 		} else {
 			return ErrInvaildNode
 		}
@@ -255,15 +262,45 @@ func (s *Node) sendBinMessage(ctx context.Context, to addr.LogicAddr, cmd uint16
 	return nil
 }
 
-func (s *Node) SendBinMessageContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
-	return s.sendBinMessage(ctx, to, cmd, msg, time.Time{})
+/*
+ *  SendMessage系列函数的deadline参数选择
+ *
+ *  发送操作存在两个对外隐藏的缓冲区 分别为:
+ *  pendingMsgQueue:  连接建立之前缓存待发送消息,如果pendingMsgQueue满SendMessage返回ErrPendingQueueFull
+ *  sendQueue:        异步发送缓冲区，如果满行为取决于deadline,如果deadline==0返回netgo.ErrSendQueueFull,否则等到deadline超时返回ErrPushToSendQueueTimeout
+ *
+ *  当 deadline != 0, deadline包含连接建立的时间，如果deadline到达时连接尚未建立 msg将被丢弃。
+ *  连接建立后将检查msg的deadline,如果到达msg将被丢弃。
+ *
+ */
+
+func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte, deadline ...time.Time) error {
+	select {
+	case <-s.die:
+		return errors.New("server die")
+	case <-s.started:
+	default:
+		return errors.New("server not start")
+	}
+	if to == s.localAddr.LogicAddr() {
+		go func() {
+			s.msgManager.dispatchBinary(to, cmd, msg)
+		}()
+	} else {
+		if n := s.getNodeByLogicAddr(to); n != nil {
+			d := time.Now().Add(DefaultSendTimeout)
+			if len(deadline) > 0 {
+				d = deadline[0]
+			}
+			n.sendMessage(s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd), d)
+		} else {
+			return ErrInvaildNode
+		}
+	}
+	return nil
 }
 
-func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
-	return s.sendBinMessage(context.TODO(), to, cmd, msg, time.Now().Add(time.Second))
-}
-
-func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
+func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...time.Time) error {
 	select {
 	case <-s.die:
 		return errors.New("server die")
@@ -277,7 +314,11 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
 		}()
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessage(context.TODO(), s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), time.Now().Add(time.Second))
+			d := time.Now().Add(DefaultSendTimeout)
+			if len(deadline) > 0 {
+				d = deadline[0]
+			}
+			n.sendMessage(s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg), d)
 		} else {
 			return ErrInvaildNode
 		}
@@ -535,12 +576,16 @@ func RegisterRPC(name string, method interface{}) error {
 	return GetDefaultNode().RegisterRPC(name, method)
 }
 
-func SendPbMessage(to addr.LogicAddr, msg proto.Message) error {
-	return GetDefaultNode().SendPbMessage(to, msg)
+func SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...time.Time) error {
+	return GetDefaultNode().SendPbMessage(to, msg, deadline...)
 }
 
-func SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte) error {
-	return GetDefaultNode().SendBinMessage(to, cmd, msg)
+func SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte, deadline ...time.Time) error {
+	return GetDefaultNode().SendBinMessage(to, cmd, msg, deadline...)
+}
+
+func SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
+	return GetDefaultNode().SendBinMessageWithContext(ctx, to, cmd, msg)
 }
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {

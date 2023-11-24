@@ -10,6 +10,7 @@ import (
 
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/ss"
+	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
 	"google.golang.org/protobuf/proto"
 )
@@ -26,16 +27,12 @@ type rpcChannel struct {
 	once sync.Once
 }
 
-func (c *rpcChannel) SendRequest(request *rpcgo.RequestMsg, deadline time.Time) error {
-	return c.node.sendMessage(context.TODO(), c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request), deadline)
-}
-
-func (c *rpcChannel) SendRequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
-	return c.node.sendMessage(ctx, c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request), time.Time{})
+func (c *rpcChannel) SendRequest(ctx context.Context, request *rpcgo.RequestMsg) error {
+	return c.node.sendMessageWithContext(ctx, c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request))
 }
 
 func (c *rpcChannel) Reply(response *rpcgo.ResponseMsg) error {
-	return c.node.sendMessage(context.TODO(), c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), response), time.Now().Add(time.Second))
+	return c.node.sendMessage(c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), response), time.Now().Add(time.Second))
 }
 
 func (c *rpcChannel) Name() string {
@@ -59,6 +56,15 @@ func (c *rpcChannel) Peer() addr.LogicAddr {
 	return c.peer
 }
 
+func (c *rpcChannel) IsRetryAbleError(err error) bool {
+	switch err {
+	case ErrPendingQueueFull, netgo.ErrSendQueueFull, netgo.ErrPushToSendQueueTimeout:
+		return true
+	default:
+		return netgo.IsNetTimeoutError(err)
+	}
+}
+
 // 自连接channel
 type selfChannel struct {
 	self *Node
@@ -66,14 +72,7 @@ type selfChannel struct {
 	once sync.Once
 }
 
-func (c *selfChannel) SendRequest(request *rpcgo.RequestMsg, deadline time.Time) error {
-	go func() {
-		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
-	}()
-	return nil
-}
-
-func (c *selfChannel) SendRequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
+func (c *selfChannel) SendRequest(ctx context.Context, request *rpcgo.RequestMsg) error {
 	go func() {
 		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
 	}()
@@ -101,6 +100,10 @@ func (c *selfChannel) Identity() uint64 {
 
 func (c *selfChannel) Peer() addr.LogicAddr {
 	return c.self.localAddr.LogicAddr()
+}
+
+func (c *selfChannel) IsRetryAbleError(_ error) bool {
+	return false
 }
 
 type JsonCodec struct {
