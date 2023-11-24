@@ -1,0 +1,23 @@
+tcp_port = ":8111"
+inter_service = ":18111"
+
+
+socket_timeout = "5m"
+mongo_connect_timeout = "3s"
+lesson_refresh_interval = "10m" # 学习流更新时间间隔，<=0 表示不使用缓存，每次都从中台拉取
+node_release_delay = "30s" # 节点释放延迟时间
+
+node_save_interval = "5m" # 节点保存间隔
+gm_enable = true
+time_offset = 86400
+
+[mongo]
+uri = "mongodb://localhost:27017"
+database = "basketball"
+
+[Log]
+MaxLogfileSize  = 100 # 100mb
+LogLevel        = "debug"
+EnableStdout = true
+MaxAge          = 14   #最大保留14天的日志
+MaxBackups      = 10   #最多保留10个滚动日志	

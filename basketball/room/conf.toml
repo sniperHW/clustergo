@@ -1,0 +1,6 @@
+ExportService = "8.208.81.212:8110"
+InterService  = "127.0.0.1:18110" 
+GameService   = "127.0.0.1:18111"
+MaxRoomNum    = 100
+MaxPlayerNum  = 500
+RecvTimeout   = 3 #秒
