@@ -61,7 +61,7 @@ func (c *rpcChannel) IsRetryAbleError(err error) bool {
 	case ErrPendingQueueFull, netgo.ErrSendQueueFull, netgo.ErrPushToSendQueueTimeout:
 		return true
 	default:
-		return netgo.IsNetTimeoutError(err)
+		return false
 	}
 }
 
