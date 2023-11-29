@@ -61,11 +61,11 @@ func MakeHarborAddr(logic string, tcpAddr string) (Addr, error) {
 	}, nil
 }
 
-func (a *Addr) LogicAddr() LogicAddr {
+func (a Addr) LogicAddr() LogicAddr {
 	return a.logicAddr
 }
 
-func (a *Addr) NetAddr() *net.TCPAddr {
+func (a Addr) NetAddr() *net.TCPAddr {
 	return (*net.TCPAddr)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&a.netAddr))))
 }
 

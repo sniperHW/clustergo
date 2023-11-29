@@ -19,7 +19,7 @@ func main() {
 	echoAddr, _ := clustergo.GetAddrByType(1)
 
 	for i := 0; i < 10; i++ {
-		resp, err := echo.Call(context.TODO(), echoAddr, &echo.Request{Msg: "hello"})
+		resp, err := echo.Call(context.TODO(), echoAddr, &echo.EchoReq{Msg: "hello"})
 		clustergo.Log().Debug(resp, err)
 	}
 	clustergo.Stop()

@@ -168,6 +168,10 @@ func (s *Node) getNodeByLogicAddr(to addr.LogicAddr) (n *node) {
 	return n
 }
 
+func (s *Node) Addr() addr.Addr {
+	return s.localAddr
+}
+
 func (s *Node) StartSmuxServer(onNewStream func(*smux.Stream)) error {
 	if s.onNewStream.CompareAndSwap(nil, onNewStream) {
 		return nil

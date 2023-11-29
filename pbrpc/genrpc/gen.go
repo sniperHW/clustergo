@@ -23,7 +23,7 @@ type Replyer struct {
 	replyer *rpcgo.Replyer
 }
 
-func (r *Replyer) Reply(result *Response) {
+func (r *Replyer) Reply(result *{{.Response}}) {
 	r.replyer.Reply(result)
 }
 
@@ -36,25 +36,27 @@ func (r *Replyer) Channel() rpcgo.Channel {
 }
 
 type {{.Service}} interface {
-	OnCall(context.Context, *Replyer,*Request)
+	Serve{{.Service}}(context.Context, *Replyer,*{{.Request}})
 }
 
 func Register(o {{.Service}}) {
-	clustergo.RegisterRPC("{{.Method}}",func(ctx context.Context, r *rpcgo.Replyer,arg *Request) {
-		o.OnCall(ctx,&Replyer{replyer:r},arg)
+	clustergo.RegisterRPC("{{.Method}}",func(ctx context.Context, r *rpcgo.Replyer,arg *{{.Request}}) {
+		o.Serve{{.Service}}(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
-func Call(ctx context.Context, peer addr.LogicAddr,arg *Request) (*Response,error) {
-	var resp Response
+func Call(ctx context.Context, peer addr.LogicAddr,arg *{{.Request}}) (*{{.Response}},error) {
+	var resp {{.Response}}
 	err := clustergo.Call(ctx,peer,"{{.Method}}",arg,&resp)
 	return &resp,err
 }
 `
 
 type method struct {
-	Method  string
-	Service string
+	Method   string
+	Request  string
+	Response string
+	Service  string
 }
 
 var (
@@ -86,7 +88,12 @@ func gen(tmpl *template.Template, name string) {
 		return
 	}
 
-	err = tmpl.Execute(f, method{name, strings.Title(name) + "Service"})
+	err = tmpl.Execute(f, method{
+		Method:   name,
+		Service:  strings.Title(name),
+		Request:  fmt.Sprintf("%sReq", strings.Title(name)),
+		Response: fmt.Sprintf("%sRsp", strings.Title(name)),
+	})
 	if err != nil {
 		panic(err)
 	} else {

@@ -2,10 +2,10 @@ syntax = "proto3";
 
 option go_package = "service/echo";
 
-message request {
+message echoReq {
 	string msg = 1;
 }
 
-message response {
+message echoRsp {
     string msg = 1;
 }
