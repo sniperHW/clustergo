@@ -48,8 +48,8 @@ type loginReq struct {
 	IsStream  bool   `json:"IsStream,omitempty"`
 }
 
-type ProtoMsgHandler func(addr.LogicAddr, proto.Message)
-type BinaryMsgHandler func(addr.LogicAddr, uint16, []byte)
+type ProtoMsgHandler func(context.Context, addr.LogicAddr, proto.Message)
+type BinaryMsgHandler func(context.Context, addr.LogicAddr, uint16, []byte)
 
 type msgManager struct {
 	sync.RWMutex
@@ -57,7 +57,7 @@ type msgManager struct {
 	binaryMsgHandlers map[uint16]BinaryMsgHandler
 }
 
-func (m ProtoMsgHandler) call(from addr.LogicAddr, cmd uint16, msg proto.Message) {
+func (m ProtoMsgHandler) call(ctx context.Context, from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
@@ -65,10 +65,10 @@ func (m ProtoMsgHandler) call(from addr.LogicAddr, cmd uint16, msg proto.Message
 			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
 		}
 	}()
-	m(from, msg)
+	m(ctx, from, msg)
 }
 
-func (m BinaryMsgHandler) call(from addr.LogicAddr, cmd uint16, msg []byte) {
+func (m BinaryMsgHandler) call(ctx context.Context, from addr.LogicAddr, cmd uint16, msg []byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
@@ -76,7 +76,7 @@ func (m BinaryMsgHandler) call(from addr.LogicAddr, cmd uint16, msg []byte) {
 			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
 		}
 	}()
-	m(from, cmd, msg)
+	m(ctx, from, cmd, msg)
 }
 
 func (m *msgManager) registerProto(cmd uint16, handler ProtoMsgHandler) {
@@ -103,7 +103,7 @@ func (m *msgManager) registerBinary(cmd uint16, handler BinaryMsgHandler) {
 	m.binaryMsgHandlers[cmd] = handler
 }
 
-func (m *msgManager) dispatchProto(from addr.LogicAddr, cmd uint16, msg proto.Message) {
+func (m *msgManager) dispatchProto(ctx context.Context, from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	m.RLock()
 	handler, ok := m.protoMsgHandlers[cmd]
 	m.RUnlock()
@@ -111,14 +111,14 @@ func (m *msgManager) dispatchProto(from addr.LogicAddr, cmd uint16, msg proto.Me
 		if handler == nil {
 			logger.Errorf("cmd:%d pb handler is nil\n", cmd)
 		} else {
-			handler.call(from, cmd, msg)
+			handler.call(ctx, from, cmd, msg)
 		}
 	} else {
 		logger.Errorf("unkonw cmd:%d\n", cmd)
 	}
 }
 
-func (m *msgManager) dispatchBinary(from addr.LogicAddr, cmd uint16, msg []byte) {
+func (m *msgManager) dispatchBinary(ctx context.Context, from addr.LogicAddr, cmd uint16, msg []byte) {
 	m.RLock()
 	handler, ok := m.binaryMsgHandlers[cmd]
 	m.RUnlock()
@@ -126,14 +126,41 @@ func (m *msgManager) dispatchBinary(from addr.LogicAddr, cmd uint16, msg []byte)
 		if handler == nil {
 			logger.Errorf("cmd:%d pb handler is nil\n", cmd)
 		} else {
-			handler.call(from, cmd, msg)
+			handler.call(ctx, from, cmd, msg)
 		}
 	} else {
 		logger.Errorf("unkonw cmd:%d\n", cmd)
 	}
 }
 
+const pool_goroutine_size = 16
+
+type gopool struct {
+	taskqueue chan func()
+	die       chan struct{}
+}
+
+func (p *gopool) loop() {
+	for {
+		select {
+		case v := <-p.taskqueue:
+			v()
+		case <-p.die:
+			return
+		}
+	}
+}
+
+func (p *gopool) Go(fn func()) {
+	select {
+	case p.taskqueue <- fn:
+	default:
+		go fn()
+	}
+}
+
 type Node struct {
+	gopool
 	localAddr    addr.Addr
 	listener     net.Listener
 	nodeCache    nodeCache
@@ -142,7 +169,6 @@ type Node struct {
 	msgManager   msgManager
 	startOnce    sync.Once
 	stopOnce     sync.Once
-	die          chan struct{}
 	started      chan struct{}
 	smuxSessions sync.Map
 	onNewStream  atomic.Value
@@ -222,7 +248,7 @@ func (s *Node) GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err erro
 	return addr, err
 }
 
-func (s *Node) RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) *Node {
+func (s *Node) RegisterProtoHandler(msg proto.Message, handler func(context.Context, addr.LogicAddr, proto.Message)) *Node {
 	if handler == nil {
 		logger.Panicf("RegisterBinrayHandler %s handler == nil", reflect.TypeOf(msg).Name())
 	}
@@ -232,7 +258,7 @@ func (s *Node) RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAd
 	return s
 }
 
-func (s *Node) RegisterBinrayHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) *Node {
+func (s *Node) RegisterBinrayHandler(cmd uint16, handler func(context.Context, addr.LogicAddr, uint16, []byte)) *Node {
 	if handler == nil {
 		logger.Panicf("RegisterBinrayHandler %d handler == nil", cmd)
 	}
@@ -253,9 +279,9 @@ func (s *Node) SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr,
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		go func() {
-			s.msgManager.dispatchBinary(to, cmd, msg)
-		}()
+		s.Go(func() {
+			s.msgManager.dispatchBinary(context.TODO(), to, cmd, msg)
+		})
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			n.sendMessageWithContext(ctx, s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd))
@@ -287,9 +313,9 @@ func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte, deadlin
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		go func() {
-			s.msgManager.dispatchBinary(to, cmd, msg)
-		}()
+		s.Go(func() {
+			s.msgManager.dispatchBinary(context.TODO(), to, cmd, msg)
+		})
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			d := time.Now().Add(DefaultSendTimeout)
@@ -313,9 +339,9 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...t
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		go func() {
-			s.msgManager.dispatchProto(to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
-		}()
+		s.Go(func() {
+			s.msgManager.dispatchProto(context.TODO(), to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
+		})
 	} else {
 		if n := s.getNodeByLogicAddr(to); n != nil {
 			d := time.Now().Add(DefaultSendTimeout)
@@ -405,6 +431,9 @@ func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicA
 				}()
 			})
 			if err == nil {
+				for i := 0; i < pool_goroutine_size; i++ {
+					go s.loop()
+				}
 				logger.Debugf("%s serve on:%s", localAddr.String(), s.localAddr.NetAddr().String())
 				go serve()
 				close(s.started)
@@ -525,6 +554,10 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 
 func NewClusterNode(rpccodec rpcgo.Codec) *Node {
 	return &Node{
+		gopool: gopool{
+			die:       make(chan struct{}),
+			taskqueue: make(chan func(), 256),
+		},
 		nodeCache: nodeCache{
 			allnodes: map[addr.LogicAddr]*node{},
 			nodes:    map[uint32][]*node{},
@@ -537,7 +570,6 @@ func NewClusterNode(rpccodec rpcgo.Codec) *Node {
 			protoMsgHandlers:  map[uint16]ProtoMsgHandler{},
 			binaryMsgHandlers: map[uint16]BinaryMsgHandler{},
 		},
-		die:     make(chan struct{}),
 		started: make(chan struct{}),
 	}
 }
@@ -568,11 +600,11 @@ func Wait() error {
 	return GetDefaultNode().Wait()
 }
 
-func RegisterProtoHandler(msg proto.Message, handler func(addr.LogicAddr, proto.Message)) *Node {
+func RegisterProtoHandler(msg proto.Message, handler func(context.Context, addr.LogicAddr, proto.Message)) *Node {
 	return GetDefaultNode().RegisterProtoHandler(msg, handler)
 }
 
-func RegisterBinaryHandler(cmd uint16, handler func(addr.LogicAddr, uint16, []byte)) *Node {
+func RegisterBinaryHandler(cmd uint16, handler func(context.Context, addr.LogicAddr, uint16, []byte)) *Node {
 	return GetDefaultNode().RegisterBinrayHandler(cmd, handler)
 }
 

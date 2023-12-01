@@ -280,18 +280,18 @@ func (n *node) onRelayMessage(self *Node, message *ss.RelayMessage) {
 	}
 }
 
-func (n *node) onMessage(self *Node, msg interface{}) {
+func (n *node) onMessage(ctx context.Context, self *Node, msg interface{}) {
 	switch msg := msg.(type) {
 	case *ss.Message:
 		switch m := msg.Payload().(type) {
 		case proto.Message:
-			self.msgManager.dispatchProto(msg.From(), msg.Cmd(), m)
+			self.msgManager.dispatchProto(ctx, msg.From(), msg.Cmd(), m)
 		case []byte:
-			self.msgManager.dispatchBinary(msg.From(), msg.Cmd(), m)
+			self.msgManager.dispatchBinary(ctx, msg.From(), msg.Cmd(), m)
 		case *rpcgo.RequestMsg:
 			self.rpcSvr.OnMessage(context.TODO(), &rpcChannel{peer: msg.From(), node: n, self: self}, m)
 		case *rpcgo.ResponseMsg:
-			self.rpcCli.OnMessage(context.TODO(), m)
+			self.rpcCli.OnMessage(m)
 		}
 	case *ss.RelayMessage:
 		n.onRelayMessage(self, msg)
@@ -304,13 +304,14 @@ func (n *node) onEstablish(self *Node, conn *net.TCPConn) {
 		SendChanSize: SendChanSize,
 		Codec:        codec,
 		AutoRecv:     true,
+		Context:      context.TODO(),
 	})
 
-	n.socket.SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
+	n.socket.SetPacketHandler(func(ctx context.Context, as *netgo.AsynSocket, packet interface{}) error {
 		if self.getNodeByLogicAddr(n.addr.LogicAddr()) != n {
 			return ErrInvaildNode
 		} else {
-			n.onMessage(self, packet)
+			n.onMessage(ctx, self, packet)
 			return nil
 		}
 	})
@@ -481,7 +482,9 @@ func (n *node) sendMessage(self *Node, msg interface{}, deadline time.Time) (err
 		})
 		//尝试与对端建立连接
 		if n.pendingMsg.Len() == 1 {
-			go n.dial(self)
+			self.Go(func() {
+				n.dial(self)
+			})
 		}
 		n.Unlock()
 	}
@@ -508,7 +511,9 @@ func (n *node) sendMessageWithContext(ctx context.Context, self *Node, msg inter
 		})
 		//尝试与对端建立连接
 		if n.pendingMsg.Len() == 1 {
-			go n.dial(self)
+			self.Go(func() {
+				n.dial(self)
+			})
 		}
 		n.Unlock()
 	}

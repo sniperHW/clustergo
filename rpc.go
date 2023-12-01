@@ -73,16 +73,16 @@ type selfChannel struct {
 }
 
 func (c *selfChannel) SendRequest(ctx context.Context, request *rpcgo.RequestMsg) error {
-	go func() {
+	c.self.Go(func() {
 		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
-	}()
+	})
 	return nil
 }
 
 func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
-	go func() {
-		c.self.rpcCli.OnMessage(context.TODO(), response)
-	}()
+	c.self.Go(func() {
+		c.self.rpcCli.OnMessage(response)
+	})
 	return nil
 }
 
