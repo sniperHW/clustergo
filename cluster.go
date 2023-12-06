@@ -387,13 +387,21 @@ func (s *Node) Stop() error {
 		once = true
 	})
 	if once {
-		s.listener.Close()
-		s.nodeCache.close()
-		s.smuxSessions.Range(func(key, _ interface{}) bool {
-			key.(*smux.Session).Close()
-			return true
-		})
-		close(s.die)
+		go func() {
+			s.listener.Close()
+			//rpcSvr不再接收新的请求
+			s.rpcSvr.Stop()
+			//等待所有rpc请求都返回
+			for s.rpcSvr.PendingCallCount() > 0 {
+				time.Sleep(time.Millisecond * 10)
+			}
+			s.nodeCache.close()
+			s.smuxSessions.Range(func(key, _ interface{}) bool {
+				key.(*smux.Session).Close()
+				return true
+			})
+			close(s.die)
+		}()
 		return nil
 	} else {
 		return errors.New("stoped")
