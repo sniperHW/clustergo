@@ -137,6 +137,7 @@ func TestBenchmarkRPC(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			for atomic.AddInt32(&counter, 1) <= 100000 {
+				var resp string
 				node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
 			}
 			wait.Done()
@@ -197,8 +198,10 @@ func TestSingleNode(t *testing.T) {
 	err = s.Call(context.TODO(), localAddr.LogicAddr(), "hello", "sniperHW", &resp)
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
+
 	localDiscovery.RemoveNode(localAddr.LogicAddr())
 	s.Wait()
+
 }
 
 func TestTwoNode(t *testing.T) {
@@ -229,6 +232,12 @@ func TestTwoNode(t *testing.T) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
+	node1.RegisterRPC("Delay", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+		logger.Debugf("on Delay")
+		time.Sleep(time.Second * 5)
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
+	})
+
 	node2 := NewClusterNode(JsonCodec{})
 	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
 	assert.Nil(t, err)
@@ -253,8 +262,18 @@ func TestTwoNode(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
 
+	go func() {
+		err = node2.Call(context.TODO(), node1Addr.LogicAddr(), "Delay", "sniperHW", &resp)
+		assert.Nil(t, err)
+	}()
+
+	time.Sleep(time.Second)
+
+	beg := time.Now()
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
-	node1.Wait()
+	logger.Debugf("waitting...")
+	node1.Wait() //Delay返回后，Wait才会返回
+	logger.Debugf("wait:%v", time.Now().Sub(beg))
 
 	_, err = node2.GetAddrByType(1)
 	assert.NotNil(t, err)
