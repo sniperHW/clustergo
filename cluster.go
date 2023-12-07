@@ -270,6 +270,11 @@ func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
+func (s *Node) AddBeforeRPC(fn func(*rpcgo.RequestMsg) error) *Node {
+	s.rpcSvr.AddBefore(fn)
+	return s
+}
+
 func (s *Node) SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
 	select {
 	case <-s.die:
@@ -618,6 +623,10 @@ func RegisterBinaryHandler(cmd uint16, handler func(context.Context, addr.LogicA
 
 func RegisterRPC(name string, method interface{}) error {
 	return GetDefaultNode().RegisterRPC(name, method)
+}
+
+func AddBeforeRPC(fn func(*rpcgo.RequestMsg) error) *Node {
+	return GetDefaultNode().AddBeforeRPC(fn)
 }
 
 func SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...time.Time) error {
