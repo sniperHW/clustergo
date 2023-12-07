@@ -258,7 +258,7 @@ func (s *Node) RegisterProtoHandler(msg proto.Message, handler func(context.Cont
 	return s
 }
 
-func (s *Node) RegisterBinrayHandler(cmd uint16, handler func(context.Context, addr.LogicAddr, uint16, []byte)) *Node {
+func (s *Node) RegisterBinaryHandler(cmd uint16, handler func(context.Context, addr.LogicAddr, uint16, []byte)) *Node {
 	if handler == nil {
 		logger.Panicf("RegisterBinrayHandler %d handler == nil", cmd)
 	}
@@ -613,7 +613,7 @@ func RegisterProtoHandler(msg proto.Message, handler func(context.Context, addr.
 }
 
 func RegisterBinaryHandler(cmd uint16, handler func(context.Context, addr.LogicAddr, uint16, []byte)) *Node {
-	return GetDefaultNode().RegisterBinrayHandler(cmd, handler)
+	return GetDefaultNode().RegisterBinaryHandler(cmd, handler)
 }
 
 func RegisterRPC(name string, method interface{}) error {
