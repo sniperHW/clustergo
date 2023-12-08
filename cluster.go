@@ -270,7 +270,7 @@ func (s *Node) RegisterRPC(name string, method interface{}) error {
 	return s.rpcSvr.Register(name, method)
 }
 
-func (s *Node) AddBeforeRPC(fn func(*rpcgo.RequestMsg) error) *Node {
+func (s *Node) AddBeforeRPC(fn func(*rpcgo.Replyer, *rpcgo.RequestMsg) bool) *Node {
 	s.rpcSvr.AddBefore(fn)
 	return s
 }
@@ -625,7 +625,7 @@ func RegisterRPC(name string, method interface{}) error {
 	return GetDefaultNode().RegisterRPC(name, method)
 }
 
-func AddBeforeRPC(fn func(*rpcgo.RequestMsg) error) *Node {
+func AddBeforeRPC(fn func(*rpcgo.Replyer, *rpcgo.RequestMsg) bool) *Node {
 	return GetDefaultNode().AddBeforeRPC(fn)
 }
 
