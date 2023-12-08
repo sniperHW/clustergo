@@ -182,9 +182,9 @@ func TestSingleNode(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	s.AddBeforeRPC(func(_ *rpcgo.Replyer, req *rpcgo.RequestMsg) bool {
+	s.AddBeforeRPC(func(replyer *rpcgo.Replyer, req *rpcgo.RequestMsg) bool {
 		beg := time.Now()
-		req.SetReplyHook(func(_ *rpcgo.RequestMsg, err error) {
+		replyer.SetReplyHook(func(_ *rpcgo.RequestMsg, err error) {
 			if err == nil {
 				logger.Debugf("call %s(\"%v\") use:%v", req.Method, *req.GetArg().(*string), time.Now().Sub(beg))
 			} else {
