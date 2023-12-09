@@ -362,7 +362,7 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...t
 	return nil
 }
 
-func (s *Node) AsynCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
+func (s *Node) AsyncCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
 	select {
 	case <-s.die:
 		return rpcgo.NewError(rpcgo.ErrOther, "server die")
@@ -372,9 +372,9 @@ func (s *Node) AsynCall(to addr.LogicAddr, method string, arg interface{}, ret i
 	}
 	var err error
 	if to == s.localAddr.LogicAddr() {
-		err = s.rpcCli.AsynCall(&selfChannel{self: s}, method, arg, ret, deadline, callback)
+		err = s.rpcCli.AsyncCall(&selfChannel{self: s}, method, arg, ret, deadline, callback)
 	} else if n := s.getNodeByLogicAddr(to); n != nil {
-		err = s.rpcCli.AsynCall(&rpcChannel{peer: to, node: n, self: s}, method, arg, ret, deadline, callback)
+		err = s.rpcCli.AsyncCall(&rpcChannel{peer: to, node: n, self: s}, method, arg, ret, deadline, callback)
 	} else {
 		return ErrInvaildNode
 	}
@@ -665,6 +665,10 @@ func SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte, deadline ...time.
 
 func SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
 	return GetDefaultNode().SendBinMessageWithContext(ctx, to, cmd, msg)
+}
+
+func AsyncCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
+	return GetDefaultNode().AsyncCall(to, method, arg, ret, deadline, callback)
 }
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {

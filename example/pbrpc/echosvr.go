@@ -6,8 +6,8 @@ import (
 	"github.com/sniperHW/clustergo"
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/example/pbrpc/service/echo"
 	"github.com/sniperHW/clustergo/logger/zap"
-	"github.com/sniperHW/clustergo/pbrpc/service/echo"
 )
 
 type echoService struct {
