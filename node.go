@@ -464,8 +464,8 @@ func (n *node) sendMessage(self *Node, msg interface{}, deadline time.Time) (err
 		err = socket.Send(msg, deadline)
 	} else {
 		if n.pendingMsg.Len() >= MaxPendingMsgSize {
-			if !deadline.IsZero() {
-				//deadline.IsZero的包优先及最低，直接丢弃
+			if deadline.IsZero() {
+				//deadline.IsZero的包优先级最低，直接丢弃
 				return ErrPendingQueueFull
 			} else {
 				//尝试移除已经失效或deadline.IsZero的msg

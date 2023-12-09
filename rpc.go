@@ -27,8 +27,12 @@ type rpcChannel struct {
 	once sync.Once
 }
 
-func (c *rpcChannel) SendRequest(ctx context.Context, request *rpcgo.RequestMsg) error {
+func (c *rpcChannel) RequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
 	return c.node.sendMessageWithContext(ctx, c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request))
+}
+
+func (c *rpcChannel) Request(request *rpcgo.RequestMsg) error {
+	return c.node.sendMessage(c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request), time.Time{})
 }
 
 func (c *rpcChannel) Reply(response *rpcgo.ResponseMsg) error {
@@ -72,7 +76,14 @@ type selfChannel struct {
 	once sync.Once
 }
 
-func (c *selfChannel) SendRequest(ctx context.Context, request *rpcgo.RequestMsg) error {
+func (c *selfChannel) RequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
+	c.self.Go(func() {
+		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
+	})
+	return nil
+}
+
+func (c *selfChannel) Request(request *rpcgo.RequestMsg) error {
 	c.self.Go(func() {
 		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
 	})

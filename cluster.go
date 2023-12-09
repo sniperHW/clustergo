@@ -30,6 +30,7 @@ var (
 	ErrDuplicateConn    = errors.New("duplicate node connection")
 	ErrNetAddrMismatch  = errors.New("net addr mismatch")
 	ErrPendingQueueFull = errors.New("pending queue full")
+	ErrBusy             = errors.New("busy")
 )
 
 var (
@@ -359,6 +360,31 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...t
 		}
 	}
 	return nil
+}
+
+func (s *Node) AsynCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
+	select {
+	case <-s.die:
+		return rpcgo.NewError(rpcgo.ErrOther, "server die")
+	case <-s.started:
+	default:
+		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
+	}
+	var err error
+	if to == s.localAddr.LogicAddr() {
+		err = s.rpcCli.AsynCall(&selfChannel{self: s}, method, arg, ret, deadline, callback)
+	} else if n := s.getNodeByLogicAddr(to); n != nil {
+		err = s.rpcCli.AsynCall(&rpcChannel{peer: to, node: n, self: s}, method, arg, ret, deadline, callback)
+	} else {
+		return ErrInvaildNode
+	}
+
+	switch err {
+	case ErrPendingQueueFull, netgo.ErrSendQueueFull:
+		return ErrBusy
+	default:
+		return err
+	}
 }
 
 func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
