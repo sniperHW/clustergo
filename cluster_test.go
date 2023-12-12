@@ -87,6 +87,80 @@ func init() {
 	InitLogger(l.Sugar())
 }
 
+func TestBenchmarkRPCAsync(t *testing.T) {
+	localDiscovery := &localDiscovery{
+		nodes: map[addr.LogicAddr]*discovery.Node{},
+	}
+
+	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
+	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node1Addr,
+		Available: true,
+	})
+
+	localDiscovery.AddNode(&discovery.Node{
+		Addr:      node2Addr,
+		Available: true,
+	})
+
+	node1 := NewClusterNode(JsonCodec{})
+	node1.RegisterProtoHandler(&ss.Echo{}, func(_ context.Context, _ addr.LogicAddr, msg proto.Message) {
+		logger.Debug(msg.(*ss.Echo).Msg)
+	})
+
+	node1.RegisterRPC("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
+	})
+
+	node2 := NewClusterNode(JsonCodec{})
+	err := node2.Start(localDiscovery, node2Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	logger.Debug("Start OK")
+
+	var resp string
+
+	err = node1.Start(localDiscovery, node1Addr.LogicAddr())
+	assert.Nil(t, err)
+
+	node2.Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+
+	begtime := time.Now()
+
+	counter := int32(0)
+	concurrent := 500
+	var wait sync.WaitGroup
+	var callback func(resp interface{}, e error)
+	callback = func(resp interface{}, e error) {
+		if atomic.AddInt32(&counter, 1) <= 100000 {
+			node2.AsyncCall(node1Addr.LogicAddr(), "hello", "sniperHW", resp, time.Now().Add(time.Second*5), callback)
+		} else {
+			wait.Done()
+		}
+	}
+
+	for i := 0; i < concurrent; i++ {
+		wait.Add(1)
+		var resp string
+		node2.AsyncCall(node1Addr.LogicAddr(), "hello", "sniperHW", &resp, time.Now().Add(time.Second*5), callback)
+	}
+
+	wait.Wait()
+
+	fmt.Println("10W call,use:", time.Since(begtime))
+
+	localDiscovery.RemoveNode(node1Addr.LogicAddr())
+	node1.Wait()
+
+	_, err = node2.GetAddrByType(1)
+	assert.NotNil(t, err)
+
+	localDiscovery.RemoveNode(node2Addr.LogicAddr())
+	node2.Wait()
+}
+
 func TestBenchmarkRPC(t *testing.T) {
 	localDiscovery := &localDiscovery{
 		nodes: map[addr.LogicAddr]*discovery.Node{},

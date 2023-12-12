@@ -33,7 +33,6 @@ func (ss *LengthPayloadPacketReceiver) Recv(readable netgo.ReadAble, deadline ti
 		if unpackSize >= sizeLen {
 			payload := int(binary.BigEndian.Uint32(ss.Buff[ss.r:]))
 			totalSize := payload + sizeLen
-
 			if payload == 0 {
 				return nil, fmt.Errorf("zero payload")
 			} else if totalSize > ss.MaxPacketSize {
@@ -58,6 +57,10 @@ func (ss *LengthPayloadPacketReceiver) Recv(readable netgo.ReadAble, deadline ti
 				ss.w = ss.w - ss.r
 				ss.r = 0
 			}
+		} else if ss.r > 0 {
+			copy(ss.Buff, ss.Buff[ss.r:ss.w])
+			ss.w = ss.w - ss.r
+			ss.r = 0
 		}
 
 		var n int
