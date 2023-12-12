@@ -9,7 +9,7 @@ import (
 	"io"
 	"net"
 	"reflect"
-	"runtime"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,9 +61,7 @@ type msgManager struct {
 func (m ProtoMsgHandler) call(ctx context.Context, from addr.LogicAddr, cmd uint16, msg proto.Message) {
 	defer func() {
 		if r := recover(); r != nil {
-			buf := make([]byte, 65535)
-			l := runtime.Stack(buf, false)
-			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
+			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, debug.Stack())
 		}
 	}()
 	m(ctx, from, msg)
@@ -72,9 +70,7 @@ func (m ProtoMsgHandler) call(ctx context.Context, from addr.LogicAddr, cmd uint
 func (m BinaryMsgHandler) call(ctx context.Context, from addr.LogicAddr, cmd uint16, msg []byte) {
 	defer func() {
 		if r := recover(); r != nil {
-			buf := make([]byte, 65535)
-			l := runtime.Stack(buf, false)
-			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, buf[:l])
+			logger.Errorf("error on Dispatch:%d\nstack:%v,%s\n", cmd, r, debug.Stack())
 		}
 	}()
 	m(ctx, from, cmd, msg)
