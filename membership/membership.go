@@ -16,7 +16,7 @@ type MemberInfo struct {
 	Update []Node
 }
 
-type MemberShip interface {
+type Client interface {
 	//订阅变更
 	Subscribe(func(MemberInfo)) error
 	Close()

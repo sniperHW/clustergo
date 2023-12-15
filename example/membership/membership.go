@@ -171,20 +171,20 @@ func (cc *codec) Decode(payload []byte) (interface{}, error) {
 	return nil, errors.New("invaild object")
 }
 
-type discoverySvr struct {
+type memberShipSvr struct {
 	sync.Mutex
 	nodes   map[string]*Node
 	clients map[*netgo.AsynSocket]struct{}
 }
 
-func NewServer() *discoverySvr {
-	return &discoverySvr{
+func NewServer() *memberShipSvr {
+	return &memberShipSvr{
 		nodes:   map[string]*Node{},
 		clients: map[*netgo.AsynSocket]struct{}{},
 	}
 }
 
-func (svr *discoverySvr) pub(socket *netgo.AsynSocket) {
+func (svr *memberShipSvr) pub(socket *netgo.AsynSocket) {
 	var nodeinfo NodeInfo
 	for _, v := range svr.nodes {
 		nodeinfo.Nodes = append(nodeinfo.Nodes, *v)
@@ -203,7 +203,7 @@ func (svr *discoverySvr) pub(socket *netgo.AsynSocket) {
 	}
 }
 
-func (svr *discoverySvr) Start(service string, config []*Node) error {
+func (svr *memberShipSvr) Start(service string, config []*Node) error {
 	for _, v := range config {
 		svr.nodes[v.LogicAddr] = v
 	}
@@ -266,23 +266,23 @@ func (svr *discoverySvr) Start(service string, config []*Node) error {
 	}
 }
 
-type discoverCli struct {
+type memberShipCli struct {
 	svrService string
 	nodes      []membership.Node
 }
 
-func NewClient(svr string) *discoverCli {
-	return &discoverCli{
+func NewClient(svr string) *memberShipCli {
+	return &memberShipCli{
 		svrService: svr,
 	}
 }
 
-func (c *discoverCli) Close() {
+func (c *memberShipCli) Close() {
 
 }
 
 // 订阅变更
-func (c *discoverCli) Subscribe(updateCB func(membership.MemberInfo)) error {
+func (c *memberShipCli) Subscribe(updateCB func(membership.MemberInfo)) error {
 	dialer := &net.Dialer{}
 	for {
 		if conn, err := dialer.Dial("tcp", c.svrService); err == nil {

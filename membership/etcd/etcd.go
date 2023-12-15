@@ -23,7 +23,7 @@ type Node struct {
 	Available bool
 }
 
-type MemberShip struct {
+type Client struct {
 	sync.Mutex
 	configuration  map[string]membership.Node //配置中的节点
 	alive          map[string]struct{}        //活动节点
@@ -45,7 +45,7 @@ type MemberShip struct {
 	closed         bool
 }
 
-func (ectd *MemberShip) fetchLogicAddr(str string) string {
+func (ectd *Client) fetchLogicAddr(str string) string {
 	v := strings.Split(str, "/")
 	if len(v) > 0 {
 		return v[len(v)-1]
@@ -54,7 +54,7 @@ func (ectd *MemberShip) fetchLogicAddr(str string) string {
 	}
 }
 
-func (etcd *MemberShip) fetchConfiguration(ctx context.Context, cli *clientv3.Client) error {
+func (etcd *Client) fetchConfiguration(ctx context.Context, cli *clientv3.Client) error {
 	etcd.configuration = map[string]membership.Node{}
 	resp, err := cli.Get(ctx, etcd.PrefixConfig, clientv3.WithPrefix())
 	if err != nil {
@@ -83,7 +83,7 @@ func (etcd *MemberShip) fetchConfiguration(ctx context.Context, cli *clientv3.Cl
 	return nil
 }
 
-func (etcd *MemberShip) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
+func (etcd *Client) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
 	etcd.alive = map[string]struct{}{}
 	resp, err := cli.Get(ctx, etcd.PrefixAlive, clientv3.WithPrefix())
 	if err != nil {
@@ -103,7 +103,7 @@ func (etcd *MemberShip) fetchAlive(ctx context.Context, cli *clientv3.Client) er
 	return nil
 }
 
-func (etcd *MemberShip) watch(ctx context.Context, cli *clientv3.Client) (err error) {
+func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error) {
 
 	if etcd.leaseCh == nil {
 		etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
@@ -145,7 +145,7 @@ func (etcd *MemberShip) watch(ctx context.Context, cli *clientv3.Client) (err er
 			}
 			etcd.rversionConfig = v.Header.GetRevision()
 			for _, e := range v.Events {
-				var nodeinfo membership.DiscoveryInfo
+				var nodeinfo membership.MemberInfo
 				key := etcd.fetchLogicAddr(string(e.Kv.Key))
 				switch e.Type {
 				case clientv3.EventTypePut:
@@ -213,7 +213,7 @@ func (etcd *MemberShip) watch(ctx context.Context, cli *clientv3.Client) (err er
 	}
 }
 
-func (etcd *MemberShip) subscribe(ctx context.Context, cli *clientv3.Client) {
+func (etcd *Client) subscribe(ctx context.Context, cli *clientv3.Client) {
 	var err error
 	if etcd.leaseID == 0 {
 		ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -269,7 +269,7 @@ func (etcd *MemberShip) subscribe(ctx context.Context, cli *clientv3.Client) {
 	}
 }
 
-func (etcd *MemberShip) Close() {
+func (etcd *Client) Close() {
 	etcd.Lock()
 	defer etcd.Unlock()
 	if etcd.closed {
@@ -282,7 +282,7 @@ func (etcd *MemberShip) Close() {
 	}
 }
 
-func (etcd *MemberShip) Subscribe(cb func(membership.MemberInfo)) error {
+func (etcd *Client) Subscribe(cb func(membership.MemberInfo)) error {
 
 	once := false
 
@@ -331,7 +331,7 @@ func (etcd *MemberShip) Subscribe(cb func(membership.MemberInfo)) error {
 	return nil
 }
 
-func (etcd *MemberShip) errorf(format string, v ...any) {
+func (etcd *Client) errorf(format string, v ...any) {
 	if etcd.Logger != nil {
 		etcd.Logger.Errorf(format, v...)
 	} else {
