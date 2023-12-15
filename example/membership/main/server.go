@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/example/membership"
 )
 
 func main() {
-	var config []*discovery.Node
+	var config []*membership.Node
 	f, err := os.Open("./config.json")
 	if err != nil {
 		panic(err)
@@ -20,7 +20,7 @@ func main() {
 		panic(err)
 	}
 
-	svr := discovery.NewServer()
+	svr := membership.NewServer()
 
 	svr.Start("127.0.0.1:18110", config)
 

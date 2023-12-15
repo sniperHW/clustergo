@@ -1,4 +1,4 @@
-package discovery
+package membership
 
 import (
 	"github.com/sniperHW/clustergo/addr"
@@ -10,14 +10,14 @@ type Node struct {
 	Available bool //是否可用,
 }
 
-type DiscoveryInfo struct {
+type MemberInfo struct {
 	Add    []Node
 	Remove []Node
 	Update []Node
 }
 
-type Discovery interface {
+type MemberShip interface {
 	//订阅变更
-	Subscribe(func(DiscoveryInfo)) error
+	Subscribe(func(MemberInfo)) error
 	Close()
 }

@@ -1,4 +1,4 @@
-package discovery
+package membership
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/buffer"
-	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/netgo"
 )
 
@@ -268,7 +268,7 @@ func (svr *discoverySvr) Start(service string, config []*Node) error {
 
 type discoverCli struct {
 	svrService string
-	nodes      []discovery.Node
+	nodes      []membership.Node
 }
 
 func NewClient(svr string) *discoverCli {
@@ -282,7 +282,7 @@ func (c *discoverCli) Close() {
 }
 
 // 订阅变更
-func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
+func (c *discoverCli) Subscribe(updateCB func(membership.MemberInfo)) error {
 	dialer := &net.Dialer{}
 	for {
 		if conn, err := dialer.Dial("tcp", c.svrService); err == nil {
@@ -297,10 +297,10 @@ func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 				go c.Subscribe(updateCB)
 			}).SetPacketHandler(func(_ context.Context, as *netgo.AsynSocket, packet interface{}) error {
 				locals := c.nodes
-				updates := []discovery.Node{}
+				updates := []membership.Node{}
 				for _, v := range packet.(*NodeInfo).Nodes {
 					if address, err := addr.MakeAddr(v.LogicAddr, v.NetAddr); err == nil {
-						updates = append(updates, discovery.Node{
+						updates = append(updates, membership.Node{
 							Export:    v.Export,
 							Available: v.Available,
 							Addr:      address,
@@ -312,7 +312,7 @@ func (c *discoverCli) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
 					return updates[l].Addr.LogicAddr() < updates[r].Addr.LogicAddr()
 				})
 
-				var nodeInfo discovery.DiscoveryInfo
+				var nodeInfo membership.MemberInfo
 
 				i := 0
 				j := 0

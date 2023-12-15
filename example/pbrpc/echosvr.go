@@ -5,7 +5,7 @@ import (
 
 	"github.com/sniperHW/clustergo"
 	"github.com/sniperHW/clustergo/addr"
-	"github.com/sniperHW/clustergo/example/discovery"
+	"github.com/sniperHW/clustergo/example/membership"
 	"github.com/sniperHW/clustergo/example/pbrpc/service/echo"
 	"github.com/sniperHW/clustergo/logger/zap"
 )
@@ -25,7 +25,7 @@ func main() {
 	echo.Register(&echoService{})
 
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")
-	clustergo.Start(discovery.NewClient("127.0.0.1:18110"), localaddr)
+	clustergo.Start(membership.NewClient("127.0.0.1:18110"), localaddr)
 
 	clustergo.Wait()
 

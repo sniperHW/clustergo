@@ -12,7 +12,7 @@ import (
 
 	"github.com/sniperHW/clustergo"
 	"github.com/sniperHW/clustergo/addr"
-	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/membership"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -23,10 +23,10 @@ type Node struct {
 	Available bool
 }
 
-type Discovery struct {
+type MemberShip struct {
 	sync.Mutex
-	configuration  map[string]discovery.Node //配置中的节点
-	alive          map[string]struct{}       //活动节点
+	configuration  map[string]membership.Node //配置中的节点
+	alive          map[string]struct{}        //活动节点
 	once           sync.Once
 	Cfg            clientv3.Config
 	PrefixConfig   string
@@ -36,7 +36,7 @@ type Discovery struct {
 	TTL            time.Duration
 	rversionConfig int64
 	rversionAlive  int64
-	cb             func(discovery.DiscoveryInfo)
+	cb             func(membership.MemberInfo)
 	leaseID        clientv3.LeaseID
 	watchConfig    clientv3.WatchChan
 	watchAlive     clientv3.WatchChan
@@ -45,7 +45,7 @@ type Discovery struct {
 	closed         bool
 }
 
-func (ectd *Discovery) fetchLogicAddr(str string) string {
+func (ectd *MemberShip) fetchLogicAddr(str string) string {
 	v := strings.Split(str, "/")
 	if len(v) > 0 {
 		return v[len(v)-1]
@@ -54,8 +54,8 @@ func (ectd *Discovery) fetchLogicAddr(str string) string {
 	}
 }
 
-func (etcd *Discovery) fetchConfiguration(ctx context.Context, cli *clientv3.Client) error {
-	etcd.configuration = map[string]discovery.Node{}
+func (etcd *MemberShip) fetchConfiguration(ctx context.Context, cli *clientv3.Client) error {
+	etcd.configuration = map[string]membership.Node{}
 	resp, err := cli.Get(ctx, etcd.PrefixConfig, clientv3.WithPrefix())
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (etcd *Discovery) fetchConfiguration(ctx context.Context, cli *clientv3.Cli
 		var n Node
 		if err := json.Unmarshal(v.Value, &n); err == nil && n.LogicAddr == etcd.fetchLogicAddr(string(v.Key)) {
 			if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
-				nn := discovery.Node{
+				nn := membership.Node{
 					Addr:      address,
 					Available: n.Available,
 					Export:    n.Export,
@@ -83,7 +83,7 @@ func (etcd *Discovery) fetchConfiguration(ctx context.Context, cli *clientv3.Cli
 	return nil
 }
 
-func (etcd *Discovery) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
+func (etcd *MemberShip) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
 	etcd.alive = map[string]struct{}{}
 	resp, err := cli.Get(ctx, etcd.PrefixAlive, clientv3.WithPrefix())
 	if err != nil {
@@ -103,7 +103,7 @@ func (etcd *Discovery) fetchAlive(ctx context.Context, cli *clientv3.Client) err
 	return nil
 }
 
-func (etcd *Discovery) watch(ctx context.Context, cli *clientv3.Client) (err error) {
+func (etcd *MemberShip) watch(ctx context.Context, cli *clientv3.Client) (err error) {
 
 	if etcd.leaseCh == nil {
 		etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
@@ -145,14 +145,14 @@ func (etcd *Discovery) watch(ctx context.Context, cli *clientv3.Client) (err err
 			}
 			etcd.rversionConfig = v.Header.GetRevision()
 			for _, e := range v.Events {
-				var nodeinfo discovery.DiscoveryInfo
+				var nodeinfo membership.DiscoveryInfo
 				key := etcd.fetchLogicAddr(string(e.Kv.Key))
 				switch e.Type {
 				case clientv3.EventTypePut:
 					var n Node
 					if err := json.Unmarshal(e.Kv.Value, &n); err == nil && n.LogicAddr == key {
 						if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
-							nn := discovery.Node{
+							nn := membership.Node{
 								Addr:   address,
 								Export: n.Export,
 							}
@@ -191,7 +191,7 @@ func (etcd *Discovery) watch(ctx context.Context, cli *clientv3.Client) (err err
 			}
 			etcd.rversionAlive = v.Header.GetRevision()
 			for _, e := range v.Events {
-				var nodeinfo discovery.DiscoveryInfo
+				var nodeinfo membership.MemberInfo
 				key := etcd.fetchLogicAddr(string(e.Kv.Key))
 				switch e.Type {
 				case clientv3.EventTypePut:
@@ -213,7 +213,7 @@ func (etcd *Discovery) watch(ctx context.Context, cli *clientv3.Client) (err err
 	}
 }
 
-func (etcd *Discovery) subscribe(ctx context.Context, cli *clientv3.Client) {
+func (etcd *MemberShip) subscribe(ctx context.Context, cli *clientv3.Client) {
 	var err error
 	if etcd.leaseID == 0 {
 		ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -249,7 +249,7 @@ func (etcd *Discovery) subscribe(ctx context.Context, cli *clientv3.Client) {
 		}
 		cancel()
 
-		var nodeinfo discovery.DiscoveryInfo
+		var nodeinfo membership.MemberInfo
 		for k, v := range etcd.configuration {
 			if _, ok := etcd.alive[k]; ok && v.Available {
 				v.Available = true
@@ -269,7 +269,7 @@ func (etcd *Discovery) subscribe(ctx context.Context, cli *clientv3.Client) {
 	}
 }
 
-func (etcd *Discovery) Close() {
+func (etcd *MemberShip) Close() {
 	etcd.Lock()
 	defer etcd.Unlock()
 	if etcd.closed {
@@ -282,7 +282,7 @@ func (etcd *Discovery) Close() {
 	}
 }
 
-func (etcd *Discovery) Subscribe(cb func(discovery.DiscoveryInfo)) error {
+func (etcd *MemberShip) Subscribe(cb func(membership.MemberInfo)) error {
 
 	once := false
 
@@ -331,7 +331,7 @@ func (etcd *Discovery) Subscribe(cb func(discovery.DiscoveryInfo)) error {
 	return nil
 }
 
-func (etcd *Discovery) errorf(format string, v ...any) {
+func (etcd *MemberShip) errorf(format string, v ...any) {
 	if etcd.Logger != nil {
 		etcd.Logger.Errorf(format, v...)
 	} else {

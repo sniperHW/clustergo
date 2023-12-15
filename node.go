@@ -15,7 +15,7 @@ import (
 
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/ss"
-	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/clustergo/pkg/crypto"
 	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
@@ -86,7 +86,7 @@ func (cache *nodeCache) removeHarbor(harbor *node) {
 	}
 }
 
-func (cache *nodeCache) onNodeInfoUpdate(self *Node, nodeinfo discovery.DiscoveryInfo) {
+func (cache *nodeCache) onNodeInfoUpdate(self *Node, nodeinfo membership.MemberInfo) {
 
 	defer cache.initOnce.Do(func() {
 		logger.Debug("init ok")

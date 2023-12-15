@@ -14,23 +14,23 @@ import (
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/pb"
 	"github.com/sniperHW/clustergo/codec/ss"
-	"github.com/sniperHW/clustergo/discovery"
 	"github.com/sniperHW/clustergo/logger/zap"
+	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/rpcgo"
 	"github.com/stretchr/testify/assert"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
 
-type localDiscovery struct {
-	nodes      map[addr.LogicAddr]*discovery.Node
-	subscribes []func(discovery.DiscoveryInfo)
+type localMemberShip struct {
+	nodes      map[addr.LogicAddr]*membership.Node
+	subscribes []func(membership.MemberInfo)
 }
 
 // 订阅变更
-func (d *localDiscovery) Subscribe(updateCB func(discovery.DiscoveryInfo)) error {
+func (d *localMemberShip) Subscribe(updateCB func(membership.MemberInfo)) error {
 	d.subscribes = append(d.subscribes, updateCB)
-	i := discovery.DiscoveryInfo{}
+	i := membership.MemberInfo{}
 	for _, v := range d.nodes {
 		i.Add = append(i.Add, *v)
 	}
@@ -38,21 +38,21 @@ func (d *localDiscovery) Subscribe(updateCB func(discovery.DiscoveryInfo)) error
 	return nil
 }
 
-func (d *localDiscovery) AddNode(n *discovery.Node) {
+func (d *localMemberShip) AddNode(n *membership.Node) {
 	d.nodes[n.Addr.LogicAddr()] = n
-	add := discovery.DiscoveryInfo{
-		Add: []discovery.Node{*n},
+	add := membership.MemberInfo{
+		Add: []membership.Node{*n},
 	}
 	for _, v := range d.subscribes {
 		v(add)
 	}
 }
 
-func (d *localDiscovery) RemoveNode(logicAddr addr.LogicAddr) {
+func (d *localMemberShip) RemoveNode(logicAddr addr.LogicAddr) {
 	if n := d.nodes[logicAddr]; n != nil {
 		delete(d.nodes, logicAddr)
-		remove := discovery.DiscoveryInfo{
-			Remove: []discovery.Node{*n},
+		remove := membership.MemberInfo{
+			Remove: []membership.Node{*n},
 		}
 		for _, v := range d.subscribes {
 			v(remove)
@@ -60,14 +60,14 @@ func (d *localDiscovery) RemoveNode(logicAddr addr.LogicAddr) {
 	}
 }
 
-func (d *localDiscovery) ModifyNode(modify *discovery.Node) {
+func (d *localMemberShip) ModifyNode(modify *membership.Node) {
 	if n, ok := d.nodes[modify.Addr.LogicAddr()]; ok {
 		if n.Available != modify.Available || n.Addr.NetAddr() != modify.Addr.NetAddr() {
 			logger.Debug("modify")
 			d.nodes[modify.Addr.LogicAddr()] = modify
 			//nodes := d.LoadNodeInfo()
-			update := discovery.DiscoveryInfo{
-				Update: []discovery.Node{*modify},
+			update := membership.MemberInfo{
+				Update: []membership.Node{*modify},
 			}
 
 			for _, v := range d.subscribes {
@@ -77,7 +77,7 @@ func (d *localDiscovery) ModifyNode(modify *discovery.Node) {
 	}
 }
 
-func (d *localDiscovery) Close() {
+func (d *localMemberShip) Close() {
 
 }
 
@@ -88,19 +88,19 @@ func init() {
 }
 
 func TestBenchmarkRPCAsync(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
@@ -162,19 +162,19 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 }
 
 func TestBenchmarkRPC(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
@@ -233,13 +233,13 @@ func TestBenchmarkRPC(t *testing.T) {
 }
 
 func TestSingleNode(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	localAddr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      localAddr,
 		Available: true,
 	})
@@ -291,19 +291,19 @@ func TestSingleNode(t *testing.T) {
 }
 
 func TestTwoNode(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
@@ -370,8 +370,8 @@ func TestTwoNode(t *testing.T) {
 }
 
 func TestHarbor(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	//cluster:1
@@ -382,23 +382,23 @@ func TestHarbor(t *testing.T) {
 	node2Addr, _ := addr.MakeAddr("2.2.1", "localhost:18111")
 	harbor2Addr, _ := addr.MakeHarborAddr("2.255.1", "localhost:19111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 		Export:    true, //将节点暴露到cluster以外
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      harbor1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      harbor2Addr,
 		Available: true,
 	})
@@ -470,19 +470,19 @@ func TestHarbor(t *testing.T) {
 }
 
 func TestStream(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
@@ -544,19 +544,19 @@ func TestStream(t *testing.T) {
 }
 
 func TestBiDirectionDial(t *testing.T) {
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 	node2Addr, _ := addr.MakeAddr("1.2.1", "localhost:18111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
@@ -614,19 +614,19 @@ func TestDefault(t *testing.T) {
 
 	RPCCodec = JsonCodec{}
 
-	localDiscovery := &localDiscovery{
-		nodes: map[addr.LogicAddr]*discovery.Node{},
+	localDiscovery := &localMemberShip{
+		nodes: map[addr.LogicAddr]*membership.Node{},
 	}
 
 	node1Addr, _ := addr.MakeAddr("1.1.1", "localhost:18110")
 	node2Addr, _ := addr.MakeAddr("1.2.3", "localhost:18111")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node1Addr,
 		Available: true,
 	})
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node2Addr,
 		Available: true,
 	})
@@ -676,14 +676,14 @@ func TestDefault(t *testing.T) {
 
 	node3Addr, _ := addr.MakeAddr("1.2.1", "localhost:18113")
 
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node3Addr,
 		Available: true,
 	})
 
 	time.Sleep(time.Second)
 
-	localDiscovery.ModifyNode(&discovery.Node{
+	localDiscovery.ModifyNode(&membership.Node{
 		Addr:      node3Addr,
 		Available: false,
 	})
@@ -691,14 +691,14 @@ func TestDefault(t *testing.T) {
 	time.Sleep(time.Second)
 	//变更网络地址
 	node3Addr, _ = addr.MakeAddr("1.2.1", "localhost:18114")
-	localDiscovery.ModifyNode(&discovery.Node{
+	localDiscovery.ModifyNode(&membership.Node{
 		Addr:      node3Addr,
 		Available: false,
 	})
 
 	//恢复available
 	time.Sleep(time.Second)
-	localDiscovery.ModifyNode(&discovery.Node{
+	localDiscovery.ModifyNode(&membership.Node{
 		Addr:      node3Addr,
 		Available: true,
 	})
@@ -710,7 +710,7 @@ func TestDefault(t *testing.T) {
 	time.Sleep(time.Second)
 
 	node4Addr, _ := addr.MakeAddr("1.2.5", "localhost:18115")
-	localDiscovery.AddNode(&discovery.Node{
+	localDiscovery.AddNode(&membership.Node{
 		Addr:      node4Addr,
 		Available: true,
 	})

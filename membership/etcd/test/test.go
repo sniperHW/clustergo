@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sniperHW/clustergo/discovery"
-	"github.com/sniperHW/clustergo/discovery/etcd"
+	"github.com/sniperHW/clustergo/membership"
+	"github.com/sniperHW/clustergo/membership/etcd"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 func main() {
 
-	discoveryCli := etcd.Discovery{
+	membershipCli := etcd.MemberShip{
 		PrefixConfig: "/test/",
 		PrefixAlive:  "/alive/",
 		LogicAddr:    "1.1.1",
@@ -22,7 +22,7 @@ func main() {
 		},
 	}
 
-	discoveryCli.Subscribe(func(di discovery.DiscoveryInfo) {
+	membershipCli.Subscribe(func(di membership.MemberInfo) {
 		fmt.Println("add", di.Add)
 		fmt.Println("update", di.Update)
 		fmt.Println("remove", di.Remove)

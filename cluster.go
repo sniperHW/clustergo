@@ -17,7 +17,7 @@ import (
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/pb"
 	"github.com/sniperHW/clustergo/codec/ss"
-	"github.com/sniperHW/clustergo/discovery"
+	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/clustergo/pkg/crypto"
 	"github.com/sniperHW/netgo"
 	"github.com/sniperHW/rpcgo"
@@ -435,7 +435,7 @@ func (s *Node) Stop() error {
 	}
 }
 
-func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicAddr) (err error) {
+func (s *Node) Start(MemberShip membership.MemberShip, localAddr addr.LogicAddr) (err error) {
 	once := false
 	s.startOnce.Do(func() {
 		once = true
@@ -443,7 +443,7 @@ func (s *Node) Start(discoveryService discovery.Discovery, localAddr addr.LogicA
 	if once {
 		s.nodeCache.localAddr = localAddr
 
-		if err = discoveryService.Subscribe(func(nodeinfo discovery.DiscoveryInfo) {
+		if err = MemberShip.Subscribe(func(nodeinfo membership.MemberInfo) {
 			s.nodeCache.onNodeInfoUpdate(s, nodeinfo)
 		}); err != nil {
 			return err
@@ -619,8 +619,8 @@ func GetDefaultNode() *Node {
 	return defaultInstance
 }
 
-func Start(discovery discovery.Discovery, localAddr addr.LogicAddr) (err error) {
-	return GetDefaultNode().Start(discovery, localAddr)
+func Start(MemberShip membership.MemberShip, localAddr addr.LogicAddr) (err error) {
+	return GetDefaultNode().Start(MemberShip, localAddr)
 }
 
 func GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {
