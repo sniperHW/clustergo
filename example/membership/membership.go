@@ -128,6 +128,10 @@ func (cc *codec) Recv(readable netgo.ReadAble, deadline time.Time) (pkt []byte, 
 				cc.w = cc.w - cc.r
 				cc.r = 0
 			}
+		} else if cc.r > 0 {
+			copy(cc.buff, cc.buff[cc.r:cc.w])
+			cc.w = cc.w - cc.r
+			cc.r = 0
 		}
 
 		var n int
