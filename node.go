@@ -291,7 +291,7 @@ func (n *node) onMessage(ctx context.Context, self *Node, msg interface{}) {
 		case *rpcgo.RequestMsg:
 			self.rpcSvr.OnMessage(ctx, &rpcChannel{peer: msg.From(), node: n, self: self}, m)
 		case *rpcgo.ResponseMsg:
-			self.rpcCli.OnMessage(m)
+			self.rpcCli.OnMessage(nil, m)
 		}
 	case *ss.RelayMessage:
 		n.onRelayMessage(self, msg)

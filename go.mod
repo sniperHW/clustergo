@@ -1,12 +1,11 @@
-module clustergo
+module github.com/sniperHW/clustergo
 
 go 1.21.5
 
 require (
 	github.com/go-redis/redis v6.15.9+incompatible
-	github.com/sniperHW/clustergo v0.0.0-20231215101752-e03076d26f54
 	github.com/sniperHW/netgo v0.0.0-20231214060736-2b26e624b5f6
-	github.com/sniperHW/rpcgo v0.0.0-20231212101151-8685c8e140ae
+	github.com/sniperHW/rpcgo v0.0.0-20231220032533-cdeb6a7b1119
 	github.com/stretchr/testify v1.8.4
 	github.com/xtaci/smux v1.5.24
 	go.etcd.io/etcd/client/v3 v3.5.11

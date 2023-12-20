@@ -6,6 +6,7 @@ package clustergo
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -134,8 +135,15 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 	var wait sync.WaitGroup
 	var callback func(resp interface{}, e error)
 	callback = func(resp interface{}, e error) {
-		if atomic.AddInt32(&counter, 1) <= 100000 {
-			node2.AsyncCall(node1Addr.LogicAddr(), "hello", "sniperHW", resp, time.Now().Add(time.Second*5), callback)
+		if c := atomic.AddInt32(&counter, 1); c <= 100000 {
+			for {
+				err := node2.AsyncCall(node1Addr.LogicAddr(), "hello", "sniperHW", resp, time.Now().Add(time.Second*5), callback)
+				if err != ErrBusy {
+					break
+				} else {
+					runtime.Gosched()
+				}
+			}
 		} else {
 			wait.Done()
 		}
@@ -144,7 +152,14 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 	for i := 0; i < concurrent; i++ {
 		wait.Add(1)
 		var resp string
-		node2.AsyncCall(node1Addr.LogicAddr(), "hello", "sniperHW", &resp, time.Now().Add(time.Second*5), callback)
+		for {
+			err := node2.AsyncCall(node1Addr.LogicAddr(), "hello", "sniperHW", &resp, time.Now().Add(time.Second*5), callback)
+			if err != ErrBusy {
+				break
+			} else {
+				runtime.Gosched()
+			}
+		}
 	}
 
 	wait.Wait()
@@ -161,7 +176,7 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 	node2.Wait()
 }
 
-func TestBenchmarkRPC(t *testing.T) {
+func TestBenchmarkRPCSync(t *testing.T) {
 	localDiscovery := &localMemberShip{
 		nodes: map[addr.LogicAddr]*membership.Node{},
 	}

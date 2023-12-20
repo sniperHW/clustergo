@@ -92,7 +92,7 @@ func (c *selfChannel) Request(request *rpcgo.RequestMsg) error {
 
 func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
 	c.self.Go(func() {
-		c.self.rpcCli.OnMessage(response)
+		c.self.rpcCli.OnMessage(nil, response)
 	})
 	return nil
 }
@@ -103,10 +103,6 @@ func (c *selfChannel) Name() string {
 		c.name = fmt.Sprintf("%s <-> %s", localAddrStr, localAddrStr)
 	})
 	return c.name
-}
-
-func (c *selfChannel) Identity() uint64 {
-	return *(*uint64)(unsafe.Pointer(c.self))
 }
 
 func (c *selfChannel) Peer() addr.LogicAddr {
