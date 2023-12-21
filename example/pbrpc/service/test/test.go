@@ -41,6 +41,12 @@ func Call(ctx context.Context, peer addr.LogicAddr,arg *TestReq) (*TestRsp,error
 	return &resp,err
 }
 
+func CallWithTimeout(peer addr.LogicAddr,arg *TestReq,d time.Duration) (*TestRsp,error) {
+	var resp TestRsp
+	err := clustergo.CallWithTimeout(peer,"test",arg,&resp,d)
+	return &resp,err
+}
+
 func AsyncCall(peer addr.LogicAddr,arg *TestReq,deadline time.Time,callback func(*TestRsp,error)) error {
 	var resp TestRsp
 	err := clustergo.AsyncCall(peer,"test",arg,&resp,deadline,func(res interface{},err error){

@@ -383,6 +383,12 @@ func (s *Node) AsyncCall(to addr.LogicAddr, method string, arg interface{}, ret 
 	}
 }
 
+func (s *Node) CallWithTimeout(to addr.LogicAddr, method string, arg interface{}, ret interface{}, d time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	return s.Call(ctx, to, method, arg, ret)
+}
+
 func (s *Node) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
 	select {
 	case <-s.die:
@@ -665,6 +671,10 @@ func SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint1
 
 func AsyncCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
 	return GetDefaultNode().AsyncCall(to, method, arg, ret, deadline, callback)
+}
+
+func CallWithTimeout(to addr.LogicAddr, method string, arg interface{}, ret interface{}, d time.Duration) error {
+	return GetDefaultNode().CallWithTimeout(to, method, arg, ret, d)
 }
 
 func Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {

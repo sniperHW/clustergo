@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -22,7 +21,7 @@ func main() {
 	echoAddr, _ := clustergo.GetAddrByType(1)
 
 	for i := 0; i < 10; i++ {
-		resp, err := echo.Call(context.TODO(), echoAddr, &echo.EchoReq{Msg: fmt.Sprintf("hello:%d", i)})
+		resp, err := echo.CallWithTimeout(echoAddr, &echo.EchoReq{Msg: fmt.Sprintf("hello:%d", i)}, time.Second)
 		clustergo.Log().Debug(resp, err)
 	}
 

@@ -296,7 +296,7 @@ func TestSingleNode(t *testing.T) {
 	})
 
 	var resp string
-	err = s.Call(context.TODO(), localAddr.LogicAddr(), "hello", "sniperHW", &resp)
+	err = s.CallWithTimeout(localAddr.LogicAddr(), "hello", "sniperHW", &resp, time.Second)
 	assert.Nil(t, err)
 	assert.Equal(t, resp, "hello world:sniperHW")
 
