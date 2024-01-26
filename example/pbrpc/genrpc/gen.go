@@ -41,26 +41,28 @@ type {{.Service}} interface {
 }
 
 func Register(o {{.Service}}) {
-	clustergo.RegisterRPC("{{.Method}}",func(ctx context.Context, r *rpcgo.Replyer,arg *{{.Request}}) {
+	clustergo.GetRPCServer().RegisterService("{{.Method}}",func(ctx context.Context, r *rpcgo.Replyer,arg *{{.Request}}) {
 		o.Serve{{.Service}}(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
+var client *clustergo.RPCClient = clustergo.GetRPCClient()
+
 func Call(ctx context.Context, peer addr.LogicAddr,arg *{{.Request}}) (*{{.Response}},error) {
 	var resp {{.Response}}
-	err := clustergo.Call(ctx,peer,"{{.Method}}",arg,&resp)
+	err := client.Call(ctx,peer,"{{.Method}}",arg,&resp)
 	return &resp,err
 }
 
 func CallWithTimeout(peer addr.LogicAddr,arg *{{.Request}},d time.Duration) (*{{.Response}},error) {
 	var resp {{.Response}}
-	err := clustergo.CallWithTimeout(peer,"{{.Method}}",arg,&resp,d)
+	err := client.CallWithTimeout(peer,"{{.Method}}",arg,&resp,d)
 	return &resp,err
 }
 
 func AsyncCall(peer addr.LogicAddr,arg *{{.Request}},deadline time.Time,callback func(*{{.Response}},error)) error {
 	var resp {{.Response}}
-	err := clustergo.AsyncCall(peer,"{{.Method}}",arg,&resp,deadline,func(res interface{},err error){
+	err := client.AsyncCall(peer,"{{.Method}}",arg,&resp,deadline,func(res interface{},err error){
 		callback(res.(*{{.Response}}),err)
 	})
 	return err

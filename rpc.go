@@ -78,21 +78,21 @@ type selfChannel struct {
 
 func (c *selfChannel) RequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
 	c.self.Go(func() {
-		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
+		c.self.rpcSvr.svr.OnMessage(context.TODO(), c, request)
 	})
 	return nil
 }
 
 func (c *selfChannel) Request(request *rpcgo.RequestMsg) error {
 	c.self.Go(func() {
-		c.self.rpcSvr.OnMessage(context.TODO(), c, request)
+		c.self.rpcSvr.svr.OnMessage(context.TODO(), c, request)
 	})
 	return nil
 }
 
 func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
 	c.self.Go(func() {
-		c.self.rpcCli.OnMessage(nil, response)
+		c.self.rpcCli.cli.OnMessage(nil, response)
 	})
 	return nil
 }
