@@ -424,10 +424,10 @@ func (s *Node) Stop() error {
 			s.listener.Close()
 			//rpcSvr不再接收新的请求
 			s.rpcSvr.Stop()
-			//等待所有rpc请求都返回
-			for s.rpcSvr.PendingCallCount() > 0 {
-				time.Sleep(time.Millisecond * 10)
-			}
+			//等待所有rpc请求都返回,重构rpc拦截器，使用拦截器实现计数
+			//for s.rpcSvr.PendingCallCount() > 0 {
+			//	time.Sleep(time.Millisecond * 10)
+			//}
 			s.nodeCache.close()
 			s.smuxSessions.Range(func(key, _ interface{}) bool {
 				key.(*smux.Session).Close()
