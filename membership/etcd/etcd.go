@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sniperHW/clustergo"
@@ -24,9 +25,8 @@ type Node struct {
 }
 
 type Client struct {
-	sync.Mutex
-	configuration  map[string]membership.Node //配置中的节点
-	alive          map[string]struct{}        //活动节点
+	members        map[string]*membership.Node //配置中的节点
+	alive          map[string]struct{}         //活动节点
 	once           sync.Once
 	Cfg            clientv3.Config
 	PrefixConfig   string
@@ -42,7 +42,7 @@ type Client struct {
 	watchAlive     clientv3.WatchChan
 	leaseCh        <-chan *clientv3.LeaseKeepAliveResponse
 	closeFunc      context.CancelFunc
-	closed         bool
+	closed         atomic.Bool
 }
 
 func (ectd *Client) fetchLogicAddr(str string) string {
@@ -54,8 +54,8 @@ func (ectd *Client) fetchLogicAddr(str string) string {
 	}
 }
 
-func (etcd *Client) fetchConfiguration(ctx context.Context, cli *clientv3.Client) error {
-	etcd.configuration = map[string]membership.Node{}
+func (etcd *Client) fetchMembers(ctx context.Context, cli *clientv3.Client) error {
+	etcd.members = map[string]*membership.Node{}
 	resp, err := cli.Get(ctx, etcd.PrefixConfig, clientv3.WithPrefix())
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func (etcd *Client) fetchConfiguration(ctx context.Context, cli *clientv3.Client
 					Available: n.Available,
 					Export:    n.Export,
 				}
-				etcd.configuration[nn.Addr.LogicAddr().String()] = nn
+				etcd.members[nn.Addr.LogicAddr().String()] = &nn
 			} else {
 				etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
 			}
@@ -161,13 +161,13 @@ func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error)
 								nn.Available = true
 							}
 
-							if _, ok := etcd.configuration[key]; ok {
+							if _, ok := etcd.members[key]; ok {
 								nodeinfo.Update = append(nodeinfo.Update, nn)
 							} else {
 								nodeinfo.Add = append(nodeinfo.Add, nn)
 							}
 
-							etcd.configuration[key] = nn
+							etcd.members[key] = &nn
 
 							etcd.cb(nodeinfo)
 						} else {
@@ -177,9 +177,9 @@ func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error)
 						etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(e.Kv.Key), string(e.Kv.Value))
 					}
 				case clientv3.EventTypeDelete:
-					if n, ok := etcd.configuration[key]; ok {
-						delete(etcd.configuration, key)
-						nodeinfo.Remove = append(nodeinfo.Remove, n)
+					if n, ok := etcd.members[key]; ok {
+						delete(etcd.members, key)
+						nodeinfo.Remove = append(nodeinfo.Remove, *n)
 						etcd.cb(nodeinfo)
 					}
 				}
@@ -196,15 +196,15 @@ func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error)
 				switch e.Type {
 				case clientv3.EventTypePut:
 					etcd.alive[key] = struct{}{}
-					if n, ok := etcd.configuration[key]; ok && n.Available {
-						nodeinfo.Update = append(nodeinfo.Update, n)
+					if n, ok := etcd.members[key]; ok && n.Available {
+						nodeinfo.Update = append(nodeinfo.Update, *n)
 						etcd.cb(nodeinfo)
 					}
 				case clientv3.EventTypeDelete:
 					delete(etcd.alive, key)
-					if n, ok := etcd.configuration[key]; ok {
+					if n, ok := etcd.members[key]; ok {
 						n.Available = false
-						nodeinfo.Update = append(nodeinfo.Update, n)
+						nodeinfo.Update = append(nodeinfo.Update, *n)
 						etcd.cb(nodeinfo)
 					}
 				}
@@ -218,9 +218,9 @@ func (etcd *Client) subscribe(ctx context.Context, cli *clientv3.Client) {
 	if etcd.leaseID == 0 {
 		ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
 		//获取配置
-		if err = etcd.fetchConfiguration(ctxWithTimeout, cli); err != nil {
+		if err = etcd.fetchMembers(ctxWithTimeout, cli); err != nil {
 			cancel()
-			etcd.errorf("fetchConfiguration() error:%v", err)
+			etcd.errorf("fetchMembers() error:%v", err)
 			return
 		}
 
@@ -250,13 +250,13 @@ func (etcd *Client) subscribe(ctx context.Context, cli *clientv3.Client) {
 		cancel()
 
 		var nodeinfo membership.MemberInfo
-		for k, v := range etcd.configuration {
+		for k, v := range etcd.members {
 			if _, ok := etcd.alive[k]; ok && v.Available {
 				v.Available = true
 			} else {
 				v.Available = false
 			}
-			nodeinfo.Add = append(nodeinfo.Add, v)
+			nodeinfo.Add = append(nodeinfo.Add, *v)
 		}
 
 		etcd.cb(nodeinfo)
@@ -270,12 +270,7 @@ func (etcd *Client) subscribe(ctx context.Context, cli *clientv3.Client) {
 }
 
 func (etcd *Client) Close() {
-	etcd.Lock()
-	defer etcd.Unlock()
-	if etcd.closed {
-		return
-	} else {
-		etcd.closed = true
+	if etcd.closed.CompareAndSwap(false, true) {
 		if etcd.closeFunc != nil {
 			etcd.closeFunc()
 		}
@@ -291,9 +286,7 @@ func (etcd *Client) Subscribe(cb func(membership.MemberInfo)) error {
 	})
 
 	if once {
-		etcd.Lock()
-		defer etcd.Unlock()
-		if etcd.closed {
+		if etcd.closed.Load() {
 			return errors.New("closed")
 		}
 
