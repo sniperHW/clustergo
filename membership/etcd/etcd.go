@@ -203,8 +203,9 @@ func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error)
 				case clientv3.EventTypeDelete:
 					delete(etcd.alive, key)
 					if n, ok := etcd.members[key]; ok {
-						n.Available = false
-						nodeinfo.Update = append(nodeinfo.Update, *n)
+						nn := *n
+						nn.Available = false
+						nodeinfo.Update = append(nodeinfo.Update, nn)
 						etcd.cb(nodeinfo)
 					}
 				}
