@@ -64,17 +64,17 @@ func (cli *Client) initScriptSha() (err error) {
 	}
 
 	if cli.checkTimeoutSha, err = cli.redisCli.ScriptLoad(ScriptCheckTimeout).Result(); err != nil {
-		err = fmt.Errorf("error on init ScriptHeartbeat:%s", err.Error())
+		err = fmt.Errorf("error on init checkTimeout:%s", err.Error())
 		return err
 	}
 
 	if cli.getAliveSha, err = cli.redisCli.ScriptLoad(ScriptGetAlive).Result(); err != nil {
-		err = fmt.Errorf("error on init ScriptHeartbeat:%s", err.Error())
+		err = fmt.Errorf("error on init getAlive:%s", err.Error())
 		return err
 	}
 
 	if cli.updateMemberSha, err = cli.redisCli.ScriptLoad(ScriptUpdateMember).Result(); err != nil {
-		err = fmt.Errorf("error on init ScriptHeartbeat:%s", err.Error())
+		err = fmt.Errorf("error on init updateMember:%s", err.Error())
 		return err
 	}
 
@@ -93,81 +93,41 @@ func (cli *Client) RemoveMember(n *Node) error {
 }
 
 func (cli *Client) getAlives() {
-	/*re, err := cli.redisCli.EvalSha(cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
+	re, err := cli.redisCli.EvalSha(cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
 	err = GetRedisError(err)
 	if err == nil {
 		r := re.([]interface{})
 		version := r[0].(int64)
-		var alives []string
-		if len(r) > 1 {
-			for _, v := range r[1].([]interface{}) {
-				alives = append(alives, v.(string))
-			}
-			sort.Slice(alives, func(i, j int) bool {
-				return alives[i] < alives[j]
-			})
-		}
-
 		var nodeinfo membership.MemberInfo
 		cli.Lock()
 		if version != cli.aliveVersion.Load() {
-			cli.memberVersion.Store(version)
-			var localAlives []string
-			for k, _ := range cli.alive {
-				localAlives = append(localAlives, k)
-			}
-			sort.Slice(localAlives, func(i, j int) bool {
-				return localAlives[i] < localAlives[j]
-			})
-
-			i := 0
-			j := 0
-			for i < len(alives) && j < len(localAlives) {
-				nodej := localAlives[j]
-				nodei := alives[i]
-				if nodei == nodej {
-					i++
-					j++
-				} else if nodei > nodej {
-					//移除节点
-					delete(cli.alive, nodej)
-					if n := cli.members[nodej]; n != nil {
+			cli.aliveVersion.Store(version)
+			for _, v := range r[1].([]interface{}) {
+				addr, dead := v.([]interface{})[0].(string), v.([]interface{})[1].(string)
+				if dead == "true" {
+					delete(cli.alive, addr)
+					if n, ok := cli.members[addr]; ok {
+						//标记为不可用状态
 						nn := *n
 						nn.Available = false
 						nodeinfo.Update = append(nodeinfo.Update, nn)
 					}
-					j++
 				} else {
-					//添加节点
-					cli.alive[nodei] = struct{}{}
-					if n := cli.members[nodei]; n != nil {
-						if n.Available {
+					if _, ok := cli.alive[addr]; !ok {
+						cli.alive[addr] = struct{}{}
+						if n, ok := cli.members[addr]; ok && n.Available {
 							nodeinfo.Update = append(nodeinfo.Update, *n)
 						}
-					}
-					i++
-				}
-			}
-			for _, v := range localAlives[j:] {
-				delete(cli.alive, v)
-				if n := cli.members[v]; n != nil {
-					nn := *n
-					nn.Available = false
-					nodeinfo.Update = append(nodeinfo.Update, nn)
-				}
-			}
-
-			for _, v := range alives[i:] {
-				cli.alive[v] = struct{}{}
-				if n := cli.members[v]; n != nil {
-					if n.Available {
-						nodeinfo.Update = append(nodeinfo.Update, *n)
 					}
 				}
 			}
 		}
+		fmt.Println(cli.aliveVersion.Load(), cli.alive)
 		cli.Unlock()
-	}*/
+		if cli.cb != nil && len(nodeinfo.Update) > 0 {
+			cli.cb(nodeinfo)
+		}
+	}
 }
 
 func (cli *Client) getMembers() {
