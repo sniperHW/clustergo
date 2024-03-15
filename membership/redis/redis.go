@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-redis/redis"
 	"github.com/sniperHW/clustergo"
+	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/membership"
 )
 
@@ -36,15 +37,14 @@ func (n *Node) Unmarshal(data []byte) error {
 
 type Client struct {
 	sync.Mutex
+	LogicAddr       string
+	Logger          clustergo.Logger
+	RedisCli        *redis.Client
 	memberVersion   atomic.Int64
 	aliveVersion    atomic.Int64
 	alive           map[string]struct{}         //健康节点
 	members         map[string]*membership.Node //配置中的节点
-	once            sync.Once
-	LogicAddr       string
-	Logger          clustergo.Logger
 	cb              func(membership.MemberInfo)
-	redisCli        *redis.Client
 	getMembersSha   string
 	heartbeatSha    string
 	checkTimeoutSha string
@@ -52,28 +52,28 @@ type Client struct {
 	updateMemberSha string
 }
 
-func (cli *Client) initScriptSha() (err error) {
-	if cli.getMembersSha, err = cli.redisCli.ScriptLoad(ScriptGetMembers).Result(); err != nil {
+func (cli *Client) InitScript() (err error) {
+	if cli.getMembersSha, err = cli.RedisCli.ScriptLoad(ScriptGetMembers).Result(); err != nil {
 		err = fmt.Errorf("error on init ScriptGetMembers:%s", err.Error())
 		return err
 	}
 
-	if cli.heartbeatSha, err = cli.redisCli.ScriptLoad(ScriptHeartbeat).Result(); err != nil {
+	if cli.heartbeatSha, err = cli.RedisCli.ScriptLoad(ScriptHeartbeat).Result(); err != nil {
 		err = fmt.Errorf("error on init ScriptHeartbeat:%s", err.Error())
 		return err
 	}
 
-	if cli.checkTimeoutSha, err = cli.redisCli.ScriptLoad(ScriptCheckTimeout).Result(); err != nil {
+	if cli.checkTimeoutSha, err = cli.RedisCli.ScriptLoad(ScriptCheckTimeout).Result(); err != nil {
 		err = fmt.Errorf("error on init checkTimeout:%s", err.Error())
 		return err
 	}
 
-	if cli.getAliveSha, err = cli.redisCli.ScriptLoad(ScriptGetAlive).Result(); err != nil {
+	if cli.getAliveSha, err = cli.RedisCli.ScriptLoad(ScriptGetAlive).Result(); err != nil {
 		err = fmt.Errorf("error on init getAlive:%s", err.Error())
 		return err
 	}
 
-	if cli.updateMemberSha, err = cli.redisCli.ScriptLoad(ScriptUpdateMember).Result(); err != nil {
+	if cli.updateMemberSha, err = cli.RedisCli.ScriptLoad(ScriptUpdateMember).Result(); err != nil {
 		err = fmt.Errorf("error on init updateMember:%s", err.Error())
 		return err
 	}
@@ -83,17 +83,17 @@ func (cli *Client) initScriptSha() (err error) {
 
 func (cli *Client) UpdateMember(n *Node) error {
 	jsonBytes, _ := n.Marshal()
-	_, err := cli.redisCli.EvalSha(cli.updateMemberSha, []string{n.LogicAddr}, "insert_update", string(jsonBytes)).Result()
+	_, err := cli.RedisCli.EvalSha(cli.updateMemberSha, []string{n.LogicAddr}, "insert_update", string(jsonBytes)).Result()
 	return GetRedisError(err)
 }
 
 func (cli *Client) RemoveMember(n *Node) error {
-	_, err := cli.redisCli.EvalSha(cli.updateMemberSha, []string{n.LogicAddr}, "delete").Result()
+	_, err := cli.RedisCli.EvalSha(cli.updateMemberSha, []string{n.LogicAddr}, "delete").Result()
 	return GetRedisError(err)
 }
 
-func (cli *Client) getAlives() {
-	re, err := cli.redisCli.EvalSha(cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
+func (cli *Client) getAlives() error {
+	re, err := cli.RedisCli.EvalSha(cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
 	err = GetRedisError(err)
 	if err == nil {
 		r := re.([]interface{})
@@ -128,72 +128,59 @@ func (cli *Client) getAlives() {
 			cli.cb(nodeinfo)
 		}
 	}
+	return err
 }
 
-func (cli *Client) getMembers() {
-	/*re, err := cli.redisCli.EvalSha(cli.getMembersSha, []string{}, cli.memberVersion.Load()).Result()
+func (cli *Client) getMembers() error {
+	re, err := cli.RedisCli.EvalSha(cli.getMembersSha, []string{}, cli.memberVersion.Load()).Result()
 	err = GetRedisError(err)
 	if err == nil {
 		r := re.([]interface{})
 		version := r[0].(int64)
-		var members []membership.Node
-		if len(r) > 1 {
-			for _, v := range r[1].([]interface{}) {
-				var n Node
-				if err = n.Unmarshal([]byte(v.(string))); err == nil {
-					nn := membership.Node{
-						Export: n.Export,
-					}
-					nn.Addr, _ = addr.MakeAddr(n.LogicAddr, n.NetAddr)
-					if _, ok := cli.alive[n.LogicAddr]; ok && n.Available {
-						nn.Available = true
-					}
-					members = append(members, nn)
-				}
-			}
-			sort.Slice(members, func(i, j int) bool {
-				return members[i].Addr.LogicAddr() < members[j].Addr.LogicAddr()
-			})
-		}
-		cli.Lock()
 		var nodeinfo membership.MemberInfo
+		cli.Lock()
 		if version != cli.memberVersion.Load() {
 			cli.memberVersion.Store(version)
-			var localMembers []membership.Node
-			for _, v := range cli.members {
-				localMembers = append(localMembers, *v)
-			}
-			sort.Slice(localMembers, func(i, j int) bool {
-				return localMembers[i].Addr.LogicAddr().String() < localMembers[j].Addr.LogicAddr().String()
-			})
-			//比较members和localMembers的差异
-			i := 0
-			j := 0
-			for i < len(members) && j < len(localMembers) {
-				nodej := localMembers[j]
-				nodei := members[i]
-				if nodei.Addr.LogicAddr() == nodej.Addr.LogicAddr() {
-					if nodei.Addr.NetAddr() != nodej.Addr.NetAddr() ||
-						nodei.Available != nodej.Available {
-						nodeinfo.Update = append(nodeinfo.Update, nodei)
+			for _, v := range r[1].([]interface{}) {
+				m, markdel := v.([]interface{})[1].(string), v.([]interface{})[2].(string)
+				var n Node
+				if err = n.Unmarshal([]byte(m)); err == nil {
+					if markdel == "true" {
+						if nn, ok := cli.members[n.LogicAddr]; ok {
+							delete(cli.members, n.LogicAddr)
+							nodeinfo.Remove = append(nodeinfo.Remove, *nn)
+						}
+					} else {
+						if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
+							nn := membership.Node{
+								Addr:   address,
+								Export: n.Export,
+							}
+							if _, ok := cli.alive[n.LogicAddr]; ok && n.Available {
+								nn.Available = true
+							}
+
+							if _, ok := cli.members[n.LogicAddr]; ok {
+								nodeinfo.Update = append(nodeinfo.Update, nn)
+							} else {
+								nodeinfo.Add = append(nodeinfo.Add, nn)
+							}
+							cli.members[n.LogicAddr] = &nn
+						}
 					}
-					i++
-					j++
-				} else if nodei.Addr.LogicAddr() > nodej.Addr.LogicAddr() {
-					nodeinfo.Remove = append(nodeinfo.Remove, nodej)
-					j++
-				} else {
-					nodeinfo.Add = append(nodeinfo.Add, nodei)
-					i++
 				}
 			}
-			nodeinfo.Add = append(nodeinfo.Add, members[i:]...)
-			nodeinfo.Remove = append(nodeinfo.Remove, localMembers[j:]...)
+		}
+		fmt.Println(cli.memberVersion.Load())
+		for _, v := range cli.members {
+			fmt.Println(v.Addr.LogicAddr().String(), v.Addr.NetAddr().String(), v.Available, v.Export)
 		}
 		cli.Unlock()
 
-		if len(nodeinfo.Add) > 0 || len(nodeinfo.Remove) > 0 || len(nodeinfo.Update) > 0 {
+		if cli.cb != nil && (len(nodeinfo.Add) > 0 || len(nodeinfo.Update) > 0 || len(nodeinfo.Remove) > 0) {
 			cli.cb(nodeinfo)
 		}
-	}*/
+
+	}
+	return err
 }

@@ -9,6 +9,53 @@ import (
 	"github.com/sniperHW/clustergo/membership"
 )
 
+func TestGetMember(t *testing.T) {
+	cli := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	cli.FlushAll()
+
+	rcli := &Client{
+		alive:    map[string]struct{}{},
+		members:  map[string]*membership.Node{},
+		RedisCli: cli,
+	}
+
+	if err := rcli.InitScript(); err != nil {
+		panic(err)
+	}
+
+	err := rcli.UpdateMember(&Node{
+		LogicAddr: "1.1.1",
+		NetAddr:   "192.168.1.1:8011",
+		Available: true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	err = rcli.UpdateMember(&Node{
+		LogicAddr: "1.1.2",
+		NetAddr:   "192.168.1.2:8011",
+		Available: true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	rcli.getMembers()
+
+	err = rcli.RemoveMember(&Node{
+		LogicAddr: "1.1.2",
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	rcli.getMembers()
+
+}
+
 func TestGetAlive(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -28,10 +75,10 @@ func TestGetAlive(t *testing.T) {
 	rcli := &Client{
 		alive:    map[string]struct{}{},
 		members:  map[string]*membership.Node{},
-		redisCli: cli,
+		RedisCli: cli,
 	}
 
-	if err := rcli.initScriptSha(); err != nil {
+	if err := rcli.InitScript(); err != nil {
 		panic(err)
 	}
 

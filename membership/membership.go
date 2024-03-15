@@ -21,3 +21,9 @@ type Client interface {
 	Subscribe(func(MemberInfo)) error
 	Close()
 }
+
+type Admin interface {
+	AddMember(Node)
+	UpdateMember(Node)
+	RemoveMember(Node)
+}
