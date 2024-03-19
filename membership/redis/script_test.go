@@ -135,3 +135,26 @@ func TestAlive(t *testing.T) {
 	}
 
 }
+
+func TestRedis(t *testing.T) {
+	cli := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	cli.FlushAll()
+
+	cli.Set("hello", "world", 0)
+
+	v, err := cli.Get("hello").Result()
+
+	fmt.Println(v, err)
+
+	//inputReader := bufio.NewReader(os.Stdin)
+
+	//inputReader.ReadString('\n')
+
+	time.Sleep(time.Second * 5)
+
+	v, err = cli.Get("hello").Result()
+
+	fmt.Println(v, err)
+}
