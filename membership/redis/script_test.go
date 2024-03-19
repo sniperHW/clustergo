@@ -138,7 +138,8 @@ func TestAlive(t *testing.T) {
 
 func TestRedis(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr:       "localhost:6379",
+		MaxRetries: 10,
 	})
 	cli.FlushAll()
 
@@ -148,13 +149,33 @@ func TestRedis(t *testing.T) {
 
 	fmt.Println(v, err)
 
-	//inputReader := bufio.NewReader(os.Stdin)
-
-	//inputReader.ReadString('\n')
-
 	time.Sleep(time.Second * 5)
+
+	fmt.Println("again")
 
 	v, err = cli.Get("hello").Result()
 
 	fmt.Println(v, err)
+
+}
+
+func TestSubscribe(t *testing.T) {
+	cli := redis.NewClient(&redis.Options{
+		Addr:       "localhost:6379",
+		MaxRetries: 10,
+	})
+	cli.FlushAll()
+
+	_, err := cli.Subscribe("alive").ReceiveMessage()
+	err = GetRedisError(err)
+	fmt.Println(err)
+
+	time.Sleep(time.Second * 5)
+
+	fmt.Println("again")
+
+	_, err = cli.Subscribe("alive").ReceiveMessage()
+	err = GetRedisError(err)
+	fmt.Println(err)
+
 }

@@ -2,9 +2,11 @@ package redis
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/sniperHW/clustergo"
@@ -50,6 +52,8 @@ type Client struct {
 	checkTimeoutSha string
 	getAliveSha     string
 	updateMemberSha string
+	once            sync.Once
+	closed          atomic.Bool
 }
 
 func (cli *Client) InitScript() (err error) {
@@ -183,4 +187,62 @@ func (cli *Client) getMembers() error {
 
 	}
 	return err
+}
+
+func (cli *Client) watch() {
+
+	recover := func() {
+		for {
+			err1 := cli.getMembers()
+			err2 := cli.getAlives()
+			if err1 == nil && err2 == nil {
+				return
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
+	}
+
+	for {
+		m, err := cli.RedisCli.Subscribe("members", "alive").ReceiveMessage()
+		if err != nil {
+			recover()
+		} else {
+			switch m.Channel {
+			case "members":
+				err = cli.getMembers()
+			case "alive":
+				err = cli.getAlives()
+			}
+			if err != nil {
+				recover()
+			}
+		}
+	}
+}
+
+func (cli *Client) Subscribe(cb func(membership.MemberInfo)) error {
+
+	once := false
+
+	cli.once.Do(func() {
+		once = true
+	})
+
+	if once {
+		if cli.closed.Load() {
+			return errors.New("closed")
+		}
+		cli.cb = cb
+		err := cli.getMembers()
+		if err != nil {
+			return err
+		}
+		err = cli.getAlives()
+		if err != nil {
+			return err
+		}
+		go cli.watch()
+	}
+	return nil
 }

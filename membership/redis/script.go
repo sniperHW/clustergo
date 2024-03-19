@@ -113,6 +113,7 @@ const ScriptGetAlive string = `
 `
 
 // 遍历db1,将超时节点标记为dead=true
+// todo: 记录下上次检测的时间,避免频繁执行检查
 const ScriptCheckTimeout string = `
 	redis.call('select',1)
 	local serverVer = redis.call('get','version')
