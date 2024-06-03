@@ -23,7 +23,8 @@ type Client interface {
 }
 
 type Admin interface {
-	AddMember(Node)
+	//更新节点信息，如果节点不存在将它添加到membership中
 	UpdateMember(Node)
+	//从membership中移除节点
 	RemoveMember(Node)
 }
