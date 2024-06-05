@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -24,28 +23,27 @@ type Node struct {
 	Available bool
 }
 
-type Client struct {
+type MemberShip struct {
 	members        map[string]*membership.Node //配置中的节点
 	alive          map[string]struct{}         //活动节点
 	once           sync.Once
 	Cfg            clientv3.Config
 	PrefixConfig   string
 	PrefixAlive    string
-	LogicAddr      string
 	Logger         clustergo.Logger
 	TTL            time.Duration
 	rversionConfig int64
 	rversionAlive  int64
 	cb             func(membership.MemberInfo)
-	leaseID        clientv3.LeaseID
 	watchConfig    clientv3.WatchChan
 	watchAlive     clientv3.WatchChan
-	leaseCh        <-chan *clientv3.LeaseKeepAliveResponse
 	closeFunc      context.CancelFunc
 	closed         atomic.Bool
+	//leaseID        clientv3.LeaseID
+	//leaseCh        <-chan *clientv3.LeaseKeepAliveResponse
 }
 
-func (ectd *Client) fetchLogicAddr(str string) string {
+func (ectd *MemberShip) fetchLogicAddr(str string) string {
 	v := strings.Split(str, "/")
 	if len(v) > 0 {
 		return v[len(v)-1]
@@ -54,7 +52,7 @@ func (ectd *Client) fetchLogicAddr(str string) string {
 	}
 }
 
-func (etcd *Client) fetchMembers(ctx context.Context, cli *clientv3.Client) error {
+func (etcd *MemberShip) fetchMembers(ctx context.Context, cli *clientv3.Client) error {
 	etcd.members = map[string]*membership.Node{}
 	resp, err := cli.Get(ctx, etcd.PrefixConfig, clientv3.WithPrefix())
 	if err != nil {
@@ -83,7 +81,7 @@ func (etcd *Client) fetchMembers(ctx context.Context, cli *clientv3.Client) erro
 	return nil
 }
 
-func (etcd *Client) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
+func (etcd *MemberShip) fetchAlive(ctx context.Context, cli *clientv3.Client) error {
 	etcd.alive = map[string]struct{}{}
 	resp, err := cli.Get(ctx, etcd.PrefixAlive, clientv3.WithPrefix())
 	if err != nil {
@@ -93,9 +91,6 @@ func (etcd *Client) fetchAlive(ctx context.Context, cli *clientv3.Client) error 
 	for _, v := range resp.Kvs {
 		key := etcd.fetchLogicAddr(string(v.Key))
 		etcd.alive[key] = struct{}{}
-		if key == etcd.LogicAddr {
-			etcd.leaseID = clientv3.LeaseID(v.Lease)
-		}
 	}
 
 	etcd.rversionAlive = resp.Header.GetRevision()
@@ -103,14 +98,18 @@ func (etcd *Client) fetchAlive(ctx context.Context, cli *clientv3.Client) error 
 	return nil
 }
 
-func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error) {
+func (etcd *MemberShip) watch(ctx context.Context, cli *clientv3.Client) (err error) {
 
-	if etcd.leaseCh == nil {
-		etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
-		if err != nil {
-			return err
+	/*if etcd.LogicAddr == "" {
+		etcd.leaseCh = make(chan *clientv3.LeaseKeepAliveResponse)
+	} else {
+		if etcd.leaseCh == nil {
+			etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
+			if err != nil {
+				return err
+			}
 		}
-	}
+	}*/
 
 	if etcd.watchConfig == nil {
 		etcd.watchConfig = cli.Watch(ctx, etcd.PrefixConfig, clientv3.WithPrefix(), clientv3.WithRev(etcd.rversionConfig+1))
@@ -122,22 +121,22 @@ func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error)
 
 	for {
 		select {
-		case _, ok := <-etcd.leaseCh:
-			if !ok {
-				if respLeaseGrant, err := cli.Lease.Grant(ctx, int64(etcd.TTL/time.Second)); err != nil {
+		/*case _, ok := <-etcd.leaseCh:
+		if !ok {
+			if respLeaseGrant, err := cli.Lease.Grant(ctx, int64(etcd.TTL/time.Second)); err != nil {
+				return err
+			} else {
+				etcd.leaseID = respLeaseGrant.ID
+				_, err = cli.Put(ctx, fmt.Sprintf("%s%s", etcd.PrefixAlive, etcd.LogicAddr), fmt.Sprintf("%x", respLeaseGrant.ID), clientv3.WithLease(respLeaseGrant.ID))
+				if err != nil {
 					return err
-				} else {
-					etcd.leaseID = respLeaseGrant.ID
-					_, err = cli.Put(ctx, fmt.Sprintf("%s%s", etcd.PrefixAlive, etcd.LogicAddr), fmt.Sprintf("%x", respLeaseGrant.ID), clientv3.WithLease(respLeaseGrant.ID))
-					if err != nil {
-						return err
-					}
-					etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
-					if err != nil {
-						return err
-					}
+				}
+				etcd.leaseCh, err = cli.Lease.KeepAlive(ctx, etcd.leaseID)
+				if err != nil {
+					return err
 				}
 			}
+		}*/
 		case v := <-etcd.watchConfig:
 			if v.Canceled {
 				etcd.watchConfig = nil
@@ -214,41 +213,37 @@ func (etcd *Client) watch(ctx context.Context, cli *clientv3.Client) (err error)
 	}
 }
 
-func (etcd *Client) subscribe(ctx context.Context, cli *clientv3.Client) {
+func (etcd *MemberShip) subscribe(ctx context.Context, cli *clientv3.Client) {
 	var err error
-	if etcd.leaseID == 0 {
+	if etcd.rversionConfig == 0 {
 		ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
+		defer cancel()
 		//获取配置
 		if err = etcd.fetchMembers(ctxWithTimeout, cli); err != nil {
-			cancel()
 			etcd.errorf("fetchMembers() error:%v", err)
 			return
 		}
 
 		//获取alive信息
 		if err = etcd.fetchAlive(ctxWithTimeout, cli); err != nil {
-			cancel()
 			etcd.errorf("fetchAlive() error:%v", err)
 			return
 		}
 
-		if etcd.leaseID == 0 {
+		/*if etcd.LogicAddr != "" && etcd.leaseID == 0 {
 			//创建lease
 			if respLeaseGrant, err := cli.Lease.Grant(ctxWithTimeout, int64(etcd.TTL/time.Second)); err != nil {
-				cancel()
 				etcd.errorf("Lease.Grant() error:%v", err)
 				return
 			} else {
 				etcd.leaseID = respLeaseGrant.ID
 				_, err = cli.Put(ctxWithTimeout, fmt.Sprintf("%s%s", etcd.PrefixAlive, etcd.LogicAddr), fmt.Sprintf("%x", etcd.leaseID), clientv3.WithLease(etcd.leaseID))
 				if err != nil {
-					cancel()
 					etcd.errorf("alive put error:%v", err)
 					return
 				}
 			}
-		}
-		cancel()
+		}*/
 
 		var nodeinfo membership.MemberInfo
 		for k, v := range etcd.members {
@@ -270,7 +265,7 @@ func (etcd *Client) subscribe(ctx context.Context, cli *clientv3.Client) {
 	}
 }
 
-func (etcd *Client) Close() {
+func (etcd *MemberShip) Close() {
 	if etcd.closed.CompareAndSwap(false, true) {
 		if etcd.closeFunc != nil {
 			etcd.closeFunc()
@@ -278,7 +273,7 @@ func (etcd *Client) Close() {
 	}
 }
 
-func (etcd *Client) Subscribe(cb func(membership.MemberInfo)) error {
+func (etcd *MemberShip) Subscribe(cb func(membership.MemberInfo)) error {
 
 	once := false
 
@@ -325,7 +320,7 @@ func (etcd *Client) Subscribe(cb func(membership.MemberInfo)) error {
 	return nil
 }
 
-func (etcd *Client) errorf(format string, v ...any) {
+func (etcd *MemberShip) errorf(format string, v ...any) {
 	if etcd.Logger != nil {
 		etcd.Logger.Errorf(format, v...)
 	} else {

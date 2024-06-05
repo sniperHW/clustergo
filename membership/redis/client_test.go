@@ -1,27 +1,120 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/redis/go-redis/v9"
 	"github.com/sniperHW/clustergo/membership"
 )
+
+func TestClientSubscribe(t *testing.T) {
+	cli := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	cli.FlushAll(context.Background())
+
+	node1 := &MemberShip{
+		RedisCli: cli,
+	}
+
+	if err := node1.Init(); err != nil {
+		panic(err)
+	}
+
+	node1.Subscribe(func(di membership.MemberInfo) {
+		fmt.Println("add", di.Add)
+		fmt.Println("update", di.Update)
+		fmt.Println("remove", di.Remove)
+	})
+
+	time.Sleep(time.Second * 10)
+
+	/*rcli := &MemberShip{
+		RedisCli: redis.NewClient(&redis.Options{
+			Addr: "localhost:6379",
+		}),
+	}
+
+	if err := rcli.Init(); err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Update1")
+
+	err := rcli.UpdateMember(&Node{
+		LogicAddr: "1.1.1",
+		NetAddr:   "192.168.1.1:8011",
+		Available: true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	//time.Sleep(time.Second)
+
+	fmt.Println("Update2")
+
+	err = rcli.UpdateMember(&Node{
+		LogicAddr: "1.1.2",
+		NetAddr:   "192.168.1.2:8011",
+		Available: true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Second * 2)
+
+	err = rcli.RemoveMember(&Node{
+		LogicAddr: "1.1.2",
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Second)
+
+	err = rcli.UpdateMember(&Node{
+		LogicAddr: "1.1.1",
+		NetAddr:   "192.168.1.1:8012",
+		Available: true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Second)
+
+	fmt.Println("------------keepalive---------")
+
+	rcli.KeepAlive(&Node{
+		LogicAddr: "1.1.1",
+	})
+
+	time.Sleep(time.Second * 11)
+
+	fmt.Println("ScriptCheckTimeout")
+
+	rcli.CheckTimeout()
+
+	time.Sleep(time.Second * 2)*/
+
+}
 
 func TestGetMember(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	cli.FlushAll()
+	cli.FlushAll(context.Background())
 
-	rcli := &Client{
-		alive:    map[string]struct{}{},
-		members:  map[string]*membership.Node{},
+	rcli := &MemberShip{
 		RedisCli: cli,
 	}
 
-	if err := rcli.InitScript(); err != nil {
+	if err := rcli.Init(); err != nil {
 		panic(err)
 	}
 
@@ -60,25 +153,25 @@ func TestGetAlive(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	cli.FlushAll()
+	cli.FlushAll(context.Background())
 
 	{
-		_, err := cli.Eval(ScriptHeartbeat, []string{"sniperHW1"}, 2).Result()
+		_, err := cli.Eval(context.Background(), ScriptHeartbeat, []string{"sniperHW1"}, 2).Result()
 		fmt.Println("sniperHW1 heartbeat", GetRedisError(err))
 	}
 
 	{
-		_, err := cli.Eval(ScriptHeartbeat, []string{"sniperHW2"}, 5).Result()
+		_, err := cli.Eval(context.Background(), ScriptHeartbeat, []string{"sniperHW2"}, 5).Result()
 		fmt.Println("sniperHW2 heartbeat", GetRedisError(err))
 	}
 
-	rcli := &Client{
+	rcli := &MemberShip{
 		alive:    map[string]struct{}{},
-		members:  map[string]*membership.Node{},
+		members:  map[string]*Node{},
 		RedisCli: cli,
 	}
 
-	if err := rcli.InitScript(); err != nil {
+	if err := rcli.Init(); err != nil {
 		panic(err)
 	}
 
@@ -87,11 +180,11 @@ func TestGetAlive(t *testing.T) {
 	c := make(chan struct{})
 
 	go func() {
-		m, err := cli.Subscribe("alive").ReceiveMessage()
+		m, err := cli.Subscribe(context.Background(), "alive").ReceiveMessage(context.Background())
 		err = GetRedisError(err)
 		fmt.Println("server version", m.Payload)
 		if err == nil {
-			_, err := cli.Eval(ScriptGetAlive, []string{}, 0).Result()
+			_, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 0).Result()
 			err = GetRedisError(err)
 			if err != nil {
 				fmt.Println(err)
@@ -109,7 +202,7 @@ func TestGetAlive(t *testing.T) {
 
 	time.Sleep(time.Second * 3)
 
-	_, err := cli.Eval(ScriptCheckTimeout, []string{}).Result()
+	_, err := cli.Eval(context.Background(), ScriptCheckTimeout, []string{}).Result()
 	err = GetRedisError(err)
 	if err != nil {
 		fmt.Println(err)

@@ -72,6 +72,7 @@ const ScriptHeartbeat string = `
 		redis.call('set','version',serverVer)
 		redis.call('hmset',KEYS[1],'deadline',deadline,'version',serverVer,'dead','false')
 		--publish
+		redis.call('select',0)
 		redis.call('PUBLISH',"alive",serverVer)
 	else
 		redis.call('hmset',KEYS[1],'deadline',deadline)
@@ -124,7 +125,7 @@ const ScriptCheckTimeout string = `
 	end
 
 	local now = tonumber(redis.call('TIME')[1])
-
+	
 	local change = false	
 	local result = redis.call('scan',0)
 	for k,v in pairs(result[2]) do
@@ -143,6 +144,7 @@ const ScriptCheckTimeout string = `
 
 	if change then
 		--publish
+		redis.call('select',0)
 		redis.call('PUBLISH','alive',serverVer)
 	end
 `

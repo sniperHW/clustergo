@@ -1,36 +1,37 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestMembers(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	cli.FlushAll()
+	cli.FlushAll(context.Background())
 
 	{
-		_, err := cli.Eval(ScriptUpdateMember, []string{"sniperHW1"}, "insert_update", "sniperHW's data").Result()
+		_, err := cli.Eval(context.Background(), ScriptUpdateMember, []string{"sniperHW1"}, "insert_update", "sniperHW's data").Result()
 		fmt.Println(GetRedisError(err))
 	}
 
 	{
-		_, err := cli.Eval(ScriptUpdateMember, []string{"sniperHW2"}, "insert_update", "sniperHW2's data").Result()
+		_, err := cli.Eval(context.Background(), ScriptUpdateMember, []string{"sniperHW2"}, "insert_update", "sniperHW2's data").Result()
 		fmt.Println(GetRedisError(err))
 	}
 
 	{
-		_, err := cli.Eval(ScriptUpdateMember, []string{"sniperHW2"}, "delete").Result()
+		_, err := cli.Eval(context.Background(), ScriptUpdateMember, []string{"sniperHW2"}, "delete").Result()
 		fmt.Println(GetRedisError(err))
 	}
 
 	{
-		re, err := cli.Eval(ScriptGetMembers, []string{}, 0).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetMembers, []string{}, 0).Result()
 		if err != nil {
 			fmt.Println(GetRedisError(err))
 		}
@@ -38,7 +39,7 @@ func TestMembers(t *testing.T) {
 	}
 
 	{
-		re, err := cli.Eval(ScriptGetMembers, []string{}, 2).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetMembers, []string{}, 2).Result()
 		if err != nil {
 			fmt.Println(GetRedisError(err))
 		}
@@ -46,7 +47,7 @@ func TestMembers(t *testing.T) {
 	}
 
 	{
-		re, err := cli.Eval(ScriptGetMembers, []string{}, 3).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetMembers, []string{}, 3).Result()
 		if err != nil {
 			fmt.Println(GetRedisError(err))
 		}
@@ -59,20 +60,20 @@ func TestAlive(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	cli.FlushAll()
+	cli.FlushAll(context.Background())
 
 	{
-		_, err := cli.Eval(ScriptHeartbeat, []string{"sniperHW1"}, 2).Result()
+		_, err := cli.Eval(context.Background(), ScriptHeartbeat, []string{"sniperHW1"}, 2).Result()
 		fmt.Println("sniperHW1 heartbeat", GetRedisError(err))
 	}
 
 	{
-		_, err := cli.Eval(ScriptHeartbeat, []string{"sniperHW2"}, 5).Result()
+		_, err := cli.Eval(context.Background(), ScriptHeartbeat, []string{"sniperHW2"}, 5).Result()
 		fmt.Println("sniperHW2 heartbeat", GetRedisError(err))
 	}
 
 	{
-		re, err := cli.Eval(ScriptGetAlive, []string{}, 0).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 0).Result()
 		err = GetRedisError(err)
 		if err != nil {
 			fmt.Println(err)
@@ -88,11 +89,11 @@ func TestAlive(t *testing.T) {
 	c := make(chan struct{})
 
 	go func() {
-		m, err := cli.Subscribe("alive").ReceiveMessage()
+		m, err := cli.Subscribe(context.Background(), "alive").ReceiveMessage(context.Background())
 		err = GetRedisError(err)
 		fmt.Println("server version", m.Payload)
 		if err == nil {
-			re, err := cli.Eval(ScriptGetAlive, []string{}, 0).Result()
+			re, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 0).Result()
 			err = GetRedisError(err)
 			if err != nil {
 				fmt.Println(err)
@@ -110,7 +111,7 @@ func TestAlive(t *testing.T) {
 
 	time.Sleep(time.Second * 3)
 
-	_, err := cli.Eval(ScriptCheckTimeout, []string{}).Result()
+	_, err := cli.Eval(context.Background(), ScriptCheckTimeout, []string{}).Result()
 	err = GetRedisError(err)
 	if err != nil {
 		fmt.Println(err)
@@ -121,7 +122,7 @@ func TestAlive(t *testing.T) {
 	<-c
 
 	{
-		re, err := cli.Eval(ScriptGetAlive, []string{}, 1).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 1).Result()
 		err = GetRedisError(err)
 		if err != nil {
 			fmt.Println(err)
@@ -141,11 +142,11 @@ func TestRedis(t *testing.T) {
 		Addr:       "localhost:6379",
 		MaxRetries: 10,
 	})
-	cli.FlushAll()
+	cli.FlushAll(context.Background())
 
-	cli.Set("hello", "world", 0)
+	cli.Set(context.Background(), "hello", "world", 0)
 
-	v, err := cli.Get("hello").Result()
+	v, err := cli.Get(context.Background(), "hello").Result()
 
 	fmt.Println(v, err)
 
@@ -153,7 +154,7 @@ func TestRedis(t *testing.T) {
 
 	fmt.Println("again")
 
-	v, err = cli.Get("hello").Result()
+	v, err = cli.Get(context.Background(), "hello").Result()
 
 	fmt.Println(v, err)
 
@@ -164,9 +165,9 @@ func TestSubscribe(t *testing.T) {
 		Addr:       "localhost:6379",
 		MaxRetries: 10,
 	})
-	cli.FlushAll()
+	cli.FlushAll(context.Background())
 
-	_, err := cli.Subscribe("alive").ReceiveMessage()
+	_, err := cli.Subscribe(context.Background(), "alive").ReceiveMessage(context.Background())
 	err = GetRedisError(err)
 	fmt.Println(err)
 
@@ -174,7 +175,7 @@ func TestSubscribe(t *testing.T) {
 
 	fmt.Println("again")
 
-	_, err = cli.Subscribe("alive").ReceiveMessage()
+	_, err = cli.Subscribe(context.Background(), "alive").ReceiveMessage(context.Background())
 	err = GetRedisError(err)
 	fmt.Println(err)
 

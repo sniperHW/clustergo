@@ -3,7 +3,7 @@ module github.com/sniperHW/clustergo
 go 1.21.5
 
 require (
-	github.com/go-redis/redis v6.15.9+incompatible
+	github.com/redis/go-redis/v9 v9.5.2
 	github.com/sniperHW/netgo v0.0.0-20231214060736-2b26e624b5f6
 	github.com/sniperHW/rpcgo v0.0.0-20231220032533-cdeb6a7b1119
 	github.com/stretchr/testify v1.8.4
@@ -17,9 +17,11 @@ require (
 replace google.golang.org/grpc => google.golang.org/grpc v1.59.0
 
 require (
+	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
@@ -27,8 +29,6 @@ require (
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.9 // indirect
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/gomega v1.30.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/templexxx/cpu v0.0.7 // indirect

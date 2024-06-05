@@ -16,7 +16,7 @@ type MemberInfo struct {
 	Update []Node
 }
 
-type Client interface {
+type Subscribe interface {
 	//订阅变更
 	Subscribe(func(MemberInfo)) error
 	Close()
@@ -27,4 +27,6 @@ type Admin interface {
 	UpdateMember(Node)
 	//从membership中移除节点
 	RemoveMember(Node)
+	//保活
+	KeepAlive(Node)
 }

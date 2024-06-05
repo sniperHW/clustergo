@@ -1,15 +1,15 @@
 package redis
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/go-redis/redis"
-	"github.com/sniperHW/clustergo"
+	"github.com/redis/go-redis/v9"
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/membership"
 )
@@ -23,7 +23,7 @@ func GetRedisError(err error) error {
 }
 
 type Node struct {
-	LogicAddr string `json:""`
+	LogicAddr string `json:"logicAddr"`
 	NetAddr   string `json:"netAddr"`
 	Export    bool   `json:"export"`
 	Available bool   `json:"available"`
@@ -37,15 +37,13 @@ func (n *Node) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, n)
 }
 
-type Client struct {
+type MemberShip struct {
 	sync.Mutex
-	LogicAddr       string
-	Logger          clustergo.Logger
 	RedisCli        *redis.Client
 	memberVersion   atomic.Int64
 	aliveVersion    atomic.Int64
-	alive           map[string]struct{}         //健康节点
-	members         map[string]*membership.Node //配置中的节点
+	alive           map[string]struct{} //健康节点
+	members         map[string]*Node    //*membership.Node //配置中的节点
 	cb              func(membership.MemberInfo)
 	getMembersSha   string
 	heartbeatSha    string
@@ -53,31 +51,34 @@ type Client struct {
 	getAliveSha     string
 	updateMemberSha string
 	once            sync.Once
+	closeFunc       context.CancelFunc
 	closed          atomic.Bool
 }
 
-func (cli *Client) InitScript() (err error) {
-	if cli.getMembersSha, err = cli.RedisCli.ScriptLoad(ScriptGetMembers).Result(); err != nil {
+func (cli *MemberShip) Init() (err error) {
+	cli.alive = map[string]struct{}{}
+	cli.members = map[string]*Node{}
+	if cli.getMembersSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptGetMembers).Result(); err != nil {
 		err = fmt.Errorf("error on init ScriptGetMembers:%s", err.Error())
 		return err
 	}
 
-	if cli.heartbeatSha, err = cli.RedisCli.ScriptLoad(ScriptHeartbeat).Result(); err != nil {
+	if cli.heartbeatSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptHeartbeat).Result(); err != nil {
 		err = fmt.Errorf("error on init ScriptHeartbeat:%s", err.Error())
 		return err
 	}
 
-	if cli.checkTimeoutSha, err = cli.RedisCli.ScriptLoad(ScriptCheckTimeout).Result(); err != nil {
+	if cli.checkTimeoutSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptCheckTimeout).Result(); err != nil {
 		err = fmt.Errorf("error on init checkTimeout:%s", err.Error())
 		return err
 	}
 
-	if cli.getAliveSha, err = cli.RedisCli.ScriptLoad(ScriptGetAlive).Result(); err != nil {
+	if cli.getAliveSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptGetAlive).Result(); err != nil {
 		err = fmt.Errorf("error on init getAlive:%s", err.Error())
 		return err
 	}
 
-	if cli.updateMemberSha, err = cli.RedisCli.ScriptLoad(ScriptUpdateMember).Result(); err != nil {
+	if cli.updateMemberSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptUpdateMember).Result(); err != nil {
 		err = fmt.Errorf("error on init updateMember:%s", err.Error())
 		return err
 	}
@@ -85,19 +86,29 @@ func (cli *Client) InitScript() (err error) {
 	return err
 }
 
-func (cli *Client) UpdateMember(n *Node) error {
+func (cli *MemberShip) UpdateMember(n *Node) error {
 	jsonBytes, _ := n.Marshal()
-	_, err := cli.RedisCli.EvalSha(cli.updateMemberSha, []string{n.LogicAddr}, "insert_update", string(jsonBytes)).Result()
+	_, err := cli.RedisCli.EvalSha(context.Background(), cli.updateMemberSha, []string{n.LogicAddr}, "insert_update", string(jsonBytes)).Result()
 	return GetRedisError(err)
 }
 
-func (cli *Client) RemoveMember(n *Node) error {
-	_, err := cli.RedisCli.EvalSha(cli.updateMemberSha, []string{n.LogicAddr}, "delete").Result()
+func (cli *MemberShip) RemoveMember(n *Node) error {
+	_, err := cli.RedisCli.EvalSha(context.Background(), cli.updateMemberSha, []string{n.LogicAddr}, "delete").Result()
 	return GetRedisError(err)
 }
 
-func (cli *Client) getAlives() error {
-	re, err := cli.RedisCli.EvalSha(cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
+func (cli *MemberShip) KeepAlive(n *Node) error {
+	_, err := cli.RedisCli.EvalSha(context.Background(), cli.heartbeatSha, []string{n.LogicAddr}, 10).Result()
+	return GetRedisError(err)
+}
+
+func makeaddr(logicAddr, netAddr string) addr.Addr {
+	a, _ := addr.MakeAddr(logicAddr, netAddr)
+	return a
+}
+
+func (cli *MemberShip) getAlives() error {
+	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
 	err = GetRedisError(err)
 	if err == nil {
 		r := re.([]interface{})
@@ -112,15 +123,21 @@ func (cli *Client) getAlives() error {
 					delete(cli.alive, addr)
 					if n, ok := cli.members[addr]; ok {
 						//标记为不可用状态
-						nn := *n
-						nn.Available = false
-						nodeinfo.Update = append(nodeinfo.Update, nn)
+						nodeinfo.Update = append(nodeinfo.Update, membership.Node{
+							Addr:      makeaddr(n.LogicAddr, n.NetAddr),
+							Export:    n.Export,
+							Available: false,
+						})
 					}
 				} else {
 					if _, ok := cli.alive[addr]; !ok {
 						cli.alive[addr] = struct{}{}
 						if n, ok := cli.members[addr]; ok && n.Available {
-							nodeinfo.Update = append(nodeinfo.Update, *n)
+							nodeinfo.Update = append(nodeinfo.Update, membership.Node{
+								Addr:      makeaddr(n.LogicAddr, n.NetAddr),
+								Export:    n.Export,
+								Available: true,
+							})
 						}
 					}
 				}
@@ -135,8 +152,8 @@ func (cli *Client) getAlives() error {
 	return err
 }
 
-func (cli *Client) getMembers() error {
-	re, err := cli.RedisCli.EvalSha(cli.getMembersSha, []string{}, cli.memberVersion.Load()).Result()
+func (cli *MemberShip) getMembers() error {
+	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getMembersSha, []string{}, cli.memberVersion.Load()).Result()
 	err = GetRedisError(err)
 	if err == nil {
 		r := re.([]interface{})
@@ -149,10 +166,13 @@ func (cli *Client) getMembers() error {
 				m, markdel := v.([]interface{})[1].(string), v.([]interface{})[2].(string)
 				var n Node
 				if err = n.Unmarshal([]byte(m)); err == nil {
+					log.Println(n, markdel)
 					if markdel == "true" {
 						if nn, ok := cli.members[n.LogicAddr]; ok {
 							delete(cli.members, n.LogicAddr)
-							nodeinfo.Remove = append(nodeinfo.Remove, *nn)
+							nodeinfo.Remove = append(nodeinfo.Remove, membership.Node{
+								Addr: makeaddr(nn.LogicAddr, nn.NetAddr),
+							})
 						}
 					} else {
 						if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
@@ -169,15 +189,17 @@ func (cli *Client) getMembers() error {
 							} else {
 								nodeinfo.Add = append(nodeinfo.Add, nn)
 							}
-							cli.members[n.LogicAddr] = &nn
+							cli.members[n.LogicAddr] = &n
+						} else {
+							log.Println(err, n.LogicAddr, n.NetAddr)
 						}
 					}
 				}
 			}
 		}
-		fmt.Println(cli.memberVersion.Load())
+		fmt.Println("version", cli.memberVersion.Load())
 		for _, v := range cli.members {
-			fmt.Println(v.Addr.LogicAddr().String(), v.Addr.NetAddr().String(), v.Available, v.Export)
+			fmt.Println(v.LogicAddr, v.NetAddr, v.Available, v.Export)
 		}
 		cli.Unlock()
 
@@ -189,39 +211,41 @@ func (cli *Client) getMembers() error {
 	return err
 }
 
-func (cli *Client) watch() {
+func (cli *MemberShip) watch(ctx context.Context) {
+	ch := cli.RedisCli.Subscribe(ctx, "members", "alive").Channel()
 
-	recover := func() {
-		for {
-			err1 := cli.getMembers()
-			err2 := cli.getAlives()
-			if err1 == nil && err2 == nil {
-				return
-			} else {
-				time.Sleep(time.Second)
-			}
+	/*
+	 *   如果更新Node的事件早于Subscribe,更新事件将丢失，因此必须设置超时时间，超时后尝试获取members和alives的更新
+	 */
+
+	ticker := time.NewTicker(time.Second * 5)
+	select {
+	case m := <-ch:
+		fmt.Println("channel", m.Channel)
+		switch m.Channel {
+		case "members":
+			cli.getMembers()
+		case "alive":
+			cli.getAlives()
 		}
+	case <-ticker.C:
+		fmt.Println("timeout")
+		cli.getMembers()
+		cli.getAlives()
+	case <-ctx.Done():
+		return
 	}
+}
 
-	for {
-		m, err := cli.RedisCli.Subscribe("members", "alive").ReceiveMessage()
-		if err != nil {
-			recover()
-		} else {
-			switch m.Channel {
-			case "members":
-				err = cli.getMembers()
-			case "alive":
-				err = cli.getAlives()
-			}
-			if err != nil {
-				recover()
-			}
+func (cli *MemberShip) Close() {
+	if cli.closed.CompareAndSwap(false, true) {
+		if cli.closeFunc != nil {
+			cli.closeFunc()
 		}
 	}
 }
 
-func (cli *Client) Subscribe(cb func(membership.MemberInfo)) error {
+func (cli *MemberShip) Subscribe(cb func(membership.MemberInfo)) error {
 
 	once := false
 
@@ -230,10 +254,8 @@ func (cli *Client) Subscribe(cb func(membership.MemberInfo)) error {
 	})
 
 	if once {
-		if cli.closed.Load() {
-			return errors.New("closed")
-		}
 		cli.cb = cb
+
 		err := cli.getMembers()
 		if err != nil {
 			return err
@@ -242,7 +264,16 @@ func (cli *Client) Subscribe(cb func(membership.MemberInfo)) error {
 		if err != nil {
 			return err
 		}
-		go cli.watch()
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		cli.closeFunc = cancel
+
+		go cli.watch(ctx)
 	}
 	return nil
+}
+
+func (cli *MemberShip) CheckTimeout() {
+	cli.RedisCli.EvalSha(context.Background(), cli.checkTimeoutSha, []string{}).Result()
 }

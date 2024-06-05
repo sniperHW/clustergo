@@ -466,7 +466,7 @@ func (s *Node) Stop() error {
 	}
 }
 
-func (s *Node) Start(MemberShip membership.Client, localAddr addr.LogicAddr) (err error) {
+func (s *Node) Start(MemberShip membership.Subscribe, localAddr addr.LogicAddr) (err error) {
 	once := false
 	s.startOnce.Do(func() {
 		once = true
@@ -665,7 +665,7 @@ func GetDefaultNode() *Node {
 	return defaultInstance
 }
 
-func Start(MemberShip membership.Client, localAddr addr.LogicAddr) (err error) {
+func Start(MemberShip membership.Subscribe, localAddr addr.LogicAddr) (err error) {
 	return GetDefaultNode().Start(MemberShip, localAddr)
 }
 
