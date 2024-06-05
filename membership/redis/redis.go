@@ -38,10 +38,9 @@ func (n *Node) Unmarshal(data []byte) error {
 }
 
 type MemberShip struct {
-	sync.Mutex
 	RedisCli        *redis.Client
-	memberVersion   atomic.Int64
-	aliveVersion    atomic.Int64
+	memberVersion   int64
+	aliveVersion    int64
 	alive           map[string]struct{} //健康节点
 	members         map[string]*Node    //*membership.Node //配置中的节点
 	cb              func(membership.MemberInfo)
@@ -108,107 +107,95 @@ func makeaddr(logicAddr, netAddr string) addr.Addr {
 }
 
 func (cli *MemberShip) getAlives() error {
-	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getAliveSha, []string{}, cli.aliveVersion.Load()).Result()
-	err = GetRedisError(err)
-	if err == nil {
-		r := re.([]interface{})
-		version := r[0].(int64)
-		var nodeinfo membership.MemberInfo
-		cli.Lock()
-		if version != cli.aliveVersion.Load() {
-			cli.aliveVersion.Store(version)
-			for _, v := range r[1].([]interface{}) {
-				addr, dead := v.([]interface{})[0].(string), v.([]interface{})[1].(string)
-				if dead == "true" {
-					delete(cli.alive, addr)
-					if n, ok := cli.members[addr]; ok {
-						//标记为不可用状态
-						nodeinfo.Update = append(nodeinfo.Update, membership.Node{
-							Addr:      makeaddr(n.LogicAddr, n.NetAddr),
-							Export:    n.Export,
-							Available: false,
-						})
-					}
-				} else {
-					if _, ok := cli.alive[addr]; !ok {
-						cli.alive[addr] = struct{}{}
-						if n, ok := cli.members[addr]; ok && n.Available {
-							nodeinfo.Update = append(nodeinfo.Update, membership.Node{
-								Addr:      makeaddr(n.LogicAddr, n.NetAddr),
-								Export:    n.Export,
-								Available: true,
-							})
-						}
-					}
-				}
+	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getAliveSha, []string{}, cli.aliveVersion).Result()
+	if err = GetRedisError(err); err != nil {
+		return err
+	}
+
+	r := re.([]interface{})
+	version := r[0].(int64)
+	if version == cli.aliveVersion {
+		return nil
+	}
+	cli.aliveVersion = version
+	var nodeinfo membership.MemberInfo
+	for _, v := range r[1].([]interface{}) {
+		addr, dead := v.([]interface{})[0].(string), v.([]interface{})[1].(string)
+		if dead == "true" {
+			delete(cli.alive, addr)
+			if n, ok := cli.members[addr]; ok {
+				//标记为不可用状态
+				nodeinfo.Update = append(nodeinfo.Update, membership.Node{
+					Addr:      makeaddr(n.LogicAddr, n.NetAddr),
+					Export:    n.Export,
+					Available: false,
+				})
+			}
+		} else if _, ok := cli.alive[addr]; !ok {
+			cli.alive[addr] = struct{}{}
+			if n, ok := cli.members[addr]; ok && n.Available {
+				nodeinfo.Update = append(nodeinfo.Update, membership.Node{
+					Addr:      makeaddr(n.LogicAddr, n.NetAddr),
+					Export:    n.Export,
+					Available: true,
+				})
 			}
 		}
-		fmt.Println(cli.aliveVersion.Load(), cli.alive)
-		cli.Unlock()
-		if cli.cb != nil && len(nodeinfo.Update) > 0 {
-			cli.cb(nodeinfo)
-		}
 	}
-	return err
+	if cli.cb != nil && len(nodeinfo.Update) > 0 {
+		cli.cb(nodeinfo)
+	}
+	return nil
 }
 
 func (cli *MemberShip) getMembers() error {
-	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getMembersSha, []string{}, cli.memberVersion.Load()).Result()
-	err = GetRedisError(err)
-	if err == nil {
-		r := re.([]interface{})
-		version := r[0].(int64)
-		var nodeinfo membership.MemberInfo
-		cli.Lock()
-		if version != cli.memberVersion.Load() {
-			cli.memberVersion.Store(version)
-			for _, v := range r[1].([]interface{}) {
-				m, markdel := v.([]interface{})[1].(string), v.([]interface{})[2].(string)
-				var n Node
-				if err = n.Unmarshal([]byte(m)); err == nil {
-					log.Println(n, markdel)
-					if markdel == "true" {
-						if nn, ok := cli.members[n.LogicAddr]; ok {
-							delete(cli.members, n.LogicAddr)
-							nodeinfo.Remove = append(nodeinfo.Remove, membership.Node{
-								Addr: makeaddr(nn.LogicAddr, nn.NetAddr),
-							})
-						}
-					} else {
-						if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
-							nn := membership.Node{
-								Addr:   address,
-								Export: n.Export,
-							}
-							if _, ok := cli.alive[n.LogicAddr]; ok && n.Available {
-								nn.Available = true
-							}
-
-							if _, ok := cli.members[n.LogicAddr]; ok {
-								nodeinfo.Update = append(nodeinfo.Update, nn)
-							} else {
-								nodeinfo.Add = append(nodeinfo.Add, nn)
-							}
-							cli.members[n.LogicAddr] = &n
-						} else {
-							log.Println(err, n.LogicAddr, n.NetAddr)
-						}
-					}
-				}
-			}
-		}
-		fmt.Println("version", cli.memberVersion.Load())
-		for _, v := range cli.members {
-			fmt.Println(v.LogicAddr, v.NetAddr, v.Available, v.Export)
-		}
-		cli.Unlock()
-
-		if cli.cb != nil && (len(nodeinfo.Add) > 0 || len(nodeinfo.Update) > 0 || len(nodeinfo.Remove) > 0) {
-			cli.cb(nodeinfo)
-		}
-
+	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getMembersSha, []string{}, cli.memberVersion).Result()
+	if err = GetRedisError(err); err != nil {
+		return err
 	}
-	return err
+
+	r := re.([]interface{})
+	version := r[0].(int64)
+	if version != cli.memberVersion {
+		return nil
+	}
+	cli.memberVersion = version
+	var nodeinfo membership.MemberInfo
+	for _, v := range r[1].([]interface{}) {
+		m, markdel := v.([]interface{})[1].(string), v.([]interface{})[2].(string)
+		var n Node
+		if err = n.Unmarshal([]byte(m)); err != nil {
+			continue
+		} else if markdel == "true" {
+			if nn, ok := cli.members[n.LogicAddr]; ok {
+				delete(cli.members, n.LogicAddr)
+				nodeinfo.Remove = append(nodeinfo.Remove, membership.Node{
+					Addr: makeaddr(nn.LogicAddr, nn.NetAddr),
+				})
+			}
+		} else if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
+			nn := membership.Node{
+				Addr:   address,
+				Export: n.Export,
+			}
+			if _, ok := cli.alive[n.LogicAddr]; ok && n.Available {
+				nn.Available = true
+			}
+
+			if _, ok := cli.members[n.LogicAddr]; ok {
+				nodeinfo.Update = append(nodeinfo.Update, nn)
+			} else {
+				nodeinfo.Add = append(nodeinfo.Add, nn)
+			}
+			cli.members[n.LogicAddr] = &n
+		} else {
+			log.Println(err, n.LogicAddr, n.NetAddr)
+		}
+	}
+	if cli.cb != nil && (len(nodeinfo.Add) > 0 || len(nodeinfo.Update) > 0 || len(nodeinfo.Remove) > 0) {
+		cli.cb(nodeinfo)
+	}
+	return nil
 }
 
 func (cli *MemberShip) watch(ctx context.Context) {
@@ -221,7 +208,6 @@ func (cli *MemberShip) watch(ctx context.Context) {
 	ticker := time.NewTicker(time.Second * 5)
 	select {
 	case m := <-ch:
-		fmt.Println("channel", m.Channel)
 		switch m.Channel {
 		case "members":
 			cli.getMembers()
@@ -229,7 +215,6 @@ func (cli *MemberShip) watch(ctx context.Context) {
 			cli.getAlives()
 		}
 	case <-ticker.C:
-		fmt.Println("timeout")
 		cli.getMembers()
 		cli.getAlives()
 	case <-ctx.Done():
