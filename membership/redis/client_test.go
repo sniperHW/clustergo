@@ -30,9 +30,9 @@ func TestClientSubscribe(t *testing.T) {
 		fmt.Println("remove", di.Remove)
 	})
 
-	time.Sleep(time.Second * 10)
+	//time.Sleep(time.Second * 10)
 
-	/*rcli := &MemberShip{
+	rcli := &MemberShip{
 		RedisCli: redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		}),
@@ -100,7 +100,7 @@ func TestClientSubscribe(t *testing.T) {
 
 	rcli.CheckTimeout()
 
-	time.Sleep(time.Second * 2)*/
+	time.Sleep(time.Second * 2)
 
 }
 

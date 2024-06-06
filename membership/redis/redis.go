@@ -156,7 +156,7 @@ func (cli *MemberShip) getMembers() error {
 
 	r := re.([]interface{})
 	version := r[0].(int64)
-	if version != cli.memberVersion {
+	if version == cli.memberVersion {
 		return nil
 	}
 	cli.memberVersion = version
@@ -206,19 +206,21 @@ func (cli *MemberShip) watch(ctx context.Context) {
 	 */
 
 	ticker := time.NewTicker(time.Second * 5)
-	select {
-	case m := <-ch:
-		switch m.Channel {
-		case "members":
+	for {
+		select {
+		case m := <-ch:
+			switch m.Channel {
+			case "members":
+				cli.getMembers()
+			case "alive":
+				cli.getAlives()
+			}
+		case <-ticker.C:
 			cli.getMembers()
-		case "alive":
 			cli.getAlives()
+		case <-ctx.Done():
+			return
 		}
-	case <-ticker.C:
-		cli.getMembers()
-		cli.getAlives()
-	case <-ctx.Done():
-		return
 	}
 }
 
