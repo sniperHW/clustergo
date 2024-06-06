@@ -10,21 +10,21 @@ import (
 	"github.com/sniperHW/clustergo/membership"
 )
 
-func TestClientSubscribe(t *testing.T) {
+func TestSubscribe(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
 	cli.FlushAll(context.Background())
 
-	node1 := &MemberShip{
+	sub := &Subscribe{
 		RedisCli: cli,
 	}
 
-	if err := node1.Init(); err != nil {
+	if err := sub.Init(); err != nil {
 		panic(err)
 	}
 
-	node1.Subscribe(func(di membership.MemberInfo) {
+	sub.Subscribe(func(di membership.MemberInfo) {
 		fmt.Println("add", di.Add)
 		fmt.Println("update", di.Update)
 		fmt.Println("remove", di.Remove)
@@ -32,19 +32,19 @@ func TestClientSubscribe(t *testing.T) {
 
 	//time.Sleep(time.Second * 10)
 
-	rcli := &MemberShip{
+	admin := &Admin{
 		RedisCli: redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		}),
 	}
 
-	if err := rcli.Init(); err != nil {
+	if err := admin.Init(); err != nil {
 		panic(err)
 	}
 
 	fmt.Println("Update1")
 
-	err := rcli.UpdateMember(&Node{
+	err := admin.UpdateMember(&Node{
 		LogicAddr: "1.1.1",
 		NetAddr:   "192.168.1.1:8011",
 		Available: true,
@@ -57,7 +57,7 @@ func TestClientSubscribe(t *testing.T) {
 
 	fmt.Println("Update2")
 
-	err = rcli.UpdateMember(&Node{
+	err = admin.UpdateMember(&Node{
 		LogicAddr: "1.1.2",
 		NetAddr:   "192.168.1.2:8011",
 		Available: true,
@@ -68,7 +68,7 @@ func TestClientSubscribe(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
-	err = rcli.RemoveMember(&Node{
+	err = admin.RemoveMember(&Node{
 		LogicAddr: "1.1.2",
 	})
 	if err != nil {
@@ -77,7 +77,7 @@ func TestClientSubscribe(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	err = rcli.UpdateMember(&Node{
+	err = admin.UpdateMember(&Node{
 		LogicAddr: "1.1.1",
 		NetAddr:   "192.168.1.1:8012",
 		Available: true,
@@ -90,7 +90,7 @@ func TestClientSubscribe(t *testing.T) {
 
 	fmt.Println("------------keepalive---------")
 
-	rcli.KeepAlive(&Node{
+	admin.KeepAlive(&Node{
 		LogicAddr: "1.1.1",
 	})
 
@@ -98,12 +98,13 @@ func TestClientSubscribe(t *testing.T) {
 
 	fmt.Println("ScriptCheckTimeout")
 
-	rcli.CheckTimeout()
+	admin.CheckTimeout()
 
 	time.Sleep(time.Second * 2)
 
 }
 
+/*
 func TestGetMember(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -226,6 +227,7 @@ func TestGetAlive(t *testing.T) {
 		for _, v := range re.([]interface{})[1].([]interface{}) {
 			fmt.Println(v.([]interface{})[0].(string), v.([]interface{})[1].(string))
 		}
-	}*/
+	}* /
 
 }
+*/

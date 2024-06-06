@@ -160,7 +160,7 @@ func TestRedis(t *testing.T) {
 
 }
 
-func TestSubscribe(t *testing.T) {
+func TestRedisSubscribe(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr:       "localhost:6379",
 		MaxRetries: 10,

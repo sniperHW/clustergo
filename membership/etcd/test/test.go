@@ -11,7 +11,7 @@ import (
 
 func main() {
 
-	membershipCli := etcd.Client{
+	membershipCli := etcd.Subscribe{
 		PrefixConfig: "/test/",
 		PrefixAlive:  "/alive/",
 		//LogicAddr:    "1.1.1",
