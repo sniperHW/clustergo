@@ -3,7 +3,6 @@ package redis
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,8 +16,8 @@ type Subscribe struct {
 	RedisCli      *redis.Client
 	memberVersion int64
 	aliveVersion  int64
-	alive         map[string]struct{} //健康节点
-	members       map[string]*Node    //*membership.Node //配置中的节点
+	alive         map[string]struct{}         //健康节点
+	members       map[string]*membership.Node //*membership.Node //配置中的节点
 	cb            func(membership.MemberInfo)
 	getMembersSha string
 	getAliveSha   string
@@ -29,7 +28,7 @@ type Subscribe struct {
 
 func (cli *Subscribe) Init() (err error) {
 	cli.alive = map[string]struct{}{}
-	cli.members = map[string]*Node{}
+	cli.members = map[string]*membership.Node{}
 	if cli.getMembersSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptGetMembers).Result(); err != nil {
 		err = fmt.Errorf("error on init ScriptGetMembers:%s", err.Error())
 		return err
@@ -68,7 +67,7 @@ func (cli *Subscribe) getAlives() error {
 			if n, ok := cli.members[addr]; ok {
 				//标记为不可用状态
 				nodeinfo.Update = append(nodeinfo.Update, membership.Node{
-					Addr:      makeaddr(n.LogicAddr, n.NetAddr),
+					Addr:      n.Addr,
 					Export:    n.Export,
 					Available: false,
 				})
@@ -77,7 +76,7 @@ func (cli *Subscribe) getAlives() error {
 			cli.alive[addr] = struct{}{}
 			if n, ok := cli.members[addr]; ok && n.Available {
 				nodeinfo.Update = append(nodeinfo.Update, membership.Node{
-					Addr:      makeaddr(n.LogicAddr, n.NetAddr),
+					Addr:      n.Addr,
 					Export:    n.Export,
 					Available: true,
 				})
@@ -105,33 +104,33 @@ func (cli *Subscribe) getMembers() error {
 	var nodeinfo membership.MemberInfo
 	for _, v := range r[1].([]interface{}) {
 		m, markdel := v.([]interface{})[1].(string), v.([]interface{})[2].(string)
-		var n Node
+		var n membership.Node
 		if err = n.Unmarshal([]byte(m)); err != nil {
 			continue
 		} else if markdel == "true" {
-			if nn, ok := cli.members[n.LogicAddr]; ok {
-				delete(cli.members, n.LogicAddr)
-				nodeinfo.Remove = append(nodeinfo.Remove, membership.Node{
-					Addr: makeaddr(nn.LogicAddr, nn.NetAddr),
-				})
+			if nn, ok := cli.members[n.Addr.LogicAddr().String()]; ok {
+				nodeinfo.Remove = append(nodeinfo.Remove, *nn)
+				delete(cli.members, n.Addr.LogicAddr().String())
 			}
-		} else if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
+		} else {
+			logicAddr := n.Addr.LogicAddr().String()
+
 			nn := membership.Node{
-				Addr:   address,
+				Addr:   n.Addr,
 				Export: n.Export,
 			}
-			if _, ok := cli.alive[n.LogicAddr]; ok && n.Available {
+
+			if _, ok := cli.alive[logicAddr]; ok && n.Available {
 				nn.Available = true
 			}
 
-			if _, ok := cli.members[n.LogicAddr]; ok {
+			if _, ok := cli.members[logicAddr]; ok {
 				nodeinfo.Update = append(nodeinfo.Update, nn)
 			} else {
 				nodeinfo.Add = append(nodeinfo.Add, nn)
 			}
-			cli.members[n.LogicAddr] = &n
-		} else {
-			log.Println(err, n.LogicAddr, n.NetAddr)
+			cli.members[logicAddr] = &n
+
 		}
 	}
 	if cli.cb != nil && (len(nodeinfo.Add) > 0 || len(nodeinfo.Update) > 0 || len(nodeinfo.Remove) > 0) {

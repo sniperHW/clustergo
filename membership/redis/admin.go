@@ -3,9 +3,9 @@ package redis
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sniperHW/clustergo/membership"
 )
 
 type Admin struct {
@@ -13,7 +13,6 @@ type Admin struct {
 	heartbeatSha    string
 	checkTimeoutSha string
 	updateMemberSha string
-	once            sync.Once
 }
 
 func (cli *Admin) Init() (err error) {
@@ -35,19 +34,19 @@ func (cli *Admin) Init() (err error) {
 	return err
 }
 
-func (cli *Admin) UpdateMember(n *Node) error {
+func (cli *Admin) UpdateMember(n membership.Node) error {
 	jsonBytes, _ := n.Marshal()
-	_, err := cli.RedisCli.EvalSha(context.Background(), cli.updateMemberSha, []string{n.LogicAddr}, "insert_update", string(jsonBytes)).Result()
+	_, err := cli.RedisCli.EvalSha(context.Background(), cli.updateMemberSha, []string{n.Addr.LogicAddr().String()}, "insert_update", string(jsonBytes)).Result()
 	return GetRedisError(err)
 }
 
-func (cli *Admin) RemoveMember(n *Node) error {
-	_, err := cli.RedisCli.EvalSha(context.Background(), cli.updateMemberSha, []string{n.LogicAddr}, "delete").Result()
+func (cli *Admin) RemoveMember(n membership.Node) error {
+	_, err := cli.RedisCli.EvalSha(context.Background(), cli.updateMemberSha, []string{n.Addr.LogicAddr().String()}, "delete").Result()
 	return GetRedisError(err)
 }
 
-func (cli *Admin) KeepAlive(n *Node) error {
-	_, err := cli.RedisCli.EvalSha(context.Background(), cli.heartbeatSha, []string{n.LogicAddr}, 10).Result()
+func (cli *Admin) KeepAlive(n membership.Node) error {
+	_, err := cli.RedisCli.EvalSha(context.Background(), cli.heartbeatSha, []string{n.Addr.LogicAddr().String()}, 10).Result()
 	return GetRedisError(err)
 }
 

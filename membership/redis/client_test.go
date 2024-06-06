@@ -7,8 +7,19 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/membership"
 )
+
+func makeAddr(logicAddr, netAddr string) addr.Addr {
+	a, _ := addr.MakeAddr(logicAddr, netAddr)
+	return a
+}
+
+func makeLogicAddr(logicAddr string) addr.LogicAddr {
+	a, _ := addr.MakeLogicAddr(logicAddr)
+	return a
+}
 
 func TestSubscribe(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
@@ -44,9 +55,8 @@ func TestSubscribe(t *testing.T) {
 
 	fmt.Println("Update1")
 
-	err := admin.UpdateMember(&Node{
-		LogicAddr: "1.1.1",
-		NetAddr:   "192.168.1.1:8011",
+	err := admin.UpdateMember(membership.Node{
+		Addr:      makeAddr("1.1.1", "192.168.1.1:8011"),
 		Available: true,
 	})
 	if err != nil {
@@ -57,9 +67,8 @@ func TestSubscribe(t *testing.T) {
 
 	fmt.Println("Update2")
 
-	err = admin.UpdateMember(&Node{
-		LogicAddr: "1.1.2",
-		NetAddr:   "192.168.1.2:8011",
+	err = admin.UpdateMember(membership.Node{
+		Addr:      makeAddr("1.1.2", "192.168.1.2:8011"),
 		Available: true,
 	})
 	if err != nil {
@@ -68,8 +77,8 @@ func TestSubscribe(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
-	err = admin.RemoveMember(&Node{
-		LogicAddr: "1.1.2",
+	err = admin.RemoveMember(membership.Node{
+		Addr: makeAddr("1.1.2", "192.168.1.2:8011"),
 	})
 	if err != nil {
 		panic(err)
@@ -77,9 +86,8 @@ func TestSubscribe(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	err = admin.UpdateMember(&Node{
-		LogicAddr: "1.1.1",
-		NetAddr:   "192.168.1.1:8012",
+	err = admin.UpdateMember(membership.Node{
+		Addr:      makeAddr("1.1.1", "192.168.1.1:8012"),
 		Available: true,
 	})
 	if err != nil {
@@ -90,8 +98,8 @@ func TestSubscribe(t *testing.T) {
 
 	fmt.Println("------------keepalive---------")
 
-	admin.KeepAlive(&Node{
-		LogicAddr: "1.1.1",
+	admin.KeepAlive(membership.Node{
+		Addr: makeAddr("1.1.1", "192.168.1.1:8012"),
 	})
 
 	time.Sleep(time.Second * 11)
