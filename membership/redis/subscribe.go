@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/membership"
 )
 
@@ -40,11 +39,6 @@ func (cli *Subscribe) Init() (err error) {
 	}
 
 	return err
-}
-
-func makeaddr(logicAddr, netAddr string) addr.Addr {
-	a, _ := addr.MakeAddr(logicAddr, netAddr)
-	return a
 }
 
 func (cli *Subscribe) getAlives() error {
@@ -108,8 +102,13 @@ func (cli *Subscribe) getMembers() error {
 		if err = n.Unmarshal([]byte(m)); err != nil {
 			continue
 		} else if markdel == "true" {
-			if nn, ok := cli.members[n.Addr.LogicAddr().String()]; ok {
-				nodeinfo.Remove = append(nodeinfo.Remove, *nn)
+			if _, ok := cli.members[n.Addr.LogicAddr().String()]; ok {
+				if _, ok := cli.alive[n.Addr.LogicAddr().String()]; ok && n.Available {
+					n.Available = true
+				} else {
+					n.Available = false
+				}
+				nodeinfo.Remove = append(nodeinfo.Remove, n)
 				delete(cli.members, n.Addr.LogicAddr().String())
 			}
 		} else {

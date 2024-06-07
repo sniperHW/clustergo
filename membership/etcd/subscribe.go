@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/sniperHW/clustergo"
-	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/membership"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -32,8 +31,6 @@ type Subscribe struct {
 	watchAlive     clientv3.WatchChan
 	closeFunc      context.CancelFunc
 	closed         atomic.Bool
-	//leaseID        clientv3.LeaseID
-	//leaseCh        <-chan *clientv3.LeaseKeepAliveResponse
 }
 
 func (ectd *Subscribe) fetchLogicAddr(str string) string {
@@ -51,20 +48,15 @@ func (etcd *Subscribe) fetchMembers(ctx context.Context, cli *clientv3.Client) e
 	if err != nil {
 		return err
 	}
-
 	for _, v := range resp.Kvs {
-		var n Node
-		if err := json.Unmarshal(v.Value, &n); err == nil && n.LogicAddr == etcd.fetchLogicAddr(string(v.Key)) {
-			if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
-				nn := membership.Node{
-					Addr:      address,
-					Available: n.Available,
-					Export:    n.Export,
-				}
-				etcd.members[nn.Addr.LogicAddr().String()] = &nn
-			} else {
-				etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
+		var n membership.Node
+		if err := json.Unmarshal(v.Value, &n); err == nil && n.Addr.LogicAddr().String() == etcd.fetchLogicAddr(string(v.Key)) {
+			nn := membership.Node{
+				Addr:      n.Addr,
+				Available: n.Available,
+				Export:    n.Export,
 			}
+			etcd.members[nn.Addr.LogicAddr().String()] = &nn
 		} else if err != nil {
 			etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(v.Key), string(v.Value))
 		}
@@ -141,37 +133,45 @@ func (etcd *Subscribe) watch(ctx context.Context, cli *clientv3.Client) (err err
 				key := etcd.fetchLogicAddr(string(e.Kv.Key))
 				switch e.Type {
 				case clientv3.EventTypePut:
-					var n Node
-					if err := json.Unmarshal(e.Kv.Value, &n); err == nil && n.LogicAddr == key {
-						if address, err := addr.MakeAddr(n.LogicAddr, n.NetAddr); err == nil {
-							nn := membership.Node{
-								Addr:   address,
-								Export: n.Export,
-							}
+					var n membership.Node
+					if err := json.Unmarshal(e.Kv.Value, &n); err == nil && n.Addr.LogicAddr().String() == key {
 
-							if _, ok := etcd.alive[key]; ok && n.Available {
-								nn.Available = true
-							}
-
-							if _, ok := etcd.members[key]; ok {
-								nodeinfo.Update = append(nodeinfo.Update, nn)
-							} else {
-								nodeinfo.Add = append(nodeinfo.Add, nn)
-							}
-
-							etcd.members[key] = &nn
-
-							etcd.cb(nodeinfo)
-						} else {
-							etcd.errorf("MakeAddr error,logicAddr:%s,netAddr:%s", n.LogicAddr, n.NetAddr)
+						nn := membership.Node{
+							Addr:   n.Addr,
+							Export: n.Export,
 						}
+
+						if _, ok := etcd.alive[key]; ok && n.Available {
+							nn.Available = true
+						}
+
+						if _, ok := etcd.members[key]; ok {
+							nodeinfo.Update = append(nodeinfo.Update, nn)
+						} else {
+							nodeinfo.Add = append(nodeinfo.Add, nn)
+						}
+
+						etcd.members[key] = &nn
+
+						etcd.cb(nodeinfo)
+
 					} else if err != nil {
 						etcd.errorf("json.Unmarshal error:%v key:%s value:%s", err, string(e.Kv.Key), string(e.Kv.Value))
 					}
 				case clientv3.EventTypeDelete:
 					if n, ok := etcd.members[key]; ok {
 						delete(etcd.members, key)
-						nodeinfo.Remove = append(nodeinfo.Remove, *n)
+
+						nn := membership.Node{
+							Addr:   n.Addr,
+							Export: n.Export,
+						}
+
+						if _, ok := etcd.alive[key]; ok && n.Available {
+							nn.Available = true
+						}
+
+						nodeinfo.Remove = append(nodeinfo.Remove, nn)
 						etcd.cb(nodeinfo)
 					}
 				}
