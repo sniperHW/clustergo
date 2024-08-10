@@ -1,6 +1,8 @@
 package ss
 
 import (
+	"encoding/binary"
+
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/buffer"
 	"github.com/sniperHW/rpcgo"
@@ -113,8 +115,8 @@ func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, payload []byte) *Re
 	}
 
 	b := make([]byte, 0, len(payload)+sizeLen)
-	b = buffer.AppendUint32(b, uint32(len(payload)))
-	b = buffer.AppendBytes(b, payload)
-	m.payload = b
+	w := buffer.NeWriter(binary.BigEndian)
+	b = w.AppendUint32(b, uint32(len(payload)))
+	m.payload = w.AppendBytes(b, payload)
 	return m
 }

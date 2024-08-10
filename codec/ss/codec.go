@@ -30,6 +30,7 @@ func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 		},
 		selfAddr: selfAddr,
 		pbMeta:   pb.GetMeta(Namespace),
+		reader:   buffer.NewReader(binary.BigEndian, nil),
 	}
 }
 
@@ -59,7 +60,7 @@ func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint16, flag byte, 
 
 	if flag == PbMsg || flag == BinMsg {
 		//写cmd
-		b = buffer.AppendUint16(b, cmd)
+		b = buffer.NeWriter(binary.BigEndian).AppendUint16(b, cmd)
 	}
 
 	return append(buffs, b, data), totalLen

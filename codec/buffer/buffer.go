@@ -7,59 +7,68 @@ import (
 
 var ErrOutOfBounds error = errors.New("out of bounds")
 
-func AppendByte(bs []byte, v byte) []byte {
+type BufferWriter struct {
+	endian binary.ByteOrder
+}
+
+func NeWriter(endian binary.ByteOrder) BufferWriter {
+	return BufferWriter{endian: endian}
+}
+
+func (w BufferWriter) AppendByte(bs []byte, v byte) []byte {
 	return append(bs, v)
 }
 
-func AppendString(bs []byte, s string) []byte {
+func (w BufferWriter) AppendString(bs []byte, s string) []byte {
 	return append(bs, s...)
 }
 
-func AppendBytes(bs []byte, bytes []byte) []byte {
+func (w BufferWriter) AppendBytes(bs []byte, bytes []byte) []byte {
 	return append(bs, bytes...)
 }
 
-func AppendUint16(bs []byte, u16 uint16) []byte {
+func (w BufferWriter) AppendUint16(bs []byte, u16 uint16) []byte {
 	bu := []byte{0, 0}
-	binary.BigEndian.PutUint16(bu, u16)
-	return AppendBytes(bs, bu)
+	w.endian.PutUint16(bu, u16)
+	return w.AppendBytes(bs, bu)
 }
 
-func AppendUint32(bs []byte, u32 uint32) []byte {
+func (w BufferWriter) AppendUint32(bs []byte, u32 uint32) []byte {
 	bu := []byte{0, 0, 0, 0}
-	binary.BigEndian.PutUint32(bu, u32)
-	return AppendBytes(bs, bu)
+	w.endian.PutUint32(bu, u32)
+	return w.AppendBytes(bs, bu)
 }
 
-func AppendUint64(bs []byte, u64 uint64) []byte {
+func (w BufferWriter) AppendUint64(bs []byte, u64 uint64) []byte {
 	bu := []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	binary.BigEndian.PutUint64(bu, u64)
-	return AppendBytes(bs, bu)
+	w.endian.PutUint64(bu, u64)
+	return w.AppendBytes(bs, bu)
 }
 
-func AppendInt16(bs []byte, i16 int16) []byte {
-	return AppendUint16(bs, uint16(i16))
+func (w BufferWriter) AppendInt16(bs []byte, i16 int16) []byte {
+	return w.AppendUint16(bs, uint16(i16))
 }
 
-func AppendInt32(bs []byte, i32 int32) []byte {
-	return AppendUint32(bs, uint32(i32))
+func (w BufferWriter) AppendInt32(bs []byte, i32 int32) []byte {
+	return w.AppendUint32(bs, uint32(i32))
 }
 
-func AppendInt64(bs []byte, i64 int64) []byte {
-	return AppendUint64(bs, uint64(i64))
+func (w BufferWriter) AppendInt64(bs []byte, i64 int64) []byte {
+	return w.AppendUint64(bs, uint64(i64))
 }
 
-func AppendInt(bs []byte, i32 int) []byte {
-	return AppendUint32(bs, uint32(i32))
+func (w BufferWriter) AppendInt(bs []byte, i32 int) []byte {
+	return w.AppendUint32(bs, uint32(i32))
 }
 
 type BufferReader struct {
 	bs     []byte
 	offset int
+	endian binary.ByteOrder
 }
 
-func NewReader(b []byte) BufferReader {
-	return BufferReader{bs: b}
+func NewReader(endian binary.ByteOrder, b []byte) BufferReader {
+	return BufferReader{bs: b, endian: endian}
 }
 
 func (r *BufferReader) Reset(b []byte) {
@@ -105,7 +114,7 @@ func (r *BufferReader) GetUint16() uint16 {
 	if r.offset+2 > len(r.bs) {
 		return 0
 	} else {
-		ret := binary.BigEndian.Uint16(r.bs[r.offset : r.offset+2])
+		ret := r.endian.Uint16(r.bs[r.offset : r.offset+2])
 		r.offset += 2
 		return ret
 	}
@@ -115,7 +124,7 @@ func (r *BufferReader) CheckGetUint16() (uint16, error) {
 	if r.offset+2 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := binary.BigEndian.Uint16(r.bs[r.offset : r.offset+2])
+		ret := r.endian.Uint16(r.bs[r.offset : r.offset+2])
 		r.offset += 2
 		return ret, nil
 	}
@@ -138,7 +147,7 @@ func (r *BufferReader) GetUint32() uint32 {
 	if r.offset+4 > len(r.bs) {
 		return 0
 	} else {
-		ret := binary.BigEndian.Uint32(r.bs[r.offset : r.offset+4])
+		ret := r.endian.Uint32(r.bs[r.offset : r.offset+4])
 		r.offset += 4
 		return ret
 	}
@@ -148,7 +157,7 @@ func (r *BufferReader) CheckGetUint32() (uint32, error) {
 	if r.offset+4 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := binary.BigEndian.Uint32(r.bs[r.offset : r.offset+4])
+		ret := r.endian.Uint32(r.bs[r.offset : r.offset+4])
 		r.offset += 4
 		return ret, nil
 	}
@@ -171,7 +180,7 @@ func (r *BufferReader) GetUint64() uint64 {
 	if r.offset+8 > len(r.bs) {
 		return 0
 	} else {
-		ret := binary.BigEndian.Uint64(r.bs[r.offset : r.offset+8])
+		ret := r.endian.Uint64(r.bs[r.offset : r.offset+8])
 		r.offset += 8
 		return ret
 	}
@@ -181,7 +190,7 @@ func (r *BufferReader) CheckGetUint64() (uint64, error) {
 	if r.offset+8 > len(r.bs) {
 		return 0, ErrOutOfBounds
 	} else {
-		ret := binary.BigEndian.Uint64(r.bs[r.offset : r.offset+8])
+		ret := r.endian.Uint64(r.bs[r.offset : r.offset+8])
 		r.offset += 8
 		return ret, nil
 	}

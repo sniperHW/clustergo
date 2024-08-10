@@ -2,6 +2,7 @@ package membership
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,6 +58,7 @@ type codec struct {
 	w      int
 	r      int
 	reader buffer.BufferReader
+	writer buffer.BufferWriter
 }
 
 func (cc *codec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
@@ -65,18 +67,18 @@ func (cc *codec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
 		return buffs, 0
 	} else {
 		b := make([]byte, 0, 8)
-		b = buffer.AppendUint32(b, uint32(len(buff)+4))
+		b = cc.writer.AppendUint32(b, uint32(len(buff)+4))
 		switch o.(type) {
 		case *AddNode:
-			b = buffer.AppendUint32(b, addNode)
+			b = cc.writer.AppendUint32(b, addNode)
 		case *RemNode:
-			b = buffer.AppendUint32(b, remNode)
+			b = cc.writer.AppendUint32(b, remNode)
 		case *ModNode:
-			b = buffer.AppendUint32(b, modNode)
+			b = cc.writer.AppendUint32(b, modNode)
 		case *NodeInfo:
-			b = buffer.AppendUint32(b, nodeInfo)
+			b = cc.writer.AppendUint32(b, nodeInfo)
 		case *Subscribe:
-			b = buffer.AppendUint32(b, subscribe)
+			b = cc.writer.AppendUint32(b, subscribe)
 		default:
 			log.Println("invaild packet")
 			return buffs, 0
@@ -215,7 +217,9 @@ func (svr *memberShipSvr) Start(service string, config []*Node) error {
 	_, serve, err := netgo.ListenTCP("tcp", service, func(conn *net.TCPConn) {
 		log.Println("new client")
 		cc := &codec{
-			buff: make([]byte, 65535),
+			buff:   make([]byte, 65535),
+			reader: buffer.NewReader(binary.BigEndian, nil),
+			writer: buffer.NeWriter(binary.BigEndian),
 		}
 		netgo.NewAsynSocket(netgo.NewTcpSocket(conn, cc),
 			netgo.AsynSocketOption{
@@ -291,7 +295,9 @@ func (c *memberShipCli) Subscribe(updateCB func(membership.MemberInfo)) error {
 	for {
 		if conn, err := dialer.Dial("tcp", c.svrService); err == nil {
 			cc := &codec{
-				buff: make([]byte, 65535),
+				buff:   make([]byte, 65535),
+				reader: buffer.NewReader(binary.BigEndian, nil),
+				writer: buffer.NeWriter(binary.BigEndian),
 			}
 			as := netgo.NewAsynSocket(netgo.NewTcpSocket(conn.(*net.TCPConn), cc),
 				netgo.AsynSocketOption{
