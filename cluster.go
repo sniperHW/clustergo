@@ -43,7 +43,7 @@ var RPCCodec rpcgo.Codec = PbCodec{}
 
 var cecret_key []byte = []byte("sanguo_2022")
 
-type loginReq struct {
+type Handshake struct {
 	LogicAddr uint32 `json:"LogicAddr,omitempty"`
 	NetAddr   string `json:"NetAddr,omitempty"`
 	IsStream  bool   `json:"IsStream,omitempty"`
@@ -559,23 +559,23 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 		return err
 	}
 
-	var req loginReq
+	var handshake Handshake
 
-	if err = json.Unmarshal(buff, &req); nil != err {
+	if err = json.Unmarshal(buff, &handshake); nil != err {
 		return err
 	}
 
-	node := s.nodeCache.getNodeByLogicAddr(addr.LogicAddr(req.LogicAddr))
+	node := s.nodeCache.getNodeByLogicAddr(addr.LogicAddr(handshake.LogicAddr))
 	if node == nil {
 		return ErrInvaildNode
-	} else if node.addr.NetAddr().String() != req.NetAddr {
+	} else if node.addr.NetAddr().String() != handshake.NetAddr {
 		return ErrNetAddrMismatch
 	}
 
 	resp := []byte{0, 0, 0, 0}
 	binary.BigEndian.PutUint32(resp, 0)
 
-	if req.IsStream {
+	if handshake.IsStream {
 		if onNewStream, ok := s.onNewStream.Load().(func(*smux.Stream)); !ok {
 			return errors.New("onNewStream not set")
 		} else {

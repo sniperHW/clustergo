@@ -225,9 +225,9 @@ type node struct {
 	streamCli  streamClient
 }
 
-func (n *node) login(self *Node, conn *net.TCPConn, isStream bool) error {
+func (n *node) handshake(self *Node, conn *net.TCPConn, isStream bool) error {
 
-	j, err := json.Marshal(&loginReq{
+	j, err := json.Marshal(&Handshake{
 		LogicAddr: uint32(self.localAddr.LogicAddr()),
 		NetAddr:   self.localAddr.NetAddr().String(),
 		IsStream:  isStream,
@@ -396,7 +396,7 @@ func (n *node) dial(self *Node) {
 	ok := false
 	conn, err := dialer.Dial("tcp", n.addr.NetAddr().String())
 	if err == nil {
-		if err = n.login(self, conn.(*net.TCPConn), false); err != nil {
+		if err = n.handshake(self, conn.(*net.TCPConn), false); err != nil {
 			conn.Close()
 			conn = nil
 		} else {
@@ -436,7 +436,7 @@ func (n *node) openStream(self *Node) (*smux.Stream, error) {
 			dialer := &net.Dialer{}
 			if conn, err := dialer.Dial("tcp", n.addr.NetAddr().String()); err != nil {
 				return nil, err
-			} else if err = n.login(self, conn.(*net.TCPConn), true); err != nil {
+			} else if err = n.handshake(self, conn.(*net.TCPConn), true); err != nil {
 				conn.Close()
 				return nil, err
 			} else if session, err := smux.Client(conn, nil); err != nil {
