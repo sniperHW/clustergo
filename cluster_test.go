@@ -111,7 +111,7 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	node1.GetRPCServer().RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
@@ -199,7 +199,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	node1.GetRPCServer().RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
@@ -209,12 +209,10 @@ func TestBenchmarkRPCSync(t *testing.T) {
 
 	logger.Debug("Start OK")
 
-	var resp string
-
 	err = node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	node2.GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	_, err = call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 
 	begtime := time.Now()
 
@@ -226,8 +224,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			for atomic.AddInt32(&counter, 1) <= 100000 {
-				var resp string
-				node2.GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+				_, err = call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 			}
 			wait.Done()
 		}()
@@ -240,7 +237,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	node1.Wait()
 
-	_, err = node2.GetAddrByType(1)
+	_, err = call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.NotNil(t, err)
 
 	localDiscovery.RemoveNode(node2Addr.LogicAddr())
@@ -284,7 +281,7 @@ func TestSingleNode(t *testing.T) {
 		return true
 	}))
 
-	s.GetRPCServer().RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(s, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -296,10 +293,9 @@ func TestSingleNode(t *testing.T) {
 		Msg: "hello",
 	})
 
-	var resp string
-	err = s.GetRPCClient().CallWithTimeout(localAddr.LogicAddr(), "hello", "sniperHW", &resp, time.Second)
+	resp, err := callWithTimeout[string, string](s, localAddr.LogicAddr(), "hello", "sniperHW", time.Second)
 	assert.Nil(t, err)
-	assert.Equal(t, resp, "hello world:sniperHW")
+	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	localDiscovery.RemoveNode(localAddr.LogicAddr())
 	s.Wait()
@@ -329,12 +325,12 @@ func TestTwoNode(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	node1.GetRPCServer().RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
-	node1.GetRPCServer().RegisterService("Delay", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "Delay", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on Delay")
 		time.Sleep(time.Second * 5)
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
@@ -346,9 +342,8 @@ func TestTwoNode(t *testing.T) {
 
 	logger.Debug("Start OK")
 
-	var resp string
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
-	err = node2.GetRPCClient().Call(ctx, node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	_, err = call[string, string](ctx, node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 	cancel()
 	logger.Debug(err)
 
@@ -360,12 +355,12 @@ func TestTwoNode(t *testing.T) {
 	})
 
 	//var resp string
-	err = node2.GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	resp, err := call[string, string](ctx, node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.Nil(t, err)
-	assert.Equal(t, resp, "hello world:sniperHW")
+	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	go func() {
-		err = node2.GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "Delay", "sniperHW", &resp)
+		_, err = call[string, string](ctx, node2, node1Addr.LogicAddr(), "Delay", "sniperHW")
 		assert.Nil(t, err)
 	}()
 
@@ -424,7 +419,7 @@ func TestHarbor(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	node1.GetRPCServer().RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -456,21 +451,20 @@ func TestHarbor(t *testing.T) {
 		Msg: "hello",
 	})
 
-	var resp string
-	err = node2.GetRPCClient().Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
+	resp, err := call[string, string](context.TODO(), node2, type1Addr, "hello", "sniperHW")
 	assert.Nil(t, err)
-	assert.Equal(t, resp, "hello world:sniperHW")
+	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	//将1.1.1移除
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
-	err = node2.GetRPCClient().Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
+	_, err = call[string, string](context.TODO(), node2, type1Addr, "hello", "sniperHW")
 	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
 	logger.Debug(err)
 
 	//将harbor1移除
 	localDiscovery.RemoveNode(harbor1Addr.LogicAddr())
 
-	err = node2.GetRPCClient().Call(context.TODO(), type1Addr, "hello", "sniperHW", &resp)
+	_, err = call[string, string](context.TODO(), node2, type1Addr, "hello", "sniperHW")
 	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
 	logger.Debug(err)
 
@@ -651,7 +645,7 @@ func TestDefault(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	GetRPCServer().RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -669,10 +663,9 @@ func TestDefault(t *testing.T) {
 	SendBinMessage(node1Addr.LogicAddr(), 1, []byte("binMessage"))
 
 	//调用自身hello
-	var resp string
-	err = GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	resp, err := Call[string, string](context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.Nil(t, err)
-	assert.Equal(t, resp, "hello world:sniperHW")
+	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	_, err = OpenStream(node1Addr.LogicAddr())
 	assert.Equal(t, err.Error(), "cant't open stream to self")

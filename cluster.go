@@ -156,90 +156,6 @@ func (p *gopool) Go(fn func()) {
 	}
 }
 
-type RPCServer struct {
-	pendingRespCount atomic.Int32 //尚未响应的rpc数量
-	svr              *rpcgo.Server
-}
-
-func (s *RPCServer) RegisterService(name string, method interface{}) error {
-	return s.svr.Register(name, method)
-}
-
-func (s *RPCServer) SetInInterceptor(interceptor []func(*rpcgo.Replyer, *rpcgo.RequestMsg) bool) {
-	s.svr.SetInInterceptor(append(interceptor, func(replyer *rpcgo.Replyer, req *rpcgo.RequestMsg) bool {
-		s.pendingRespCount.Add(1)
-		replyer.AppendOutInterceptor(func(req *rpcgo.RequestMsg, ret interface{}, err error) {
-			s.pendingRespCount.Add(-1)
-		})
-		return true
-	}))
-}
-
-type RPCClient struct {
-	n   *Node
-	cli *rpcgo.Client
-}
-
-func (c *RPCClient) SetInInterceptor(interceptor []func(*rpcgo.RequestMsg, interface{}, error)) {
-	c.cli.SetInInterceptor(interceptor)
-}
-
-func (c *RPCClient) SetOutInterceptor(interceptor []func(*rpcgo.RequestMsg, interface{})) {
-	c.cli.SetOutInterceptor(interceptor)
-}
-
-func (c *RPCClient) AsyncCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
-	s := c.n
-	select {
-	case <-s.die:
-		return rpcgo.NewError(rpcgo.ErrOther, "server die")
-	case <-s.started:
-	default:
-		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
-	}
-	var err error
-	if to == s.localAddr.LogicAddr() {
-		err = c.cli.AsyncCall(&selfChannel{self: s}, method, arg, ret, deadline, callback)
-	} else if n := s.getNodeByLogicAddr(to); n != nil {
-		err = c.cli.AsyncCall(&rpcChannel{peer: to, node: n, self: s}, method, arg, ret, deadline, callback)
-	} else {
-		return ErrInvaildNode
-	}
-
-	switch err {
-	case ErrPendingQueueFull, netgo.ErrSendQueueFull:
-		return ErrBusy
-	default:
-		return err
-	}
-}
-
-func (c *RPCClient) CallWithTimeout(to addr.LogicAddr, method string, arg interface{}, ret interface{}, d time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), d)
-	defer cancel()
-	return c.Call(ctx, to, method, arg, ret)
-}
-
-func (c *RPCClient) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
-	s := c.n
-	select {
-	case <-s.die:
-		return rpcgo.NewError(rpcgo.ErrOther, "server die")
-	case <-s.started:
-	default:
-		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
-	}
-	if to == s.localAddr.LogicAddr() {
-		return c.cli.Call(ctx, &selfChannel{self: s}, method, arg, ret)
-	} else {
-		if n := s.getNodeByLogicAddr(to); n != nil {
-			return c.cli.Call(ctx, &rpcChannel{peer: to, node: n, self: s}, method, arg, ret)
-		} else {
-			return ErrInvaildNode
-		}
-	}
-}
-
 type Node struct {
 	gopool
 	localAddr    addr.Addr
@@ -696,6 +612,7 @@ func GetRPCClient() *RPCClient {
 func GetRPCServer() *RPCServer {
 	return GetDefaultNode().GetRPCServer()
 }
+
 func SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...time.Time) error {
 	return GetDefaultNode().SendPbMessage(to, msg, deadline...)
 }
@@ -714,4 +631,67 @@ func StartSmuxServer(onNewStream func(*smux.Stream)) {
 
 func OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 	return GetDefaultNode().OpenStream(peer)
+}
+
+func RegisterService[Arg any](name string, method func(context.Context, *rpcgo.Replyer, *Arg)) error {
+	return rpcgo.Register(GetDefaultNode().rpcSvr.svr, name, method)
+}
+
+func Call[Arg any, Ret any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {
+	r := new(Ret)
+	if err = GetRPCClient().Call(ctx, to, method, arg, r); err == nil {
+		ret = r
+	}
+	return
+}
+
+func Post[Arg any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (err error) {
+	err = GetRPCClient().Call(ctx, to, method, arg, nil)
+	return
+}
+
+func CallWithTimeout[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, d time.Duration) (ret *Ret, err error) {
+	r := new(Ret)
+	if err = GetRPCClient().CallWithTimeout(to, method, arg, r, d); err == nil {
+		ret = r
+	}
+	return
+}
+
+func AsyncCall[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
+	return GetRPCClient().AsyncCall(to, method, arg, new(Ret), deadline, func(r interface{}, err error) {
+		callback(r.(*Ret), err)
+	})
+}
+
+// for unit test only
+func registerService[Arg any](node *Node, name string, method func(context.Context, *rpcgo.Replyer, *Arg)) error {
+	return rpcgo.Register(node.rpcSvr.svr, name, method)
+}
+
+func call[Arg any, Ret any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {
+	r := new(Ret)
+	if err = node.GetRPCClient().Call(ctx, to, method, arg, r); err == nil {
+		ret = r
+	}
+	return
+}
+
+func post[Arg any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg) (err error) {
+	err = node.GetRPCClient().Call(ctx, to, method, arg, nil)
+	return
+}
+
+func callWithTimeout[Arg any, Ret any](node *Node, to addr.LogicAddr, method string, arg Arg, d time.Duration) (ret *Ret, err error) {
+	r := new(Ret)
+	if err = node.GetRPCClient().CallWithTimeout(to, method, arg, r, d); err == nil {
+		ret = r
+	}
+	return
+}
+
+func asyncCall[Arg any, Ret any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
+	return node.GetRPCClient().AsyncCall(to, method, arg, new(Ret), deadline, func(r interface{}, err error) {
+		callback(r.(*Ret), err)
+	})
 }

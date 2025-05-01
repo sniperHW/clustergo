@@ -5,7 +5,7 @@ go 1.21.5
 require (
 	github.com/redis/go-redis/v9 v9.5.2
 	github.com/sniperHW/netgo v0.0.0-20231214060736-2b26e624b5f6
-	github.com/sniperHW/rpcgo v0.0.0-20231220032533-cdeb6a7b1119
+	github.com/sniperHW/rpcgo v0.0.0-20250501095528-a98841003660
 	github.com/stretchr/testify v1.8.4
 	github.com/xtaci/smux v1.5.24
 	go.etcd.io/etcd/client/v3 v3.5.11

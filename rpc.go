@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -133,4 +134,84 @@ func (c PbCodec) Encode(v interface{}) ([]byte, error) {
 
 func (c PbCodec) Decode(b []byte, v interface{}) error {
 	return proto.Unmarshal(b, v.(proto.Message))
+}
+
+type RPCServer struct {
+	pendingRespCount atomic.Int32 //尚未响应的rpc数量
+	svr              *rpcgo.Server
+}
+
+func (s *RPCServer) SetInInterceptor(interceptor []func(*rpcgo.Replyer, *rpcgo.RequestMsg) bool) {
+	s.svr.SetInInterceptor(append(interceptor, func(replyer *rpcgo.Replyer, req *rpcgo.RequestMsg) bool {
+		s.pendingRespCount.Add(1)
+		replyer.AppendOutInterceptor(func(req *rpcgo.RequestMsg, ret interface{}, err error) {
+			s.pendingRespCount.Add(-1)
+		})
+		return true
+	}))
+}
+
+type RPCClient struct {
+	n   *Node
+	cli *rpcgo.Client
+}
+
+func (c *RPCClient) SetInInterceptor(interceptor []func(*rpcgo.RequestMsg, interface{}, error)) {
+	c.cli.SetInInterceptor(interceptor)
+}
+
+func (c *RPCClient) SetOutInterceptor(interceptor []func(*rpcgo.RequestMsg, interface{})) {
+	c.cli.SetOutInterceptor(interceptor)
+}
+
+func (c *RPCClient) AsyncCall(to addr.LogicAddr, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
+	s := c.n
+	select {
+	case <-s.die:
+		return rpcgo.NewError(rpcgo.ErrOther, "server die")
+	case <-s.started:
+	default:
+		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
+	}
+	var err error
+	if to == s.localAddr.LogicAddr() {
+		err = c.cli.AsyncCall(&selfChannel{self: s}, method, arg, ret, deadline, callback)
+	} else if n := s.getNodeByLogicAddr(to); n != nil {
+		err = c.cli.AsyncCall(&rpcChannel{peer: to, node: n, self: s}, method, arg, ret, deadline, callback)
+	} else {
+		return ErrInvaildNode
+	}
+
+	switch err {
+	case ErrPendingQueueFull, netgo.ErrSendQueueFull:
+		return ErrBusy
+	default:
+		return err
+	}
+}
+
+func (c *RPCClient) CallWithTimeout(to addr.LogicAddr, method string, arg interface{}, ret interface{}, d time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	return c.Call(ctx, to, method, arg, ret)
+}
+
+func (c *RPCClient) Call(ctx context.Context, to addr.LogicAddr, method string, arg interface{}, ret interface{}) error {
+	s := c.n
+	select {
+	case <-s.die:
+		return rpcgo.NewError(rpcgo.ErrOther, "server die")
+	case <-s.started:
+	default:
+		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
+	}
+	if to == s.localAddr.LogicAddr() {
+		return c.cli.Call(ctx, &selfChannel{self: s}, method, arg, ret)
+	} else {
+		if n := s.getNodeByLogicAddr(to); n != nil {
+			return c.cli.Call(ctx, &rpcChannel{peer: to, node: n, self: s}, method, arg, ret)
+		} else {
+			return ErrInvaildNode
+		}
+	}
 }

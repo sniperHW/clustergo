@@ -30,30 +30,21 @@ type Test interface {
 }
 
 func Register(o Test) {
-	clustergo.GetRPCServer().RegisterService("test",func(ctx context.Context, r *rpcgo.Replyer,arg *TestReq) {
+	clustergo.RegisterService("test",func(ctx context.Context, r *rpcgo.Replyer,arg *TestReq) {
 		o.ServeTest(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
-var client *clustergo.RPCClient = clustergo.GetRPCClient()
 
 func Call(ctx context.Context, peer addr.LogicAddr,arg *TestReq) (*TestRsp,error) {
-	var resp TestRsp
-	err := client.Call(ctx,peer,"test",arg,&resp)
-	return &resp,err
+	return clustergo.Call[*TestReq,TestRsp](ctx,peer,"test",arg)
 }
 
 func CallWithTimeout(peer addr.LogicAddr,arg *TestReq,d time.Duration) (*TestRsp,error) {
-	var resp TestRsp
-	err := client.CallWithTimeout(peer,"test",arg,&resp,d)
-	return &resp,err
+	return clustergo.CallWithTimeout[*TestReq,TestRsp](peer,"test",arg,d)
 }
 
 func AsyncCall(peer addr.LogicAddr,arg *TestReq,deadline time.Time,callback func(*TestRsp,error)) error {
-	var resp TestRsp
-	err := client.AsyncCall(peer,"test",arg,&resp,deadline,func(res interface{},err error){
-		callback(res.(*TestRsp),err)
-	})
-	return err
+	return clustergo.AsyncCall[*TestReq,TestRsp](peer,"test",arg,deadline,callback)
 }
 
