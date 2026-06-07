@@ -31,10 +31,6 @@ func TestSubscribe(t *testing.T) {
 		RedisCli: cli,
 	}
 
-	if err := sub.Init(); err != nil {
-		panic(err)
-	}
-
 	sub.Subscribe(func(di membership.MemberInfo) {
 		fmt.Println("add", di.Add)
 		fmt.Println("update", di.Update)
@@ -47,10 +43,6 @@ func TestSubscribe(t *testing.T) {
 		RedisCli: redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		}),
-	}
-
-	if err := admin.Init(); err != nil {
-		panic(err)
 	}
 
 	fmt.Println("Update1")

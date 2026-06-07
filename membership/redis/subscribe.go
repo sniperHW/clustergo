@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,31 +17,13 @@ type Subscribe struct {
 	alive         map[string]struct{}         //健康节点
 	members       map[string]*membership.Node //*membership.Node //配置中的节点
 	cb            func(membership.MemberInfo)
-	getMembersSha string
-	getAliveSha   string
 	once          sync.Once
 	closeFunc     context.CancelFunc
 	closed        atomic.Bool
 }
 
-func (cli *Subscribe) Init() (err error) {
-	cli.alive = map[string]struct{}{}
-	cli.members = map[string]*membership.Node{}
-	if cli.getMembersSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptGetMembers).Result(); err != nil {
-		err = fmt.Errorf("error on init ScriptGetMembers:%s", err.Error())
-		return err
-	}
-
-	if cli.getAliveSha, err = cli.RedisCli.ScriptLoad(context.Background(), ScriptGetAlive).Result(); err != nil {
-		err = fmt.Errorf("error on init getAlive:%s", err.Error())
-		return err
-	}
-
-	return err
-}
-
 func (cli *Subscribe) getAlives() error {
-	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getAliveSha, []string{}, cli.aliveVersion).Result()
+	re, err := getAlives.eval(context.Background(), cli.RedisCli, []string{}, cli.aliveVersion)
 	if err = GetRedisError(err); err != nil {
 		return err
 	}
@@ -84,7 +65,7 @@ func (cli *Subscribe) getAlives() error {
 }
 
 func (cli *Subscribe) getMembers() error {
-	re, err := cli.RedisCli.EvalSha(context.Background(), cli.getMembersSha, []string{}, cli.memberVersion).Result()
+	re, err := getMembers.eval(context.Background(), cli.RedisCli, []string{}, cli.memberVersion)
 	if err = GetRedisError(err); err != nil {
 		return err
 	}
@@ -178,6 +159,8 @@ func (cli *Subscribe) Subscribe(cb func(membership.MemberInfo)) error {
 
 	cli.once.Do(func() {
 		once = true
+		cli.alive = map[string]struct{}{}
+		cli.members = map[string]*membership.Node{}
 	})
 
 	if once {

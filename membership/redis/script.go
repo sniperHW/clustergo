@@ -1,5 +1,15 @@
 package redis
 
+import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"io"
+	"strings"
+
+	"github.com/redis/go-redis/v9"
+)
+
 // 更新一个member,add|modify|markdelete
 const ScriptUpdateMember string = `
 	redis.call('select',0)
@@ -8,7 +18,7 @@ const ScriptUpdateMember string = `
 		serverVer = 1
 	else
 		serverVer = tonumber(serverVer) + 1
-	end	
+	end
 
 	redis.call('set','version',serverVer)
 	if ARGV[1] == 'insert_update' then
@@ -20,7 +30,7 @@ const ScriptUpdateMember string = `
 		if v then
 			redis.call('hmset',KEYS[1],'version',serverVer,'markdel','true')
 			--publish
-			redis.call('PUBLISH',"members",serverVer)			
+			redis.call('PUBLISH',"members",serverVer)
 		end
 	end
 `
@@ -68,7 +78,7 @@ const ScriptHeartbeat string = `
 			serverVer = 1
 		else
 			serverVer = tonumber(serverVer) + 1
-		end		
+		end
 		redis.call('set','version',serverVer)
 		redis.call('hmset',KEYS[1],'deadline',deadline,'version',serverVer,'dead','false')
 		--publish
@@ -79,7 +89,7 @@ const ScriptHeartbeat string = `
 	end
 `
 
-const ScriptGetAlive string = `
+const ScriptGetAlives string = `
 	redis.call('select',1)
 	local clientVer = tonumber(ARGV[1])
 	local serverVer = redis.call('get','version')
@@ -105,7 +115,7 @@ const ScriptGetAlive string = `
 					table.insert(nodes,{v,dead})
 				end
 			elseif tonumber(node_version) > clientVer then
-				--返回比客户端新的节点,包括dead=="true"的节点，这样客户端可以在本地将这种节点删除	
+				--返回比客户端新的节点,包括dead=="true"的节点，这样客户端可以在本地将这种节点删除
 				table.insert(nodes,{v,dead})
 			end
 		end
@@ -125,8 +135,8 @@ const ScriptCheckTimeout string = `
 	end
 
 	local now = tonumber(redis.call('TIME')[1])
-	
-	local change = false	
+
+	local change = false
 	local result = redis.call('scan',0)
 	for k,v in pairs(result[2]) do
 		if v ~= "version" then
@@ -148,3 +158,33 @@ const ScriptCheckTimeout string = `
 		redis.call('PUBLISH','alive',serverVer)
 	end
 `
+
+type script struct {
+	src string
+	sha string
+}
+
+func newScript(src string) *script {
+	h := sha1.New()
+	_, _ = io.WriteString(h, src)
+	return &script{
+		src: src,
+		sha: hex.EncodeToString(h.Sum(nil)),
+	}
+}
+
+func (s *script) eval(ctx context.Context, c *redis.Client, keys []string, args ...any) (result any, err error) {
+	result, err = c.EvalSha(ctx, s.sha, keys, args...).Result()
+	if err != nil && strings.Contains(err.Error(), "NOSCRIPT") {
+		result, err = c.Eval(ctx, s.src, keys, args...).Result()
+	}
+	return
+}
+
+var (
+	getMembers   = newScript(ScriptGetMembers)
+	getAlives    = newScript(ScriptGetAlives)
+	updateMember = newScript(ScriptUpdateMember)
+	heartbeat    = newScript(ScriptHeartbeat)
+	checkTimeout = newScript(ScriptCheckTimeout)
+)

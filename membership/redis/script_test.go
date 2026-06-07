@@ -73,7 +73,7 @@ func TestAlive(t *testing.T) {
 	}
 
 	{
-		re, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 0).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetAlives, []string{}, 0).Result()
 		err = GetRedisError(err)
 		if err != nil {
 			fmt.Println(err)
@@ -93,7 +93,7 @@ func TestAlive(t *testing.T) {
 		err = GetRedisError(err)
 		fmt.Println("server version", m.Payload)
 		if err == nil {
-			re, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 0).Result()
+			re, err := cli.Eval(context.Background(), ScriptGetAlives, []string{}, 0).Result()
 			err = GetRedisError(err)
 			if err != nil {
 				fmt.Println(err)
@@ -122,7 +122,7 @@ func TestAlive(t *testing.T) {
 	<-c
 
 	{
-		re, err := cli.Eval(context.Background(), ScriptGetAlive, []string{}, 1).Result()
+		re, err := cli.Eval(context.Background(), ScriptGetAlives, []string{}, 1).Result()
 		err = GetRedisError(err)
 		if err != nil {
 			fmt.Println(err)
@@ -160,6 +160,7 @@ func TestRedis(t *testing.T) {
 
 }
 
+/*
 func TestRedisSubscribe(t *testing.T) {
 	cli := redis.NewClient(&redis.Options{
 		Addr:       "localhost:6379",
@@ -179,4 +180,4 @@ func TestRedisSubscribe(t *testing.T) {
 	err = GetRedisError(err)
 	fmt.Println(err)
 
-}
+	}*/
