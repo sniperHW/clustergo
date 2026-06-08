@@ -290,7 +290,7 @@ func (c *memberShipCli) Close() {
 }
 
 // 订阅变更
-func (c *memberShipCli) Subscribe(updateCB func(membership.MemberInfo)) error {
+func (c *memberShipCli) Subscribe(updateCB func(membership.MemberInfo)) (func(), error) {
 	dialer := &net.Dialer{}
 	for {
 		if conn, err := dialer.Dial("tcp", c.svrService); err == nil {
@@ -362,9 +362,21 @@ func (c *memberShipCli) Subscribe(updateCB func(membership.MemberInfo)) error {
 				return nil
 			}).Recv()
 			as.Send(&Subscribe{})
-			return nil
+			return c.Close, nil
 		} else {
 			time.Sleep(time.Second)
 		}
 	}
+}
+
+func (c *memberShipCli) UpdateMember(membership.Node) {
+
+}
+
+func (c *memberShipCli) RemoveMember(addr.LogicAddr) {
+
+}
+
+func (c *memberShipCli) KeepAlive(addr.LogicAddr) {
+
 }

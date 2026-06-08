@@ -2,27 +2,13 @@ package redis
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sniperHW/clustergo/membership"
 )
 
-type Subscribe struct {
-	RedisCli      *redis.Client
-	memberVersion int64
-	aliveVersion  int64
-	alive         map[string]struct{}         //健康节点
-	members       map[string]*membership.Node //*membership.Node //配置中的节点
-	cb            func(membership.MemberInfo)
-	once          sync.Once
-	closeFunc     context.CancelFunc
-	closed        atomic.Bool
-}
-
-func (cli *Subscribe) getAlives() error {
+func (cli *Membership) getAlives() error {
 	re, err := getAlives.eval(context.Background(), cli.RedisCli, []string{}, cli.aliveVersion)
 	if err = GetRedisError(err); err != nil {
 		return err
@@ -64,7 +50,7 @@ func (cli *Subscribe) getAlives() error {
 	return nil
 }
 
-func (cli *Subscribe) getMembers() error {
+func (cli *Membership) getMembers() error {
 	re, err := getMembers.eval(context.Background(), cli.RedisCli, []string{}, cli.memberVersion)
 	if err = GetRedisError(err); err != nil {
 		return err
@@ -119,33 +105,81 @@ func (cli *Subscribe) getMembers() error {
 	return nil
 }
 
-func (cli *Subscribe) watch(ctx context.Context) {
-	ch := cli.RedisCli.Subscribe(ctx, "members", "alive").Channel()
+func (cli *Membership) watch(ctx context.Context) {
+	pubsub := cli.RedisCli.Subscribe(ctx, "members", "alive")
+	ch := pubsub.Channel()
 
 	/*
 	 *   如果更新Node的事件早于Subscribe,更新事件将丢失，因此必须设置超时时间，超时后尝试获取members和alives的更新
 	 */
 
 	ticker := time.NewTicker(time.Second * 5)
+	defer ticker.Stop()
+
+	hadError := false
+
 	for {
 		select {
-		case m := <-ch:
+		case m, ok := <-ch:
+			if !ok {
+				// channel已关闭（网络断开或Redis重启），重新订阅
+				pubsub.Close()
+				cli.resubscribe(ctx, &pubsub, &ch)
+				hadError = true
+				continue
+			}
 			switch m.Channel {
 			case "members":
-				cli.getMembers()
+				if err := cli.getMembers(); err != nil {
+					hadError = true
+				}
 			case "alive":
-				cli.getAlives()
+				if err := cli.getAlives(); err != nil {
+					hadError = true
+				}
 			}
 		case <-ticker.C:
-			cli.getMembers()
-			cli.getAlives()
+			err1 := cli.getMembers()
+			err2 := cli.getAlives()
+			if err1 != nil || err2 != nil {
+				hadError = true
+			}
+			if hadError && err1 == nil && err2 == nil {
+				// 从错误中恢复，重置version强制全量同步以补回断线期间丢失的变更
+				cli.memberVersion = 0
+				cli.aliveVersion = 0
+				cli.getMembers()
+				cli.getAlives()
+				hadError = false
+			}
 		case <-ctx.Done():
+			pubsub.Close()
 			return
 		}
 	}
 }
 
-func (cli *Subscribe) Close() {
+func (cli *Membership) resubscribe(ctx context.Context, pubsub **redis.PubSub, ch *<-chan *redis.Message) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		p := cli.RedisCli.Subscribe(ctx, "members", "alive")
+		// 验证连接是否真正可用
+		if _, err := p.Receive(ctx); err != nil {
+			p.Close()
+			time.Sleep(time.Second * 2)
+			continue
+		}
+		*pubsub = p
+		*ch = p.Channel()
+		return
+	}
+}
+
+func (cli *Membership) close() {
 	if cli.closed.CompareAndSwap(false, true) {
 		if cli.closeFunc != nil {
 			cli.closeFunc()
@@ -153,7 +187,7 @@ func (cli *Subscribe) Close() {
 	}
 }
 
-func (cli *Subscribe) Subscribe(cb func(membership.MemberInfo)) error {
+func (cli *Membership) Subscribe(cb func(membership.MemberInfo)) (func(), error) {
 
 	once := false
 
@@ -168,11 +202,11 @@ func (cli *Subscribe) Subscribe(cb func(membership.MemberInfo)) error {
 
 		err := cli.getMembers()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = cli.getAlives()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -181,5 +215,5 @@ func (cli *Subscribe) Subscribe(cb func(membership.MemberInfo)) error {
 
 		go cli.watch(ctx)
 	}
-	return nil
+	return cli.close, nil
 }

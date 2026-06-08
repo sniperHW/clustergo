@@ -158,17 +158,18 @@ func (p *gopool) Go(fn func()) {
 
 type Node struct {
 	gopool
-	localAddr    addr.Addr
-	listener     net.Listener
-	nodeCache    nodeCache
-	msgManager   msgManager
-	startOnce    sync.Once
-	stopOnce     sync.Once
-	started      chan struct{}
-	smuxSessions sync.Map
-	onNewStream  atomic.Value
-	rpcSvr       *RPCServer
-	rpcCli       *RPCClient
+	localAddr     addr.Addr
+	listener      net.Listener
+	nodeCache     nodeCache
+	msgManager    msgManager
+	startOnce     sync.Once
+	stopOnce      sync.Once
+	started       chan struct{}
+	smuxSessions  sync.Map
+	onNewStream   atomic.Value
+	rpcSvr        *RPCServer
+	rpcCli        *RPCClient
+	stopSubscribe func()
 }
 
 // 根据目标逻辑地址返回一个node用于发送消息
@@ -362,6 +363,7 @@ func (s *Node) Stop() error {
 	})
 	if once {
 		go func() {
+			s.stopSubscribe()
 			s.listener.Close()
 			//rpcSvr不再接收新的请求
 			s.rpcSvr.svr.Stop()
@@ -382,7 +384,7 @@ func (s *Node) Stop() error {
 	}
 }
 
-func (s *Node) Start(MemberShip membership.Subscribe, localAddr addr.LogicAddr) (err error) {
+func (s *Node) Start(mb membership.Membership, localAddr addr.LogicAddr) (err error) {
 	once := false
 	s.startOnce.Do(func() {
 		once = true
@@ -390,7 +392,7 @@ func (s *Node) Start(MemberShip membership.Subscribe, localAddr addr.LogicAddr) 
 	if once {
 		s.nodeCache.localAddr = localAddr
 
-		if err = MemberShip.Subscribe(func(nodeinfo membership.MemberInfo) {
+		if s.stopSubscribe, err = mb.Subscribe(func(nodeinfo membership.MemberInfo) {
 			s.nodeCache.onNodeInfoUpdate(s, nodeinfo)
 		}); err != nil {
 			return err
@@ -581,8 +583,8 @@ func GetDefaultNode() *Node {
 	return defaultInstance
 }
 
-func Start(MemberShip membership.Subscribe, localAddr addr.LogicAddr) (err error) {
-	return GetDefaultNode().Start(MemberShip, localAddr)
+func Start(mb membership.Membership, localAddr addr.LogicAddr) (err error) {
+	return GetDefaultNode().Start(mb, localAddr)
 }
 
 func GetAddrByType(tt uint32, n ...int) (addr addr.LogicAddr, err error) {

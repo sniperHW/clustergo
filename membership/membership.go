@@ -47,17 +47,13 @@ type MemberInfo struct {
 	Update []Node
 }
 
-type Subscribe interface {
+type Membership interface {
 	//订阅变更
-	Subscribe(func(MemberInfo)) error
-	Close()
-}
-
-type Admin interface {
+	Subscribe(func(MemberInfo)) (func(), error)
 	//更新节点信息，如果节点不存在将它添加到membership中
 	UpdateMember(Node)
 	//从membership中移除节点
-	RemoveMember(Node)
+	RemoveMember(addr.LogicAddr)
 	//保活
-	KeepAlive(Node)
+	KeepAlive(addr.LogicAddr)
 }

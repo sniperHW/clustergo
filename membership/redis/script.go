@@ -12,33 +12,32 @@ import (
 
 // 更新一个member,add|modify|markdelete
 const ScriptUpdateMember string = `
-	redis.call('select',0)
-	local serverVer = redis.call('get','version')
+	local S = string.char(1)
+	local serverVer = redis.call('get','members_version')
 	if not serverVer then
 		serverVer = 1
 	else
 		serverVer = tonumber(serverVer) + 1
 	end
 
-	redis.call('set','version',serverVer)
+	redis.call('set','members_version',serverVer)
 	if ARGV[1] == 'insert_update' then
-		redis.call('hmset',KEYS[1],'version',serverVer,'info',ARGV[2],'markdel','false')
-		--publish
+		redis.call('hset','members',KEYS[1],serverVer .. S .. 'false' .. S .. ARGV[2])
 		redis.call('PUBLISH',"members",serverVer)
 	elseif ARGV[1] == "delete" then
-		local v = redis.call('hget',KEYS[1],'version')
-		if v then
-			redis.call('hmset',KEYS[1],'version',serverVer,'markdel','true')
-			--publish
+		local existing = redis.call('hget','members',KEYS[1])
+		if existing then
+			local _, _, info = existing:match('^(.-)' .. S .. '(.-)' .. S .. '(.*)$')
+			redis.call('hset','members',KEYS[1],serverVer .. S .. 'true' .. S .. (info or ''))
 			redis.call('PUBLISH',"members",serverVer)
 		end
 	end
 `
 
 const ScriptGetMembers string = `
-	redis.call('select',0)
+	local S = string.char(1)
 	local clientVer = tonumber(ARGV[1])
-	local serverVer = redis.call('get','version')
+	local serverVer = redis.call('get','members_version')
 	if not serverVer then
 		return {clientVer}
 	else
@@ -49,18 +48,18 @@ const ScriptGetMembers string = `
 		return {serverVer}
 	end
 	local nodes = {}
-	local result = redis.call('scan',0)
-	for k,v in pairs(result[2]) do
-		if v ~= "version" then
-			local r = redis.call('hmget',v,'version','info','markdel')
-			local node_version,info,markdel = r[1],r[2],r[3]
+	local all = redis.call('hgetall','members')
+	for i = 1, #all, 2 do
+		local addr = all[i]
+		local ver, markdel, info = all[i+1]:match('^(.-)' .. S .. '(.-)' .. S .. '(.*)$')
+		if ver then
 			if clientVer == 0 then
-				if markdel == "false" then
-					table.insert(nodes,{v,info,markdel})
+				if markdel == 'false' then
+					table.insert(nodes,{addr,info,markdel})
 				end
-			elseif tonumber(node_version) > clientVer then
+			elseif tonumber(ver) > clientVer then
 				--返回比客户端新的节点,包括markdel=="true"的节点，这样客户端可以在本地将这种节点删除
-				table.insert(nodes,{v,info,markdel})
+				table.insert(nodes,{addr,info,markdel})
 			end
 		end
 	end
@@ -68,31 +67,35 @@ const ScriptGetMembers string = `
 `
 
 const ScriptHeartbeat string = `
-	redis.call('select',1)
-	local dead = redis.call('get','dead')
+	local S = string.char(1)
+	local nodeData = redis.call('hget','alive',KEYS[1])
 	local deadline = tonumber(redis.call('TIME')[1]) + tonumber(ARGV[1])
+	local prevDead = 'false'
 
-	if not dead or dead == "false" then
-		local serverVer = redis.call('get','version')
+	if nodeData then
+		local _, d = nodeData:match('^(.-)' .. S .. '(.-)' .. S .. '.*$')
+		if d then prevDead = d end
+	end
+
+	if prevDead == 'false' then
+		local serverVer = redis.call('get','alive_version')
 		if not serverVer then
 			serverVer = 1
 		else
 			serverVer = tonumber(serverVer) + 1
 		end
-		redis.call('set','version',serverVer)
-		redis.call('hmset',KEYS[1],'deadline',deadline,'version',serverVer,'dead','false')
-		--publish
-		redis.call('select',0)
+		redis.call('set','alive_version',serverVer)
+		redis.call('hset','alive',KEYS[1],serverVer .. S .. 'false' .. S .. deadline)
 		redis.call('PUBLISH',"alive",serverVer)
 	else
-		redis.call('hmset',KEYS[1],'deadline',deadline)
+		redis.call('hset','alive',KEYS[1],nodeData:match('^(.-)' .. S .. '(.-)' .. S .. '.*$') .. S .. deadline)
 	end
 `
 
 const ScriptGetAlives string = `
-	redis.call('select',1)
+	local S = string.char(1)
 	local clientVer = tonumber(ARGV[1])
-	local serverVer = redis.call('get','version')
+	local serverVer = redis.call('get','alive_version')
 	if not serverVer then
 		return {clientVer}
 	else
@@ -104,30 +107,29 @@ const ScriptGetAlives string = `
 		return {serverVer}
 	end
 	local nodes = {}
-	local result = redis.call('scan',0)
-	for k,v in pairs(result[2]) do
-		if v ~= "version" then
-			local r = redis.call('hmget',v,'version','dead')
-			local node_version,dead = r[1],r[2]
+	local all = redis.call('hgetall','alive')
+	for i = 1, #all, 2 do
+		local addr = all[i]
+		local ver, dead = all[i+1]:match('^(.-)' .. S .. '(.-)' .. S .. '.*$')
+		if ver then
 			if clientVer == 0 then
 				--初始状态,只返回dead==false
-				if dead == "false" then
-					table.insert(nodes,{v,dead})
+				if dead == 'false' then
+					table.insert(nodes,{addr,dead})
 				end
-			elseif tonumber(node_version) > clientVer then
+			elseif tonumber(ver) > clientVer then
 				--返回比客户端新的节点,包括dead=="true"的节点，这样客户端可以在本地将这种节点删除
-				table.insert(nodes,{v,dead})
+				table.insert(nodes,{addr,dead})
 			end
 		end
 	end
 	return {serverVer,nodes}
 `
 
-// 遍历db1,将超时节点标记为dead=true
-// todo: 记录下上次检测的时间,避免频繁执行检查
+// 遍历alive hash,将超时节点标记为dead=true
 const ScriptCheckTimeout string = `
-	redis.call('select',1)
-	local serverVer = redis.call('get','version')
+	local S = string.char(1)
+	local serverVer = redis.call('get','alive_version')
 	if not serverVer then
 		serverVer = 1
 	else
@@ -135,26 +137,22 @@ const ScriptCheckTimeout string = `
 	end
 
 	local now = tonumber(redis.call('TIME')[1])
-
 	local change = false
-	local result = redis.call('scan',0)
-	for k,v in pairs(result[2]) do
-		if v ~= "version" then
-			local r = redis.call('hmget',v,'dead','deadline')
-			local dead,deadline = r[1],r[2]
-			if dead == "false" and now > tonumber(deadline) then
-				if change == false then
-					change = true
-					redis.call('set','version',serverVer)
-				end
-				redis.call('hmset',v,'version',serverVer,'dead','true')
+	local all = redis.call('hgetall','alive')
+
+	for i = 1, #all, 2 do
+		local addr = all[i]
+		local _, dead, dl = all[i+1]:match('^(.-)' .. S .. '(.-)' .. S .. '(.+)$')
+		if dead == 'false' and now > tonumber(dl) then
+			if not change then
+				change = true
+				redis.call('set','alive_version',serverVer)
 			end
+			redis.call('hset','alive',addr,serverVer .. S .. 'true' .. S .. dl)
 		end
 	end
 
 	if change then
-		--publish
-		redis.call('select',0)
 		redis.call('PUBLISH','alive',serverVer)
 	end
 `

@@ -29,14 +29,26 @@ type localMemberShip struct {
 }
 
 // 订阅变更
-func (d *localMemberShip) Subscribe(updateCB func(membership.MemberInfo)) error {
+func (d *localMemberShip) Subscribe(updateCB func(membership.MemberInfo)) (func(), error) {
 	d.subscribes = append(d.subscribes, updateCB)
 	i := membership.MemberInfo{}
 	for _, v := range d.nodes {
 		i.Add = append(i.Add, *v)
 	}
 	updateCB(i)
-	return nil
+	return func() {}, nil
+}
+
+func (d *localMemberShip) UpdateMember(membership.Node) {
+
+}
+
+func (d *localMemberShip) RemoveMember(addr.LogicAddr) {
+
+}
+
+func (d *localMemberShip) KeepAlive(addr.LogicAddr) {
+
 }
 
 func (d *localMemberShip) AddNode(n *membership.Node) {
