@@ -96,7 +96,7 @@ func (codec *PBCodec) Recv(readable netgo.ReadAble, deadline time.Time) (pkt []b
 	}
 }
 
-func main() {
+func clientmain() {
 	dialer := &net.Dialer{}
 	var (
 		s netgo.Socket

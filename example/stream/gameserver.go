@@ -8,7 +8,7 @@ import (
 	"github.com/xtaci/smux"
 )
 
-func main() {
+func gamemain() {
 	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	clustergo.InitLogger(l.Sugar())
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")

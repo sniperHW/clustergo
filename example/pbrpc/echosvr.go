@@ -19,7 +19,7 @@ func (e *echoService) ServeEcho(ctx context.Context, replyer *echo.Replyer, requ
 	replyer.Reply(&echo.EchoRsp{Msg: request.Msg})
 }
 
-func main() {
+func svr() {
 	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	clustergo.InitLogger(l.Sugar())
 	echo.Register(&echoService{})

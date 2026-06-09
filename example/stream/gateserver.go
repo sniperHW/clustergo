@@ -12,7 +12,7 @@ import (
 	"github.com/sniperHW/netgo"
 )
 
-func main() {
+func gatemain() {
 	l := zap.NewZapLogger("1.2.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	clustergo.InitLogger(l.Sugar())
 	localaddr, _ := addr.MakeLogicAddr("1.2.1")
