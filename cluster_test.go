@@ -367,12 +367,12 @@ func TestTwoNode(t *testing.T) {
 	})
 
 	//var resp string
-	resp, err := call[string, string](ctx, node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+	resp, err := call[string, string](context.Background(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.Nil(t, err)
 	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	go func() {
-		_, err = call[string, string](ctx, node2, node1Addr.LogicAddr(), "Delay", "sniperHW")
+		_, err = call[string, string](context.Background(), node2, node1Addr.LogicAddr(), "Delay", "sniperHW")
 		assert.Nil(t, err)
 	}()
 
@@ -739,10 +739,10 @@ func TestDefault(t *testing.T) {
 	time.Sleep(time.Second)
 	localDiscovery.RemoveNode(node4Addr.LogicAddr())
 
-	//var resp string
-	err = node2.GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &resp)
+	var rep string
+	err = node2.GetRPCClient().Call(context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW", &rep)
 	assert.Nil(t, err)
-	assert.Equal(t, resp, "hello world:sniperHW")
+	assert.Equal(t, rep, "hello world:sniperHW")
 
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	Wait()
