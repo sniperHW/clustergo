@@ -51,9 +51,9 @@ type Membership interface {
 	//订阅变更
 	Subscribe(func(MemberInfo)) (func(), error)
 	//更新节点信息，如果节点不存在将它添加到membership中
-	UpdateMember(Node)
+	UpdateMember(Node) error
 	//从membership中移除节点
-	RemoveMember(addr.LogicAddr)
+	RemoveMember(addr.LogicAddr) error
 	//保活
-	KeepAlive(addr.LogicAddr, int)
+	KeepAlive(addr.LogicAddr, int) error
 }

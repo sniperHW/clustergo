@@ -369,14 +369,14 @@ func (c *memberShipCli) Subscribe(updateCB func(membership.MemberInfo)) (func(),
 	}
 }
 
-func (c *memberShipCli) UpdateMember(membership.Node) {
-
+func (c *memberShipCli) UpdateMember(membership.Node) error {
+	return nil
 }
 
-func (c *memberShipCli) RemoveMember(addr.LogicAddr) {
-
+func (c *memberShipCli) RemoveMember(addr.LogicAddr) error {
+	return nil
 }
 
-func (c *memberShipCli) KeepAlive(addr.LogicAddr, int) {
-
+func (c *memberShipCli) KeepAlive(addr.LogicAddr, int) error {
+	return nil
 }

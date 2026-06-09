@@ -39,16 +39,16 @@ func (d *localMemberShip) Subscribe(updateCB func(membership.MemberInfo)) (func(
 	return func() {}, nil
 }
 
-func (d *localMemberShip) UpdateMember(membership.Node) {
-
+func (d *localMemberShip) UpdateMember(membership.Node) error {
+	return nil
 }
 
-func (d *localMemberShip) RemoveMember(addr.LogicAddr) {
-
+func (d *localMemberShip) RemoveMember(addr.LogicAddr) error {
+	return nil
 }
 
-func (d *localMemberShip) KeepAlive(addr.LogicAddr, int) {
-
+func (d *localMemberShip) KeepAlive(addr.LogicAddr, int) error {
+	return nil
 }
 
 func (d *localMemberShip) AddNode(n *membership.Node) {
