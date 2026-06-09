@@ -18,8 +18,8 @@ func (cli *Membership) RemoveMember(n addr.LogicAddr) error {
 	return GetRedisError(err)
 }
 
-func (cli *Membership) KeepAlive(n addr.LogicAddr) error {
-	_, err := heartbeat.eval(context.Background(), cli.RedisCli, []string{n.String()}, 10)
+func (cli *Membership) KeepAlive(n addr.LogicAddr, second int) error {
+	_, err := heartbeat.eval(context.Background(), cli.RedisCli, []string{n.String()}, second)
 	return GetRedisError(err)
 }
 

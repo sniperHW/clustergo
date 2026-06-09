@@ -47,7 +47,7 @@ func (d *localMemberShip) RemoveMember(addr.LogicAddr) {
 
 }
 
-func (d *localMemberShip) KeepAlive(addr.LogicAddr) {
+func (d *localMemberShip) KeepAlive(addr.LogicAddr, int) {
 
 }
 

@@ -377,6 +377,6 @@ func (c *memberShipCli) RemoveMember(addr.LogicAddr) {
 
 }
 
-func (c *memberShipCli) KeepAlive(addr.LogicAddr) {
+func (c *memberShipCli) KeepAlive(addr.LogicAddr, int) {
 
 }

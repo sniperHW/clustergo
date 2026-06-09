@@ -234,7 +234,7 @@ func TestAdmin_KeepAlive(t *testing.T) {
 	cli := setupTestDB(t)
 	m := &Membership{RedisCli: cli}
 
-	if err := m.KeepAlive(makeLogicAddr("1.1.1")); err != nil {
+	if err := m.KeepAlive(makeLogicAddr("1.1.1"), 10); err != nil {
 		t.Fatalf("KeepAlive failed: %v", err)
 	}
 
@@ -256,8 +256,8 @@ func TestAdmin_KeepAlive_MultipleNodes(t *testing.T) {
 	cli := setupTestDB(t)
 	m := &Membership{RedisCli: cli}
 
-	m.KeepAlive(makeLogicAddr("1.1.1"))
-	m.KeepAlive(makeLogicAddr("1.1.2"))
+	m.KeepAlive(makeLogicAddr("1.1.1"), 10)
+	m.KeepAlive(makeLogicAddr("1.1.2"), 10)
 
 	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
 	r := re.([]interface{})
@@ -362,7 +362,7 @@ func TestSubscribe_InitialMembersWithAlive(t *testing.T) {
 		Addr:      makeAddr("1.1.1", "192.168.1.1:8011"),
 		Available: true,
 	})
-	admin.KeepAlive(makeLogicAddr("1.1.1"))
+	admin.KeepAlive(makeLogicAddr("1.1.1"), 10)
 
 	sub := &Membership{RedisCli: cli}
 	c := newCollector()
@@ -538,7 +538,7 @@ func TestSubscribe_AliveChange(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Heartbeat -> node becomes alive
-	admin.KeepAlive(makeLogicAddr("1.1.1"))
+	admin.KeepAlive(makeLogicAddr("1.1.1"), 10)
 
 	waitUntil(t, func() bool {
 		c.mu.Lock()

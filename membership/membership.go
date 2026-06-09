@@ -55,5 +55,5 @@ type Membership interface {
 	//从membership中移除节点
 	RemoveMember(addr.LogicAddr)
 	//保活
-	KeepAlive(addr.LogicAddr)
+	KeepAlive(addr.LogicAddr, int)
 }

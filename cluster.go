@@ -405,6 +405,20 @@ func (s *Node) Start(mb membership.Membership, localAddr addr.LogicAddr) (err er
 			err = fmt.Errorf("%s not in config", localAddr.String())
 		} else {
 			s.localAddr = n.addr
+
+			go func() {
+				ticker := time.NewTicker(time.Second * 2)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						mb.KeepAlive(localAddr, 5)
+					case <-s.die:
+						return
+					}
+				}
+			}()
+
 			var serve func()
 			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
 				go func() {
@@ -692,7 +706,7 @@ func callWithTimeout[Arg any, Ret any](node *Node, to addr.LogicAddr, method str
 	return
 }
 
-func asyncCall[Arg any, Ret any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
+func asyncCall[Arg any, Ret any](node *Node, to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
 	return node.GetRPCClient().AsyncCall(to, method, arg, new(Ret), deadline, func(r interface{}, err error) {
 		callback(r.(*Ret), err)
 	})
