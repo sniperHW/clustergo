@@ -405,7 +405,7 @@ func (s *Node) Start(mb membership.Membership, localAddr addr.LogicAddr) (err er
 			err = fmt.Errorf("%s not in config", localAddr.String())
 		} else {
 			s.localAddr = n.addr
-
+			mb.KeepAlive(localAddr, 5)
 			go func() {
 				ticker := time.NewTicker(time.Second * 2)
 				defer ticker.Stop()
