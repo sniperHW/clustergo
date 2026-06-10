@@ -128,7 +128,7 @@ func TestAdmin_UpdateMember(t *testing.T) {
 		t.Fatalf("UpdateMember failed: %v", err)
 	}
 
-	re, err := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, err := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	if err != nil {
 		t.Fatalf("getMembers failed: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestAdmin_UpdateMemberTwice(t *testing.T) {
 		Available: false,
 	})
 
-	re, _ := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	r := re.([]interface{})
 	if r[0].(int64) != 2 {
 		t.Fatalf("expected version 2, got %d", r[0].(int64))
@@ -181,7 +181,7 @@ func TestAdmin_MultipleMembers(t *testing.T) {
 		Available: true,
 	})
 
-	re, _ := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	r := re.([]interface{})
 	if r[0].(int64) != 3 {
 		t.Fatalf("expected version 3, got %d", r[0].(int64))
@@ -204,14 +204,14 @@ func TestAdmin_RemoveMember(t *testing.T) {
 	}
 
 	// Initial fetch (version 0) excludes deleted nodes
-	re, _ := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	nodes := re.([]interface{})[1].([]interface{})
 	if len(nodes) != 0 {
 		t.Fatalf("expected 0 nodes after remove, got %d", len(nodes))
 	}
 
 	// Incremental fetch includes deleted node with markdel=true
-	re, _ = getMembers.eval(context.Background(), cli, []string{}, 1)
+	re, _ = getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 1)
 	nodes = re.([]interface{})[1].([]interface{})
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 change since v1, got %d", len(nodes))
@@ -238,7 +238,7 @@ func TestAdmin_KeepAlive(t *testing.T) {
 		t.Fatalf("KeepAlive failed: %v", err)
 	}
 
-	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	r := re.([]interface{})
 	if r[0].(int64) != 1 {
 		t.Fatalf("expected alive version 1, got %d", r[0].(int64))
@@ -259,7 +259,7 @@ func TestAdmin_KeepAlive_MultipleNodes(t *testing.T) {
 	m.KeepAlive(makeLogicAddr("1.1.1"), 10)
 	m.KeepAlive(makeLogicAddr("1.1.2"), 10)
 
-	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	r := re.([]interface{})
 	if r[0].(int64) != 2 {
 		t.Fatalf("expected version 2, got %d", r[0].(int64))
@@ -275,22 +275,22 @@ func TestAdmin_CheckTimeout(t *testing.T) {
 	m := &Membership{RedisCli: cli}
 
 	// node1: 1s timeout, node2: 300s timeout
-	heartbeat.eval(context.Background(), cli, []string{"1.1.1"}, 1)
-	heartbeat.eval(context.Background(), cli, []string{"1.1.2"}, 300)
+	heartbeat.eval(context.Background(), cli, []string{"1.1.1", "alive", "alive_version"}, 1, "alive")
+	heartbeat.eval(context.Background(), cli, []string{"1.1.2", "alive", "alive_version"}, 300, "alive")
 
 	time.Sleep(2 * time.Second)
 
 	m.CheckTimeout()
 
 	// Initial fetch: only node2 alive
-	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	nodes := re.([]interface{})[1].([]interface{})
 	if len(nodes) != 1 || nodes[0].([]interface{})[0].(string) != "1.1.2" {
 		t.Fatal("only 1.1.2 should be alive after timeout")
 	}
 
 	// Incremental fetch: node1 marked dead
-	re, _ = getAlives.eval(context.Background(), cli, []string{}, 2)
+	re, _ = getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 2)
 	nodes = re.([]interface{})[1].([]interface{})
 	found := false
 	for _, n := range nodes {
@@ -573,7 +573,7 @@ func TestSubscribe_TimeoutChange(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Heartbeat with short timeout via direct script call
-	heartbeat.eval(context.Background(), cli, []string{"1.1.1"}, 1)
+	heartbeat.eval(context.Background(), cli, []string{"1.1.1", "alive", "alive_version"}, 1, "alive")
 
 	// Wait for alive notification
 	waitUntil(t, func() bool {

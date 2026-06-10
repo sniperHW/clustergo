@@ -9,7 +9,9 @@ import (
 )
 
 func (cli *Membership) getAlives() error {
-	re, err := getAlives.eval(context.Background(), cli.RedisCli, []string{}, cli.aliveVersion)
+	re, err := getAlives.eval(context.Background(), cli.RedisCli,
+		[]string{cli.getAliveKey(), cli.getAliveVersionKey()},
+		cli.aliveVersion)
 	if err = GetRedisError(err); err != nil {
 		return err
 	}
@@ -51,7 +53,9 @@ func (cli *Membership) getAlives() error {
 }
 
 func (cli *Membership) getMembers() error {
-	re, err := getMembers.eval(context.Background(), cli.RedisCli, []string{}, cli.memberVersion)
+	re, err := getMembers.eval(context.Background(), cli.RedisCli,
+		[]string{cli.getMemberKey(), cli.getMemberVersionKey()},
+		cli.memberVersion)
 	if err = GetRedisError(err); err != nil {
 		return err
 	}
@@ -106,7 +110,9 @@ func (cli *Membership) getMembers() error {
 }
 
 func (cli *Membership) watch(ctx context.Context) {
-	pubsub := cli.RedisCli.Subscribe(ctx, "members", "alive")
+	memberKey := cli.getMemberKey()
+	aliveKey := cli.getAliveKey()
+	pubsub := cli.RedisCli.Subscribe(ctx, memberKey, aliveKey)
 	ch := pubsub.Channel()
 
 	/*
@@ -129,11 +135,11 @@ func (cli *Membership) watch(ctx context.Context) {
 				continue
 			}
 			switch m.Channel {
-			case "members":
+			case memberKey:
 				if err := cli.getMembers(); err != nil {
 					hadError = true
 				}
-			case "alive":
+			case aliveKey:
 				if err := cli.getAlives(); err != nil {
 					hadError = true
 				}
@@ -160,13 +166,15 @@ func (cli *Membership) watch(ctx context.Context) {
 }
 
 func (cli *Membership) resubscribe(ctx context.Context, pubsub **redis.PubSub, ch *<-chan *redis.Message) {
+	memberKey := cli.getMemberKey()
+	aliveKey := cli.getAliveKey()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		p := cli.RedisCli.Subscribe(ctx, "members", "alive")
+		p := cli.RedisCli.Subscribe(ctx, memberKey, aliveKey)
 		// 验证连接是否真正可用
 		if _, err := p.Receive(ctx); err != nil {
 			p.Close()

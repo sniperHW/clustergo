@@ -11,33 +11,37 @@ import (
 )
 
 // 更新一个member,add|modify|markdelete
+// KEYS[1]=addr, KEYS[2]=memberHashKey, KEYS[3]=memberVersionKey
+// ARGV[1]=action("insert_update"/"delete"), ARGV[2]=data, ARGV[3]=channelName
 const ScriptUpdateMember string = `
 	local S = string.char(1)
-	local serverVer = redis.call('get','members_version')
+	local serverVer = redis.call('get',KEYS[3])
 	if not serverVer then
 		serverVer = 1
 	else
 		serverVer = tonumber(serverVer) + 1
 	end
 
-	redis.call('set','members_version',serverVer)
+	redis.call('set',KEYS[3],serverVer)
 	if ARGV[1] == 'insert_update' then
-		redis.call('hset','members',KEYS[1],serverVer .. S .. 'false' .. S .. ARGV[2])
-		redis.call('PUBLISH',"members",serverVer)
+		redis.call('hset',KEYS[2],KEYS[1],serverVer .. S .. 'false' .. S .. ARGV[2])
+		redis.call('PUBLISH',ARGV[3],serverVer)
 	elseif ARGV[1] == "delete" then
-		local existing = redis.call('hget','members',KEYS[1])
+		local existing = redis.call('hget',KEYS[2],KEYS[1])
 		if existing then
 			local _, _, info = existing:match('^(.-)' .. S .. '(.-)' .. S .. '(.*)$')
-			redis.call('hset','members',KEYS[1],serverVer .. S .. 'true' .. S .. (info or ''))
-			redis.call('PUBLISH',"members",serverVer)
+			redis.call('hset',KEYS[2],KEYS[1],serverVer .. S .. 'true' .. S .. (info or ''))
+			redis.call('PUBLISH',ARGV[3],serverVer)
 		end
 	end
 `
 
+// KEYS[1]=memberHashKey, KEYS[2]=memberVersionKey
+// ARGV[1]=clientVersion
 const ScriptGetMembers string = `
 	local S = string.char(1)
 	local clientVer = tonumber(ARGV[1])
-	local serverVer = redis.call('get','members_version')
+	local serverVer = redis.call('get',KEYS[2])
 	if not serverVer then
 		return {clientVer}
 	else
@@ -48,7 +52,7 @@ const ScriptGetMembers string = `
 		return {serverVer}
 	end
 	local nodes = {}
-	local all = redis.call('hgetall','members')
+	local all = redis.call('hgetall',KEYS[1])
 	for i = 1, #all, 2 do
 		local addr = all[i]
 		local ver, markdel, info = all[i+1]:match('^(.-)' .. S .. '(.-)' .. S .. '(.*)$')
@@ -66,9 +70,11 @@ const ScriptGetMembers string = `
 	return {serverVer,nodes}
 `
 
+// KEYS[1]=addr, KEYS[2]=aliveHashKey, KEYS[3]=aliveVersionKey
+// ARGV[1]=timeoutSeconds, ARGV[2]=channelName
 const ScriptHeartbeat string = `
 	local S = string.char(1)
-	local nodeData = redis.call('hget','alive',KEYS[1])
+	local nodeData = redis.call('hget',KEYS[2],KEYS[1])
 	local deadline = tonumber(redis.call('TIME')[1]) + tonumber(ARGV[1])
 	local prevDead = 'false'
 
@@ -78,24 +84,26 @@ const ScriptHeartbeat string = `
 	end
 
 	if prevDead == 'false' then
-		local serverVer = redis.call('get','alive_version')
+		local serverVer = redis.call('get',KEYS[3])
 		if not serverVer then
 			serverVer = 1
 		else
 			serverVer = tonumber(serverVer) + 1
 		end
-		redis.call('set','alive_version',serverVer)
-		redis.call('hset','alive',KEYS[1],serverVer .. S .. 'false' .. S .. deadline)
-		redis.call('PUBLISH',"alive",serverVer)
+		redis.call('set',KEYS[3],serverVer)
+		redis.call('hset',KEYS[2],KEYS[1],serverVer .. S .. 'false' .. S .. deadline)
+		redis.call('PUBLISH',ARGV[2],serverVer)
 	else
-		redis.call('hset','alive',KEYS[1],nodeData:match('^(.-)' .. S .. '(.-)' .. S .. '.*$') .. S .. deadline)
+		redis.call('hset',KEYS[2],KEYS[1],nodeData:match('^(.-)' .. S .. '(.-)' .. S .. '.*$') .. S .. deadline)
 	end
 `
 
+// KEYS[1]=aliveHashKey, KEYS[2]=aliveVersionKey
+// ARGV[1]=clientVersion
 const ScriptGetAlives string = `
 	local S = string.char(1)
 	local clientVer = tonumber(ARGV[1])
-	local serverVer = redis.call('get','alive_version')
+	local serverVer = redis.call('get',KEYS[2])
 	if not serverVer then
 		return {clientVer}
 	else
@@ -107,7 +115,7 @@ const ScriptGetAlives string = `
 		return {serverVer}
 	end
 	local nodes = {}
-	local all = redis.call('hgetall','alive')
+	local all = redis.call('hgetall',KEYS[1])
 	for i = 1, #all, 2 do
 		local addr = all[i]
 		local ver, dead = all[i+1]:match('^(.-)' .. S .. '(.-)' .. S .. '.*$')
@@ -127,9 +135,11 @@ const ScriptGetAlives string = `
 `
 
 // 遍历alive hash,将超时节点标记为dead=true
+// KEYS[1]=aliveHashKey, KEYS[2]=aliveVersionKey
+// ARGV[1]=channelName
 const ScriptCheckTimeout string = `
 	local S = string.char(1)
-	local serverVer = redis.call('get','alive_version')
+	local serverVer = redis.call('get',KEYS[2])
 	if not serverVer then
 		serverVer = 1
 	else
@@ -138,7 +148,7 @@ const ScriptCheckTimeout string = `
 
 	local now = tonumber(redis.call('TIME')[1])
 	local change = false
-	local all = redis.call('hgetall','alive')
+	local all = redis.call('hgetall',KEYS[1])
 
 	for i = 1, #all, 2 do
 		local addr = all[i]
@@ -146,14 +156,14 @@ const ScriptCheckTimeout string = `
 		if dead == 'false' and now > tonumber(dl) then
 			if not change then
 				change = true
-				redis.call('set','alive_version',serverVer)
+				redis.call('set',KEYS[2],serverVer)
 			end
-			redis.call('hset','alive',addr,serverVer .. S .. 'true' .. S .. dl)
+			redis.call('hset',KEYS[1],addr,serverVer .. S .. 'true' .. S .. dl)
 		end
 	end
 
 	if change then
-		redis.call('PUBLISH','alive',serverVer)
+		redis.call('PUBLISH',ARGV[1],serverVer)
 	end
 `
 

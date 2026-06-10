@@ -29,20 +29,20 @@ func TestScriptMembers_InsertAndGet(t *testing.T) {
 	cli := setupTestDB(t)
 
 	// Empty db
-	re, err := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, err := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	checkErr(t, err)
 	if re.([]interface{})[0].(int64) != 0 {
 		t.Fatal("expected version 0 for empty db")
 	}
 
 	// Insert two nodes
-	_, err = updateMember.eval(context.Background(), cli, []string{"node1"}, "insert_update", "node1_data")
+	_, err = updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "insert_update", "node1_data", "members")
 	checkErr(t, err)
-	_, err = updateMember.eval(context.Background(), cli, []string{"node2"}, "insert_update", "node2_data")
+	_, err = updateMember.eval(context.Background(), cli, []string{"node2", "members", "members_version"}, "insert_update", "node2_data", "members")
 	checkErr(t, err)
 
 	// Fetch all (version 0) returns both
-	re, err = getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, err = getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	checkErr(t, err)
 	result := re.([]interface{})
 	if result[0].(int64) != 2 {
@@ -54,7 +54,7 @@ func TestScriptMembers_InsertAndGet(t *testing.T) {
 	}
 
 	// Version match returns only version
-	re, _ = getMembers.eval(context.Background(), cli, []string{}, 2)
+	re, _ = getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 2)
 	if len(re.([]interface{})) != 1 {
 		t.Fatal("expected only version when client is up-to-date")
 	}
@@ -64,17 +64,17 @@ func TestScriptMembers_Delete(t *testing.T) {
 	cli := setupTestDB(t)
 
 	// Insert then delete
-	updateMember.eval(context.Background(), cli, []string{"node1"}, "insert_update", "node1_data")
-	updateMember.eval(context.Background(), cli, []string{"node1"}, "delete")
+	updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "insert_update", "node1_data", "members")
+	updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "delete", "", "members")
 
 	// Initial fetch (version 0) excludes deleted nodes
-	re, _ := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	if len(re.([]interface{})[1].([]interface{})) != 0 {
 		t.Fatal("initial fetch should exclude deleted nodes")
 	}
 
 	// Incremental fetch returns deleted node with markdel=true
-	re, _ = getMembers.eval(context.Background(), cli, []string{}, 1)
+	re, _ = getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 1)
 	node := re.([]interface{})[1].([]interface{})[0].([]interface{})
 	if node[0].(string) != "node1" {
 		t.Fatalf("expected addr node1, got %s", node[0])
@@ -87,17 +87,17 @@ func TestScriptMembers_Delete(t *testing.T) {
 	}
 
 	// Delete non-existent node is no-op
-	_, err := updateMember.eval(context.Background(), cli, []string{"nonexist"}, "delete")
+	_, err := updateMember.eval(context.Background(), cli, []string{"nonexist", "members", "members_version"}, "delete", "", "members")
 	checkErr(t, err)
 }
 
 func TestScriptMembers_Update(t *testing.T) {
 	cli := setupTestDB(t)
 
-	updateMember.eval(context.Background(), cli, []string{"node1"}, "insert_update", "data_v1")
-	updateMember.eval(context.Background(), cli, []string{"node1"}, "insert_update", "data_v2")
+	updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "insert_update", "data_v1", "members")
+	updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "insert_update", "data_v2", "members")
 
-	re, _ := getMembers.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 0)
 	node := re.([]interface{})[1].([]interface{})[0].([]interface{})
 	if node[1].(string) != "data_v2" {
 		t.Fatalf("expected data_v2, got %s", node[1])
@@ -108,19 +108,19 @@ func TestScriptMembers_IncrementalFetch(t *testing.T) {
 	cli := setupTestDB(t)
 
 	// Insert node1 (v1), node2 (v2), delete node1 (v3)
-	updateMember.eval(context.Background(), cli, []string{"node1"}, "insert_update", "node1_data")
-	updateMember.eval(context.Background(), cli, []string{"node2"}, "insert_update", "node2_data")
-	updateMember.eval(context.Background(), cli, []string{"node1"}, "delete")
+	updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "insert_update", "node1_data", "members")
+	updateMember.eval(context.Background(), cli, []string{"node2", "members", "members_version"}, "insert_update", "node2_data", "members")
+	updateMember.eval(context.Background(), cli, []string{"node1", "members", "members_version"}, "delete", "", "members")
 
 	// Since v1: node2 added + node1 deleted
-	re, _ := getMembers.eval(context.Background(), cli, []string{}, 1)
+	re, _ := getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 1)
 	nodes := re.([]interface{})[1].([]interface{})
 	if len(nodes) != 2 {
 		t.Fatalf("expected 2 changes since v1, got %d", len(nodes))
 	}
 
 	// Since v2: only node1 deleted
-	re, _ = getMembers.eval(context.Background(), cli, []string{}, 2)
+	re, _ = getMembers.eval(context.Background(), cli, []string{"members", "members_version"}, 2)
 	nodes = re.([]interface{})[1].([]interface{})
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 change since v2, got %d", len(nodes))
@@ -134,17 +134,17 @@ func TestScriptAlive_HeartbeatAndGet(t *testing.T) {
 	cli := setupTestDB(t)
 
 	// Empty db
-	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	if re.([]interface{})[0].(int64) != 0 {
 		t.Fatal("expected version 0 for empty db")
 	}
 
 	// Heartbeat two nodes
-	heartbeat.eval(context.Background(), cli, []string{"node1"}, 10)
-	heartbeat.eval(context.Background(), cli, []string{"node2"}, 10)
+	heartbeat.eval(context.Background(), cli, []string{"node1", "alive", "alive_version"}, 10, "alive")
+	heartbeat.eval(context.Background(), cli, []string{"node2", "alive", "alive_version"}, 10, "alive")
 
 	// Fetch all alive
-	re, _ = getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ = getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	result := re.([]interface{})
 	if result[0].(int64) != 2 {
 		t.Fatalf("expected version 2, got %d", result[0].(int64))
@@ -160,7 +160,7 @@ func TestScriptAlive_HeartbeatAndGet(t *testing.T) {
 	}
 
 	// Version match
-	re, _ = getAlives.eval(context.Background(), cli, []string{}, 2)
+	re, _ = getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 2)
 	if len(re.([]interface{})) != 1 {
 		t.Fatal("expected only version when client is up-to-date")
 	}
@@ -170,22 +170,22 @@ func TestScriptCheckTimeout(t *testing.T) {
 	cli := setupTestDB(t)
 
 	// node1: 1s timeout, node2: 300s timeout
-	heartbeat.eval(context.Background(), cli, []string{"node1"}, 1)
-	heartbeat.eval(context.Background(), cli, []string{"node2"}, 300)
+	heartbeat.eval(context.Background(), cli, []string{"node1", "alive", "alive_version"}, 1, "alive")
+	heartbeat.eval(context.Background(), cli, []string{"node2", "alive", "alive_version"}, 300, "alive")
 
 	time.Sleep(time.Second * 2)
 
-	checkTimeout.eval(context.Background(), cli, []string{})
+	checkTimeout.eval(context.Background(), cli, []string{"alive", "alive_version"}, "alive")
 
 	// Initial fetch: only node2 alive
-	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	nodes := re.([]interface{})[1].([]interface{})
 	if len(nodes) != 1 || nodes[0].([]interface{})[0].(string) != "node2" {
 		t.Fatal("only node2 should be alive after timeout")
 	}
 
 	// Incremental fetch: node1 marked dead
-	re, _ = getAlives.eval(context.Background(), cli, []string{}, 2)
+	re, _ = getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 2)
 	nodes = re.([]interface{})[1].([]interface{})
 	found := false
 	for _, n := range nodes {
@@ -202,19 +202,19 @@ func TestScriptCheckTimeout(t *testing.T) {
 func TestScriptAlive_DeadNodeHeartbeat(t *testing.T) {
 	cli := setupTestDB(t)
 
-	heartbeat.eval(context.Background(), cli, []string{"node1"}, 1)
+	heartbeat.eval(context.Background(), cli, []string{"node1", "alive", "alive_version"}, 1, "alive")
 	time.Sleep(time.Second * 2)
-	checkTimeout.eval(context.Background(), cli, []string{})
+	checkTimeout.eval(context.Background(), cli, []string{"alive", "alive_version"}, "alive")
 
 	// Record version after death
-	re, _ := getAlives.eval(context.Background(), cli, []string{}, 0)
+	re, _ := getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, 0)
 	deadVersion := re.([]interface{})[0].(int64)
 
 	// Dead node sends heartbeat - should NOT bump version
-	heartbeat.eval(context.Background(), cli, []string{"node1"}, 300)
+	heartbeat.eval(context.Background(), cli, []string{"node1", "alive", "alive_version"}, 300, "alive")
 
 	// Version unchanged, no new changes
-	re, _ = getAlives.eval(context.Background(), cli, []string{}, deadVersion)
+	re, _ = getAlives.eval(context.Background(), cli, []string{"alive", "alive_version"}, deadVersion)
 	if len(re.([]interface{})) != 1 {
 		t.Fatal("dead node heartbeat should not produce version changes")
 	}
