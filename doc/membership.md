@@ -75,6 +75,38 @@ type Node struct {
 ### KeepAlive
 使用 etcd lease：`cli.Grant(ctx, seconds)` 创建 lease，然后 `Put` alive key with lease。
 
+## natsjet 实现
+
+**文件**：`membership/natsjet/`
+
+### 数据结构
+- 两个 JetStream KV bucket：
+  - `<Prefix>members`（默认 `members`）：存储成员配置，TTL=0（永不过期）
+  - `<Prefix>alive`（默认 `alive`）：存储心跳，TTL=`AliveTTL`（默认 10s）
+- key 都是逻辑地址字符串；value 是 `Node.Marshal()` 后的 JSON
+
+### 工作流程
+1. `Subscribe` 时通过 `EnsureBucket` 创建 bucket（如不存在），先 `Keys()` 全量拉取 members 和 alive
+2. 启动 `watch` goroutine，对两个 bucket 各开一个 `WatchAll()` 订阅
+3. watcher 自动推送初始快照 + 后续增量
+4. 每 5 秒 ticker 兜底全量同步，防止事件丢失
+5. 错误恢复时重建 watcher
+
+### KeepAlive
+- alive bucket 的 TTL 是 **bucket 级别**，由 `AliveTTL` 决定
+- 每次 `KeepAlive` 调用都会 `Put` 同一个 key，从而重置其过期计时
+- **`KeepAlive(addr, second)` 中的 `second` 参数被忽略**——这是 NATS KV 的固有限制（bucket 级 TTL 无法 per-key 控制）
+- 节点停止心跳后，`AliveTTL` 到期 → bucket 自动删除 key → watcher 推送 Delete → 客户端收到 `Update(Available=false)`
+- 不需要单独的 `CheckTimeout` 调用
+
+### 与 etcd/redis 的差异
+| 维度 | natsjet | etcd | redis |
+|---|---|---|---|
+| 保活机制 | KV bucket TTL | per-lease TTL | Lua 脚本 deadline |
+| `KeepAlive` 的 `second` 参数 | **被忽略** | 实际生效 | 实际生效 |
+| 超时清理 | 自动（TTL） | 自动（lease） | 手动 `CheckTimeout()` |
+| 变更通知 | KV Watch | Watch | Pub/Sub + Lua version |
+
 ## 自定义实现示例
 
 `example/membership/` 提供了一个基于 TCP server/client 的简单实现：
