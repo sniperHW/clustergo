@@ -75,3 +75,79 @@ func TestSocket_SendRecv(t *testing.T) {
 		t.Fatal("server close callback not fired")
 	}
 }
+
+// TestSocket_RecvTimeout verifies the onRecvTimeout -> close -> callback chain:
+// after the first packet, AutoRecv re-arms the read with AutoRecvTimeout; with no
+// further traffic the read times out and the socket closes itself.
+func TestSocket_RecvTimeout(t *testing.T) {
+	srvClosed := make(chan error, 1)
+	ln, serve, err := ListenTCP("127.0.0.1:0", func(conn *net.TCPConn) {
+		srv := New(conn, rawCodec{}, Options{SendChanSize: 8, AutoRecv: true, AutoRecvTimeout: 80 * time.Millisecond})
+		srv.SetCloseCallback(func(err error) { srvClosed <- err })
+		srv.Recv()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go serve()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli := New(conn.(*net.TCPConn), rawCodec{}, Options{SendChanSize: 8})
+	// First packet arms the AutoRecvTimeout on the server's next read.
+	if err := cli.Send([]byte("ping"), time.Time{}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	select {
+	case err := <-srvClosed:
+		if err != ErrRecvTimeout {
+			t.Fatalf("expected ErrRecvTimeout, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("recv-timeout close callback not fired")
+	}
+	cli.Close(nil)
+}
+
+// TestSocket_SendErrorCloses reproduces the Critical teardown bug: the server's
+// sendloop blocks in conn.Write on a large payload (peer not reading); when the
+// peer closes, the Write errors, sendloop calls close(), and the recvloop (blocked
+// in Read) must be unblocked so finalize runs and the close callback fires.
+func TestSocket_SendErrorCloses(t *testing.T) {
+	srvClosed := make(chan error, 1)
+	ln, serve, err := ListenTCP("127.0.0.1:0", func(conn *net.TCPConn) {
+		srv := New(conn, rawCodec{}, Options{SendChanSize: 8, AutoRecv: true})
+		srv.SetCloseCallback(func(err error) { srvClosed <- err })
+		srv.Recv()
+		// 4MiB far exceeds the kernel send buffer, so sendloop blocks inside conn.Write.
+		big := make([]byte, 4*1024*1024)
+		if e := srv.Send(big, time.Time{}); e != nil {
+			t.Logf("server send returned early: %v", e)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go serve()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := conn.(*net.TCPConn)
+	// Let the server's blocking 4MiB write get going, then close the peer end.
+	time.Sleep(100 * time.Millisecond)
+	peer.Close()
+
+	select {
+	case <-srvClosed:
+		// close callback fired — the send-error teardown path (C1 regression) works.
+	case <-time.After(2 * time.Second):
+		t.Fatal("server close callback not fired after peer close (send-error teardown hung)")
+	}
+}

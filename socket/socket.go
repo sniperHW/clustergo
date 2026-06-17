@@ -66,6 +66,11 @@ type Socket struct {
 	recvDone        chan struct{}
 }
 
+// New creates a Socket over conn and eagerly starts its send, recv, and finalize
+// goroutines. The loops remain idle (blocked on their selects) until Send/Recv is
+// first called, so callbacks (SetCloseCallback/SetPacketHandler) must be set before
+// the first Send/Recv. The caller must eventually call Close to release the conn
+// and goroutines.
 func New(conn *net.TCPConn, codec Codec, opts Options) *Socket {
 	if opts.SendChanSize <= 0 {
 		opts.SendChanSize = 1
@@ -208,13 +213,7 @@ func (s *Socket) Recv() {
 }
 
 func (s *Socket) Close(err error) {
-	s.closeOnce.Do(func() {
-		if err != nil {
-			s.closeReason.Store(err)
-		}
-		close(s.die)
-		s.conn.Close() // unblock any blocked read/write
-	})
+	s.close(err)
 }
 
 func (s *Socket) close(err error) {
@@ -223,6 +222,8 @@ func (s *Socket) close(err error) {
 			s.closeReason.Store(err)
 		}
 		close(s.die)
+		// Close the conn so a sibling loop blocked in Read/Write returns and finalize can complete.
+		s.conn.Close()
 	})
 }
 
@@ -251,7 +252,7 @@ func (s *Socket) write(buf []byte) error {
 func (s *Socket) sendloop() {
 	defer close(s.sendDone)
 	buf := poolbuff.Get()
-	defer poolbuff.Put(buf)
+	defer func() { poolbuff.Put(buf) }()
 	total := 0
 	for {
 		select {
