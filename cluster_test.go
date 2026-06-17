@@ -285,9 +285,9 @@ func TestSingleNode(t *testing.T) {
 		//设置钩子函数,当Replyer发送应答时调用
 		replyer.AppendOutInterceptor(func(req *rpc.RequestMsg, ret interface{}, err error) {
 			if err == nil {
-				logger.Debugf("call %s(\"%v\") use:%v", req.Method, *req.GetArg().(*string), time.Now().Sub(beg))
+				logger.Debugf("call %s(\"%v\") use:%v", req.Method, *req.Arg.(*string), time.Now().Sub(beg))
 			} else {
-				logger.Debugf("call %s(\"%v\") with error:%v", req.Method, *req.GetArg().(*string), err)
+				logger.Debugf("call %s(\"%v\") with error:%v", req.Method, *req.Arg.(*string), err)
 			}
 		})
 		return true
@@ -372,7 +372,7 @@ func TestTwoNode(t *testing.T) {
 	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	go func() {
-		_, err = call[string, string](context.Background(), node2, node1Addr.LogicAddr(), "Delay", "sniperHW")
+		_, err := call[string, string](context.Background(), node2, node1Addr.LogicAddr(), "Delay", "sniperHW")
 		assert.Nil(t, err)
 	}()
 
