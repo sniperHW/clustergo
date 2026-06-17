@@ -9,6 +9,7 @@ import (
 	"github.com/sniperHW/clustergo/codec/pb"
 	"github.com/sniperHW/clustergo/rpc"
 	"github.com/sniperHW/clustergo/socket"
+	"github.com/sniperHW/netgo/poolbuff"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -18,38 +19,40 @@ var _ socket.Codec = (*SSCodec)(nil)
 
 type SSCodec struct {
 	selfAddr addr.LogicAddr
+	rpcCodec rpc.Codec
 	reader   buffer.BufferReader
 	pbMeta   *pb.PbMeta
 }
 
-func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
+func NewCodec(selfAddr addr.LogicAddr, rpcCodec rpc.Codec) *SSCodec {
 	return &SSCodec{
 		selfAddr: selfAddr,
+		rpcCodec: rpcCodec,
 		pbMeta:   pb.GetMeta(Namespace),
 		reader:   buffer.NewReader(binary.BigEndian, nil),
 	}
 }
 
-func (ss *SSCodec) encode(dst []byte, m *Message, cmd uint16, flag byte, data []byte) ([]byte, int) {
-	payloadLen := sizeFlag + sizeToAndFrom + len(data)
-	if flag == PbMsg || flag == BinMsg {
-		payloadLen += sizeCmd
-	}
-	totalLen := sizeLen + payloadLen
-	if totalLen > socket.MaxPacketSize {
-		return dst, 0
-	}
-	w := buffer.NeWriter(binary.BigEndian)
+// appendSSHeader writes the length-prefix placeholder + flag + to + from and returns
+// the new dst plus the mark (offset of the length prefix) for a later finalizeFrame.
+func appendSSHeader(dst []byte, m *Message, flag byte) ([]byte, int) {
 	mark := len(dst)
 	dst = append(dst, 0, 0, 0, 0) // length prefix placeholder
-	binary.BigEndian.PutUint32(dst[mark:], uint32(payloadLen))
 	dst = append(dst, flag)
+	w := buffer.NeWriter(binary.BigEndian)
 	dst = w.AppendUint32(dst, uint32(m.To()))
 	dst = w.AppendUint32(dst, uint32(m.From()))
-	if flag == PbMsg || flag == BinMsg {
-		dst = w.AppendUint16(dst, cmd)
+	return dst, mark
+}
+
+// finalizeFrame patches the 4-byte length prefix at mark and enforces MaxPacketSize.
+// On overflow it rolls dst back to mark and returns 0 (encode nothing).
+func finalizeFrame(dst []byte, mark int) ([]byte, int) {
+	totalLen := len(dst) - mark
+	if totalLen > socket.MaxPacketSize {
+		return dst[:mark], 0
 	}
-	dst = append(dst, data...)
+	binary.BigEndian.PutUint32(dst[mark:], uint32(totalLen-sizeLen))
 	return dst, totalLen
 }
 
@@ -63,24 +66,49 @@ func (ss *SSCodec) Encode(dst []byte, o interface{}) ([]byte, int) {
 				return dst, 0
 			}
 			setMsgType(&flag, BinMsg)
-			return ss.encode(dst, o, o.cmd, flag, msg)
+			dst, mark := appendSSHeader(dst, o, flag)
+			w := buffer.NeWriter(binary.BigEndian)
+			dst = w.AppendUint16(dst, o.cmd)
+			dst = append(dst, msg...)
+			return finalizeFrame(dst, mark)
 		case proto.Message:
-			data, cmd, err := ss.pbMeta.Marshal(msg)
-			if err != nil {
-				return dst, 0
-			}
 			setMsgType(&flag, PbMsg)
-			return ss.encode(dst, o, uint16(cmd), flag, data)
+			dst, mark := appendSSHeader(dst, o, flag)
+			w := buffer.NeWriter(binary.BigEndian)
+			cmdMark := len(dst)
+			dst = w.AppendUint16(dst, 0) // cmd placeholder, patched once Marshal returns the id
+			var mErr error
+			var cmd uint32
+			dst, cmd, mErr = ss.pbMeta.Marshal(dst, msg)
+			if mErr != nil {
+				return dst[:mark], 0
+			}
+			binary.BigEndian.PutUint16(dst[cmdMark:], uint16(cmd))
+			return finalizeFrame(dst, mark)
 		case *rpc.RequestMsg:
 			setMsgType(&flag, RpcReq)
-			return ss.encode(dst, o, 0, flag, rpc.EncodeRequest(msg))
+			dst, mark := appendSSHeader(dst, o, flag)
+			var e error
+			dst, e = rpc.EncodeRequest(dst, msg, ss.rpcCodec)
+			if e != nil {
+				return dst[:mark], 0
+			}
+			return finalizeFrame(dst, mark)
 		case *rpc.ResponseMsg:
 			setMsgType(&flag, RpcResp)
-			return ss.encode(dst, o, 0, flag, rpc.EncodeResponse(msg))
+			dst, mark := appendSSHeader(dst, o, flag)
+			var e error
+			dst, e = rpc.EncodeResponse(dst, msg, ss.rpcCodec)
+			if e != nil {
+				return dst[:mark], 0
+			}
+			return finalizeFrame(dst, mark)
 		}
 		return dst, 0
 	case *RelayMessage:
-		return append(dst, o.Payload()...), len(o.Payload())
+		dst = append(dst, o.payload...)
+		poolbuff.Put(o.payload)
+		return dst, len(o.payload)
 	default:
 		return dst, 0
 	}
@@ -110,13 +138,13 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 				return NewMessage(to, from, msg, cmd), nil
 			}
 		case RpcReq:
-			if req, err := rpc.DecodeRequest(ss.reader.GetAll()); err != nil {
+			if req, err := rpc.DecodeRequest(ss.reader.GetAll(), ss.rpcCodec); err != nil {
 				return nil, err
 			} else {
 				return NewMessage(to, from, req), nil
 			}
 		case RpcResp:
-			if resp, err := rpc.DecodeResponse(ss.reader.GetAll()); err != nil {
+			if resp, err := rpc.DecodeResponse(ss.reader.GetAll(), ss.rpcCodec); err != nil {
 				return nil, err
 			} else {
 				return NewMessage(to, from, resp), nil

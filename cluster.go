@@ -168,6 +168,7 @@ type Node struct {
 	started       chan struct{}
 	smuxSessions  sync.Map
 	onNewStream   atomic.Value
+	rpcCodec      rpc.Codec
 	rpcSvr        *RPCServer
 	rpcCli        *RPCClient
 	stopSubscribe func()
@@ -577,12 +578,13 @@ func NewClusterNode(rpccodec rpc.Codec) *Node {
 		},
 		started: make(chan struct{}),
 	}
+	n.rpcCodec = rpccodec
 	n.rpcCli = &RPCClient{
 		n:   n,
-		cli: rpc.NewClient(rpccodec),
+		cli: rpc.NewClient(),
 	}
 	n.rpcSvr = &RPCServer{
-		svr: rpc.NewServer(rpccodec),
+		svr: rpc.NewServer(),
 	}
 	n.rpcSvr.SetInInterceptor([]func(*rpc.Replyer, *rpc.RequestMsg) bool{})
 	return n

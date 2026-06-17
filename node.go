@@ -299,7 +299,7 @@ func (n *node) onMessage(ctx context.Context, self *Node, msg interface{}) {
 }
 
 func (n *node) onEstablish(self *Node, conn *net.TCPConn) {
-	codec := ss.NewCodec(self.localAddr.LogicAddr())
+	codec := ss.NewCodec(self.localAddr.LogicAddr(), self.rpcCodec)
 	n.socket = socket.New(conn, codec, socket.Options{
 		SendChanSize:  SendChanSize,
 		BatchSendSize: BatchSendSize,

@@ -9,6 +9,27 @@ type BytesWriter struct {
 	B []byte
 }
 
+// WriteMessage appends a length-prefixed, codec-encoded message to B. The 2-byte
+// length is patched in after codec.Encode appends the marshalled body, so the body
+// is written straight into the caller's buffer (e.g. the pooled send buffer) with no
+// intermediate allocation. A nil value is encoded as an empty (zero-length) body.
+func (bw *BytesWriter) WriteMessage(codec Codec, v interface{}) error {
+	if v == nil {
+		bw.B = append(bw.B, 0, 0)
+		return nil
+	}
+	mark := len(bw.B)
+	bw.B = append(bw.B, 0, 0) // length placeholder
+	start := len(bw.B)
+	b, err := codec.Encode(bw.B, v)
+	if err != nil {
+		return err
+	}
+	bw.B = b
+	binary.BigEndian.PutUint16(bw.B[mark:], uint16(len(bw.B)-start))
+	return nil
+}
+
 func (bw *BytesWriter) WriteBool(v bool) {
 	if v {
 		bw.writeByte(byte(1))

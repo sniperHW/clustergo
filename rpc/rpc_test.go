@@ -9,7 +9,13 @@ import (
 
 type jsonCodec struct{}
 
-func (jsonCodec) Encode(v interface{}) ([]byte, error) { return json.Marshal(v) }
+func (jsonCodec) Encode(dst []byte, v interface{}) ([]byte, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, b...), nil
+}
 func (jsonCodec) Decode(b []byte, v interface{}) error { return json.Unmarshal(b, v) }
 
 type echoArg struct{ Msg string }
@@ -40,9 +46,8 @@ func (c *loopChannel) Name() string                { return c.name }
 func (c *loopChannel) IsRetryAbleError(error) bool { return false }
 
 func newPair() (*Client, *Server, *loopChannel) {
-	codec := jsonCodec{}
-	server := NewServer(codec)
-	client := NewClient(codec)
+	server := NewServer()
+	client := NewClient()
 	return client, server, &loopChannel{name: "loop", client: client, server: server}
 }
 
@@ -124,36 +129,66 @@ func TestRPC_Error(t *testing.T) {
 }
 
 func TestRPC_EncodeDecodeRequest(t *testing.T) {
+	codec := jsonCodec{}
+	want := &echoArg{Msg: "arg-bytes"}
 	req := &RequestMsg{
 		Seq:      42,
 		Method:   "hello",
-		Arg:      []byte("arg-bytes"),
+		Arg:      want,
 		UserData: []byte("ud"),
 		Oneway:   true,
 	}
-	got, err := DecodeRequest(EncodeRequest(req))
+	b, err := EncodeRequest(nil, req, codec)
+	if err != nil {
+		t.Fatalf("EncodeRequest: %v", err)
+	}
+	got, err := DecodeRequest(b, codec)
 	if err != nil {
 		t.Fatalf("DecodeRequest: %v", err)
 	}
-	if got.Seq != req.Seq || got.Method != req.Method || string(got.Arg) != string(req.Arg) ||
-		string(got.UserData) != string(req.UserData) || got.Oneway != req.Oneway {
-		t.Fatalf("round-trip mismatch: got %+v want %+v", got, req)
+	if got.Seq != req.Seq || got.Method != req.Method || got.Oneway != req.Oneway ||
+		string(got.UserData) != string(req.UserData) {
+		t.Fatalf("header round-trip mismatch: got %+v want %+v", got, req)
+	}
+	var a echoArg
+	if err := got.decodeArgInto(&a); err != nil {
+		t.Fatalf("decodeArgInto: %v", err)
+	}
+	if a.Msg != want.Msg {
+		t.Fatalf("arg round-trip mismatch: got %+v want %+v", a, want)
 	}
 }
 
 func TestRPC_EncodeDecodeResponse(t *testing.T) {
+	codec := jsonCodec{}
 	// without error
-	resp := &ResponseMsg{Seq: 7, Ret: []byte("ret")}
-	got, err := DecodeResponse(EncodeResponse(resp))
+	want := &echoRet{Msg: "ret"}
+	resp := &ResponseMsg{Seq: 7, Ret: want}
+	b, err := EncodeResponse(nil, resp, codec)
+	if err != nil {
+		t.Fatalf("EncodeResponse: %v", err)
+	}
+	got, err := DecodeResponse(b, codec)
 	if err != nil {
 		t.Fatalf("DecodeResponse: %v", err)
 	}
-	if got.Seq != resp.Seq || string(got.Ret) != string(resp.Ret) || got.Err != nil {
+	if got.Seq != resp.Seq || got.Err != nil {
 		t.Fatalf("round-trip mismatch (no-err): got %+v", got)
+	}
+	var r echoRet
+	if err := got.decodeRet(&r); err != nil {
+		t.Fatalf("decodeRet: %v", err)
+	}
+	if r.Msg != want.Msg {
+		t.Fatalf("ret round-trip mismatch: got %+v want %+v", r, want)
 	}
 	// with error
 	respErr := &ResponseMsg{Seq: 9, Err: NewError(ErrMethod, "boom")}
-	got, err = DecodeResponse(EncodeResponse(respErr))
+	b, err = EncodeResponse(nil, respErr, codec)
+	if err != nil {
+		t.Fatalf("EncodeResponse(err): %v", err)
+	}
+	got, err = DecodeResponse(b, codec)
 	if err != nil {
 		t.Fatalf("DecodeResponse(err): %v", err)
 	}
@@ -163,10 +198,10 @@ func TestRPC_EncodeDecodeResponse(t *testing.T) {
 }
 
 func TestRPC_DecodeTruncated(t *testing.T) {
-	if _, err := DecodeRequest(nil); err == nil {
+	if _, err := DecodeRequest(nil, nil); err == nil {
 		t.Fatal("expected error decoding nil request")
 	}
-	if _, err := DecodeRequest([]byte{1, 2, 3}); err == nil { // shorter than seq(8)
+	if _, err := DecodeRequest([]byte{1, 2, 3}, nil); err == nil { // shorter than seq(8)
 		t.Fatal("expected error decoding truncated request")
 	}
 }

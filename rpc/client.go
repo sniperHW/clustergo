@@ -27,11 +27,11 @@ type asynContext struct {
 	cli        *Client
 }
 
-func (c *asynContext) callOnResponse(codec Codec, resp []byte, err *Error) bool {
+func (c *asynContext) callOnResponse(resp *ResponseMsg, err *Error) bool {
 	if atomic.CompareAndSwapInt32(&c.fired, 0, 1) {
 		var e error
 		if err == nil {
-			if e = codec.Decode(resp, c.ret); e != nil {
+			if e = resp.decodeRet(c.ret); e != nil {
 				logger.Errorf("callOnResponse decode error:%v", e)
 				e = NewError(ErrOther, "decode resp.Ret")
 			}
@@ -47,7 +47,7 @@ func (c *asynContext) callOnResponse(codec Codec, resp []byte, err *Error) bool 
 }
 
 func (c *asynContext) onTimeout() {
-	if c.callOnResponse(nil, nil, NewError(ErrTimeout, "timeout")) {
+	if c.callOnResponse(nil, NewError(ErrTimeout, "timeout")) {
 		asynCtxPool.Put(c)
 	}
 }
@@ -58,15 +58,13 @@ type Client struct {
 	timestamp      uint32
 	timeOffset     uint32
 	startTime      time.Time
-	codec          Codec
 	pendingCall    [32]sync.Map
 	inInterceptor  []func(*RequestMsg, interface{}, error) //入站管道线
 	outInterceptor []func(*RequestMsg, interface{})        //出站管道线
 }
 
-func NewClient(codec Codec) *Client {
+func NewClient() *Client {
 	return &Client{
-		codec:      codec,
 		timeOffset: uint32(time.Now().Unix() - time.Date(2023, time.January, 1, 0, 0, 0, 0, time.Local).Unix()),
 		startTime:  time.Now(),
 	}
@@ -138,7 +136,7 @@ func (c *Client) OnMessage(resp *ResponseMsg) {
 			v <- resp
 		case *asynContext:
 			ok := v.timer.Stop()
-			v.callOnResponse(c.codec, resp.Ret, resp.Err)
+			v.callOnResponse(resp, resp.Err)
 			if ok {
 				asynCtxPool.Put(v)
 			}
@@ -149,15 +147,10 @@ func (c *Client) OnMessage(resp *ResponseMsg) {
 }
 
 func (c *Client) AsyncCall(channel Channel, method string, arg interface{}, ret interface{}, deadline time.Time, callback func(interface{}, error)) error {
-	b, err := c.codec.Encode(arg)
-	if err != nil {
-		return err
-	}
 	reqMessage := &RequestMsg{
 		Seq:    c.makeSequence(),
 		Method: method,
-		Arg:    b,
-		arg:    arg,
+		Arg:    arg,
 	}
 	c.callOutInterceptor(reqMessage, arg)
 	if ret == nil || callback == nil {
@@ -176,7 +169,7 @@ func (c *Client) AsyncCall(channel Channel, method string, arg interface{}, ret 
 				ctx.onTimeout()
 			}
 		})
-		err = channel.Request(reqMessage)
+		err := channel.Request(reqMessage)
 		if err != nil {
 			timerStopped := false
 			if _, ok := c.pending(reqMessage.Seq).LoadAndDelete(reqMessage.Seq); ok {
@@ -213,16 +206,10 @@ func (c *Client) CallWithTimeout(channel Channel, method string, arg interface{}
 }
 
 func (c *Client) Call(ctx context.Context, channel Channel, method string, arg interface{}, ret interface{}) (err error) {
-	b, err := c.codec.Encode(arg)
-	if err != nil {
-		return err
-	}
-
 	reqMessage := &RequestMsg{
 		Seq:    c.makeSequence(),
 		Method: method,
-		Arg:    b,
-		arg:    arg,
+		Arg:    arg,
 	}
 	c.callOutInterceptor(reqMessage, arg)
 	defer func() {
@@ -259,7 +246,7 @@ func (c *Client) Call(ctx context.Context, channel Channel, method string, arg i
 						err = resp.Err
 						return err
 					}
-					if err = c.codec.Decode(resp.Ret, ret); err == nil {
+					if err = resp.decodeRet(ret); err == nil {
 						return err
 					} else {
 						err = rpcError(err)

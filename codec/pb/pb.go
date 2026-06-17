@@ -69,20 +69,23 @@ func (m *PbMeta) newMessage(id uint32) (msg proto.Message, err error) {
 	return
 }
 
-func (m *PbMeta) Marshal(o interface{}) ([]byte, uint32, error) {
+// Marshal appends the wire-format encoding of o to dst, returning the new buffer, the
+// message id, and any error. Appending (rather than allocating) lets callers pass a pooled
+// send buffer and avoid an extra allocation on the hot path.
+func (m *PbMeta) Marshal(dst []byte, o interface{}) ([]byte, uint32, error) {
 	var id uint32
 	var ok bool
 	if id, ok = m.nameToID[reflect.TypeOf(o).String()]; !ok {
-		return nil, 0, fmt.Errorf("unregister type:%s", reflect.TypeOf(o).String())
+		return dst, 0, fmt.Errorf("unregister type:%s", reflect.TypeOf(o).String())
 	}
 
 	msg := o.(proto.Message)
 
-	data, err := proto.Marshal(msg)
+	b, err := proto.MarshalOptions{}.MarshalAppend(dst, msg)
 	if err != nil {
-		return nil, 0, err
+		return dst, 0, err
 	}
-	return data, id, nil
+	return b, id, nil
 }
 
 func (m *PbMeta) Unmarshal(id uint32, buff []byte) (msg proto.Message, err error) {

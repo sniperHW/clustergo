@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/buffer"
 	"github.com/sniperHW/clustergo/rpc"
+	"github.com/sniperHW/netgo/poolbuff"
 )
 
 const (
@@ -96,7 +97,8 @@ func (m *RelayMessage) GetRpcRequest() *rpc.RequestMsg {
 	if getMsgType(m.payload[4]) != RpcReq {
 		return nil
 	} else {
-		if req, err := rpc.DecodeRequest(m.payload[13:]); err != nil {
+		// nil codec: callers only inspect Seq/Oneway; the arg is not decoded here.
+		if req, err := rpc.DecodeRequest(m.payload[13:], nil); err != nil {
 			return nil
 		} else {
 			return req
@@ -110,7 +112,8 @@ func NewRelayMessage(to addr.LogicAddr, from addr.LogicAddr, payload []byte) *Re
 		from: from,
 	}
 
-	b := make([]byte, 0, len(payload)+sizeLen)
+	//b := make([]byte, 0, len(payload)+sizeLen)
+	b := poolbuff.Get()
 	w := buffer.NeWriter(binary.BigEndian)
 	b = w.AppendUint32(b, uint32(len(payload)))
 	m.payload = w.AppendBytes(b, payload)

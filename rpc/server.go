@@ -13,7 +13,6 @@ type method func(context.Context, *Server, *RequestMsg, *Replyer) error
 type Replyer struct {
 	channel        Channel
 	replyed        int32
-	codec          Codec
 	req            *RequestMsg
 	outInterceptor []func(*RequestMsg, interface{}, error)
 }
@@ -66,13 +65,7 @@ func (r *Replyer) Reply(ret interface{}) {
 		resp := &ResponseMsg{
 			Seq: r.req.Seq,
 		}
-
-		if b, e := r.codec.Encode(ret); e != nil {
-			logger.Errorf("send rpc response to (%s) encode ret error:%s\n", r.channel.Name(), e.Error())
-			return
-		} else {
-			resp.Ret = b
-		}
+		resp.Ret = ret
 
 		if e := r.channel.Reply(resp); e != nil {
 			logger.Errorf("send rpc response to (%s) error:%s\n", r.channel.Name(), e.Error())
@@ -87,15 +80,14 @@ func (r *Replyer) Channel() Channel {
 type Server struct {
 	sync.RWMutex
 	methods       map[string]method
-	codec         Codec
 	stoped        atomic.Bool
 	inInterceptor []func(*Replyer, *RequestMsg) bool //入站管道线
 }
 
-func NewServer(codec Codec) *Server {
+func NewServer() *Server {
 	return &Server{
 		methods: map[string]method{},
-		codec:   codec}
+	}
 }
 
 func (s *Server) SetInInterceptor(interceptor []func(*Replyer, *RequestMsg) bool) *Server {
@@ -114,7 +106,7 @@ func (s *Server) method(name string) method {
 }
 
 func (s *Server) OnMessage(context context.Context, channel Channel, req *RequestMsg) {
-	replyer := &Replyer{channel: channel, req: req, codec: s.codec}
+	replyer := &Replyer{channel: channel, req: req}
 	if s.stoped.Load() {
 		replyer.Error(NewError(ErrServiceUnavaliable, "service unavaliable"))
 		return

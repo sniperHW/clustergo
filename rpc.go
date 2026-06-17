@@ -112,8 +112,12 @@ func (c *selfChannel) IsRetryAbleError(_ error) bool {
 type JsonCodec struct {
 }
 
-func (c JsonCodec) Encode(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
+func (c JsonCodec) Encode(dst []byte, v interface{}) ([]byte, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, b...), nil
 }
 
 func (c JsonCodec) Decode(b []byte, v interface{}) error {
@@ -123,8 +127,8 @@ func (c JsonCodec) Decode(b []byte, v interface{}) error {
 type PbCodec struct {
 }
 
-func (c PbCodec) Encode(v interface{}) ([]byte, error) {
-	return proto.Marshal(v.(proto.Message))
+func (c PbCodec) Encode(dst []byte, v interface{}) ([]byte, error) {
+	return proto.MarshalOptions{}.MarshalAppend(dst, v.(proto.Message))
 }
 
 func (c PbCodec) Decode(b []byte, v interface{}) error {
