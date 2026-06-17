@@ -15,13 +15,13 @@ package {{.Method}}
 import (
 	"github.com/sniperHW/clustergo"
 	"github.com/sniperHW/clustergo/addr"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
 	"context"
 	"time"
 )
 
 type Replyer struct {
-	replyer *rpcgo.Replyer
+	replyer *rpc.Replyer
 }
 
 func (r *Replyer) Reply(result *{{.Response}}) {
@@ -32,7 +32,7 @@ func (r *Replyer) Error(err error) {
 	r.replyer.Error(err)
 }
 
-func (r *Replyer) Channel() rpcgo.Channel {
+func (r *Replyer) Channel() rpc.Channel {
 	return r.replyer.Channel()
 }
 
@@ -41,7 +41,7 @@ type {{.Service}} interface {
 }
 
 func Register(o {{.Service}}) {
-	clustergo.RegisterService("{{.Method}}",func(ctx context.Context, r *rpcgo.Replyer,arg *{{.Request}}) {
+	clustergo.RegisterService("{{.Method}}",func(ctx context.Context, r *rpc.Replyer,arg *{{.Request}}) {
 		o.Serve{{.Service}}(ctx,&Replyer{replyer:r},arg)
 	})
 }

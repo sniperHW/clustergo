@@ -17,7 +17,7 @@ import (
 	"github.com/sniperHW/clustergo/codec/ss"
 	"github.com/sniperHW/clustergo/logger/zap"
 	"github.com/sniperHW/clustergo/membership"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
@@ -123,7 +123,7 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
@@ -211,7 +211,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
@@ -280,10 +280,10 @@ func TestSingleNode(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	s.GetRPCServer().SetInInterceptor(append([]func(replyer *rpcgo.Replyer, req *rpcgo.RequestMsg) bool{}, func(replyer *rpcgo.Replyer, req *rpcgo.RequestMsg) bool {
+	s.GetRPCServer().SetInInterceptor(append([]func(replyer *rpc.Replyer, req *rpc.RequestMsg) bool{}, func(replyer *rpc.Replyer, req *rpc.RequestMsg) bool {
 		beg := time.Now()
 		//设置钩子函数,当Replyer发送应答时调用
-		replyer.AppendOutInterceptor(func(req *rpcgo.RequestMsg, ret interface{}, err error) {
+		replyer.AppendOutInterceptor(func(req *rpc.RequestMsg, ret interface{}, err error) {
 			if err == nil {
 				logger.Debugf("call %s(\"%v\") use:%v", req.Method, *req.GetArg().(*string), time.Now().Sub(beg))
 			} else {
@@ -293,7 +293,7 @@ func TestSingleNode(t *testing.T) {
 		return true
 	}))
 
-	registerService(s, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(s, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -337,12 +337,12 @@ func TestTwoNode(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
-	registerService(node1, "Delay", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "Delay", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on Delay")
 		time.Sleep(time.Second * 5)
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
@@ -431,7 +431,7 @@ func TestHarbor(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -657,7 +657,7 @@ func TestDefault(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	RegisterService("hello", func(_ context.Context, replyer *rpcgo.Replyer, arg *string) {
+	RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})

@@ -19,8 +19,8 @@ import (
 	"github.com/sniperHW/clustergo/codec/ss"
 	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/clustergo/pkg/crypto"
-	"github.com/sniperHW/netgo"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
+	"github.com/sniperHW/clustergo/socket"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
@@ -37,9 +37,10 @@ var (
 	SendChanSize       int           = 256                    //socket异步发送chan的大小
 	DefaultSendTimeout time.Duration = time.Millisecond * 200 //
 	MaxPendingMsgSize  int           = 1024                   //连接建立前待发送消息缓冲区的大小，一旦缓冲区满，发送将返回ErrPendingQueueFull
+	BatchSendSize      int           = 65535
 )
 
-var RPCCodec rpcgo.Codec = PbCodec{}
+var RPCCodec rpc.Codec = PbCodec{}
 
 var cecret_key []byte = []byte("sanguo_2022")
 
@@ -291,7 +292,7 @@ func (s *Node) SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr,
  *
  *  发送操作存在两个对外隐藏的缓冲区 分别为:
  *  pendingMsgQueue:  连接建立之前缓存待发送消息,如果pendingMsgQueue满SendMessage返回ErrPendingQueueFull
- *  sendQueue:        异步发送缓冲区，如果满行为取决于deadline,如果deadline==0返回netgo.ErrSendQueueFull,否则等到deadline超时返回ErrPushToSendQueueTimeout
+ *  sendQueue:        异步发送缓冲区，如果满行为取决于deadline,如果deadline==0返回socket.ErrSendQueueFull,否则等到deadline超时返回ErrPushToSendQueueTimeout
  *
  *  当 deadline != 0, deadline包含连接建立的时间，如果deadline到达时连接尚未建立 msg将被丢弃。
  *  连接建立后将检查msg的deadline,如果到达msg将被丢弃。
@@ -420,7 +421,7 @@ func (s *Node) Start(mb membership.Membership, localAddr addr.LogicAddr) (err er
 			}()
 
 			var serve func()
-			s.listener, serve, err = netgo.ListenTCP("tcp", s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
+			s.listener, serve, err = socket.ListenTCP(s.localAddr.NetAddr().String(), func(conn *net.TCPConn) {
 				go func() {
 					if err := s.onNewConnection(conn); nil != err {
 						logger.Infof("auth error %s self %s", err.Error(), localAddr.String())
@@ -558,7 +559,7 @@ func (s *Node) GetRPCServer() *RPCServer {
 	return s.rpcSvr
 }
 
-func NewClusterNode(rpccodec rpcgo.Codec) *Node {
+func NewClusterNode(rpccodec rpc.Codec) *Node {
 	n := &Node{
 		gopool: gopool{
 			die:       make(chan struct{}),
@@ -578,12 +579,12 @@ func NewClusterNode(rpccodec rpcgo.Codec) *Node {
 	}
 	n.rpcCli = &RPCClient{
 		n:   n,
-		cli: rpcgo.NewClient(rpccodec),
+		cli: rpc.NewClient(rpccodec),
 	}
 	n.rpcSvr = &RPCServer{
-		svr: rpcgo.NewServer(rpccodec),
+		svr: rpc.NewServer(rpccodec),
 	}
-	n.rpcSvr.SetInInterceptor([]func(*rpcgo.Replyer, *rpcgo.RequestMsg) bool{})
+	n.rpcSvr.SetInInterceptor([]func(*rpc.Replyer, *rpc.RequestMsg) bool{})
 	return n
 }
 
@@ -649,8 +650,8 @@ func OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 	return GetDefaultNode().OpenStream(peer)
 }
 
-func RegisterService[Arg any](name string, method func(context.Context, *rpcgo.Replyer, *Arg)) error {
-	return rpcgo.Register(GetDefaultNode().rpcSvr.svr, name, method)
+func RegisterService[Arg any](name string, method func(context.Context, *rpc.Replyer, *Arg)) error {
+	return rpc.Register(GetDefaultNode().rpcSvr.svr, name, method)
 }
 
 func Call[Arg any, Ret any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {
@@ -681,8 +682,8 @@ func AsyncCall[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, dead
 }
 
 // for unit test only
-func registerService[Arg any](node *Node, name string, method func(context.Context, *rpcgo.Replyer, *Arg)) error {
-	return rpcgo.Register(node.rpcSvr.svr, name, method)
+func registerService[Arg any](node *Node, name string, method func(context.Context, *rpc.Replyer, *Arg)) error {
+	return rpc.Register(node.rpcSvr.svr, name, method)
 }
 
 func call[Arg any, Ret any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {

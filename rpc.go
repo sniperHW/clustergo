@@ -7,12 +7,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/ss"
-	"github.com/sniperHW/netgo"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
+	"github.com/sniperHW/clustergo/socket"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,15 +27,15 @@ type rpcChannel struct {
 	once sync.Once
 }
 
-func (c *rpcChannel) RequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
+func (c *rpcChannel) RequestWithContext(ctx context.Context, request *rpc.RequestMsg) error {
 	return c.node.sendMessageWithContext(ctx, c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request))
 }
 
-func (c *rpcChannel) Request(request *rpcgo.RequestMsg) error {
+func (c *rpcChannel) Request(request *rpc.RequestMsg) error {
 	return c.node.sendMessage(c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), request), time.Time{})
 }
 
-func (c *rpcChannel) Reply(response *rpcgo.ResponseMsg) error {
+func (c *rpcChannel) Reply(response *rpc.ResponseMsg) error {
 	return c.node.sendMessage(c.self, ss.NewMessage(c.peer, c.self.localAddr.LogicAddr(), response), time.Now().Add(time.Second))
 }
 
@@ -53,17 +52,13 @@ func (c *rpcChannel) Name() string {
 	return c.name
 }
 
-func (c *rpcChannel) Identity() uint64 {
-	return *(*uint64)(unsafe.Pointer(c.node))
-}
-
 func (c *rpcChannel) Peer() addr.LogicAddr {
 	return c.peer
 }
 
 func (c *rpcChannel) IsRetryAbleError(err error) bool {
 	switch err {
-	case ErrPendingQueueFull, netgo.ErrSendQueueFull, netgo.ErrPushToSendQueueTimeout:
+	case ErrPendingQueueFull, socket.ErrSendQueueFull, socket.ErrPushToSendQueueTimeout:
 		return true
 	default:
 		return false
@@ -77,23 +72,23 @@ type selfChannel struct {
 	once sync.Once
 }
 
-func (c *selfChannel) RequestWithContext(ctx context.Context, request *rpcgo.RequestMsg) error {
+func (c *selfChannel) RequestWithContext(ctx context.Context, request *rpc.RequestMsg) error {
 	c.self.Go(func() {
 		c.self.rpcSvr.svr.OnMessage(context.TODO(), c, request)
 	})
 	return nil
 }
 
-func (c *selfChannel) Request(request *rpcgo.RequestMsg) error {
+func (c *selfChannel) Request(request *rpc.RequestMsg) error {
 	c.self.Go(func() {
 		c.self.rpcSvr.svr.OnMessage(context.TODO(), c, request)
 	})
 	return nil
 }
 
-func (c *selfChannel) Reply(response *rpcgo.ResponseMsg) error {
+func (c *selfChannel) Reply(response *rpc.ResponseMsg) error {
 	c.self.Go(func() {
-		c.self.rpcCli.cli.OnMessage(nil, response)
+		c.self.rpcCli.cli.OnMessage(response)
 	})
 	return nil
 }
@@ -138,13 +133,13 @@ func (c PbCodec) Decode(b []byte, v interface{}) error {
 
 type RPCServer struct {
 	pendingRespCount atomic.Int32 //尚未响应的rpc数量
-	svr              *rpcgo.Server
+	svr              *rpc.Server
 }
 
-func (s *RPCServer) SetInInterceptor(interceptor []func(*rpcgo.Replyer, *rpcgo.RequestMsg) bool) {
-	s.svr.SetInInterceptor(append(interceptor, func(replyer *rpcgo.Replyer, req *rpcgo.RequestMsg) bool {
+func (s *RPCServer) SetInInterceptor(interceptor []func(*rpc.Replyer, *rpc.RequestMsg) bool) {
+	s.svr.SetInInterceptor(append(interceptor, func(replyer *rpc.Replyer, req *rpc.RequestMsg) bool {
 		s.pendingRespCount.Add(1)
-		replyer.AppendOutInterceptor(func(req *rpcgo.RequestMsg, ret interface{}, err error) {
+		replyer.AppendOutInterceptor(func(req *rpc.RequestMsg, ret interface{}, err error) {
 			s.pendingRespCount.Add(-1)
 		})
 		return true
@@ -153,14 +148,14 @@ func (s *RPCServer) SetInInterceptor(interceptor []func(*rpcgo.Replyer, *rpcgo.R
 
 type RPCClient struct {
 	n   *Node
-	cli *rpcgo.Client
+	cli *rpc.Client
 }
 
-func (c *RPCClient) SetInInterceptor(interceptor []func(*rpcgo.RequestMsg, interface{}, error)) {
+func (c *RPCClient) SetInInterceptor(interceptor []func(*rpc.RequestMsg, interface{}, error)) {
 	c.cli.SetInInterceptor(interceptor)
 }
 
-func (c *RPCClient) SetOutInterceptor(interceptor []func(*rpcgo.RequestMsg, interface{})) {
+func (c *RPCClient) SetOutInterceptor(interceptor []func(*rpc.RequestMsg, interface{})) {
 	c.cli.SetOutInterceptor(interceptor)
 }
 
@@ -168,10 +163,10 @@ func (c *RPCClient) AsyncCall(to addr.LogicAddr, method string, arg interface{},
 	s := c.n
 	select {
 	case <-s.die:
-		return rpcgo.NewError(rpcgo.ErrOther, "server die")
+		return rpc.NewError(rpc.ErrOther, "server die")
 	case <-s.started:
 	default:
-		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
+		return rpc.NewError(rpc.ErrOther, "server not start")
 	}
 	var err error
 	if to == s.localAddr.LogicAddr() {
@@ -183,7 +178,7 @@ func (c *RPCClient) AsyncCall(to addr.LogicAddr, method string, arg interface{},
 	}
 
 	switch err {
-	case ErrPendingQueueFull, netgo.ErrSendQueueFull:
+	case ErrPendingQueueFull, socket.ErrSendQueueFull:
 		return ErrBusy
 	default:
 		return err
@@ -200,10 +195,10 @@ func (c *RPCClient) Call(ctx context.Context, to addr.LogicAddr, method string, 
 	s := c.n
 	select {
 	case <-s.die:
-		return rpcgo.NewError(rpcgo.ErrOther, "server die")
+		return rpc.NewError(rpc.ErrOther, "server die")
 	case <-s.started:
 	default:
-		return rpcgo.NewError(rpcgo.ErrOther, "server not start")
+		return rpc.NewError(rpc.ErrOther, "server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
 		return c.cli.Call(ctx, &selfChannel{self: s}, method, arg, ret)

@@ -5,7 +5,7 @@ import (
 
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/buffer"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
 )
 
 const (
@@ -23,10 +23,6 @@ const (
 	RpcReq          = 0x3 //RPC请求
 	RpcResp         = 0x4 //RPC响应
 	MaskMessageType = 0x7
-)
-
-var (
-	MaxPacketSize = 1024 * 4
 )
 
 func setMsgType(flag *byte, tt byte) {
@@ -96,11 +92,11 @@ func (m *RelayMessage) To() addr.LogicAddr {
 	return m.to
 }
 
-func (m *RelayMessage) GetRpcRequest() *rpcgo.RequestMsg {
+func (m *RelayMessage) GetRpcRequest() *rpc.RequestMsg {
 	if getMsgType(m.payload[4]) != RpcReq {
 		return nil
 	} else {
-		if req, err := rpcgo.DecodeRequest(m.payload[13:]); err != nil {
+		if req, err := rpc.DecodeRequest(m.payload[13:]); err != nil {
 			return nil
 		} else {
 			return req

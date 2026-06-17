@@ -1,7 +1,7 @@
 package clustergo
 
 import (
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
 )
 
 type Logger interface {
@@ -22,7 +22,7 @@ type Logger interface {
 var logger Logger
 
 func InitLogger(l Logger) {
-	rpcgo.InitLogger(l.(rpcgo.Logger))
+	rpc.InitLogger(l)
 	logger = l
 }
 

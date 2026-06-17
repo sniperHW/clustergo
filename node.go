@@ -17,8 +17,8 @@ import (
 	"github.com/sniperHW/clustergo/codec/ss"
 	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/clustergo/pkg/crypto"
-	"github.com/sniperHW/netgo"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
+	"github.com/sniperHW/clustergo/socket"
 	"github.com/xtaci/smux"
 	"google.golang.org/protobuf/proto"
 )
@@ -219,7 +219,7 @@ type streamClient struct {
 type node struct {
 	sync.Mutex
 	addr       addr.Addr
-	socket     *netgo.AsynSocket
+	socket     *socket.Socket
 	pendingMsg *list.List
 	available  bool
 	streamCli  streamClient
@@ -272,9 +272,9 @@ func (n *node) onRelayMessage(self *Node, message *ss.RelayMessage) {
 		//对于无法路由的rpc请求，返回错误响应
 		if nextNode = self.getNodeByLogicAddr(message.From()); nextNode != nil {
 			logger.Debugf(fmt.Sprintf("route message to target:%s failed", message.To().String()))
-			nextNode.sendMessage(self, ss.NewMessage(message.From(), self.localAddr.LogicAddr(), &rpcgo.ResponseMsg{
+			nextNode.sendMessage(self, ss.NewMessage(message.From(), self.localAddr.LogicAddr(), &rpc.ResponseMsg{
 				Seq: rpcReq.Seq,
-				Err: rpcgo.NewError(rpcgo.ErrOther, fmt.Sprintf("route message to target:%s failed", message.To().String())),
+				Err: rpc.NewError(rpc.ErrOther, fmt.Sprintf("route message to target:%s failed", message.To().String())),
 			}), time.Now().Add(time.Second))
 		}
 	}
@@ -288,10 +288,10 @@ func (n *node) onMessage(ctx context.Context, self *Node, msg interface{}) {
 			self.msgManager.dispatchProto(ctx, msg.From(), msg.Cmd(), m)
 		case []byte:
 			self.msgManager.dispatchBinary(ctx, msg.From(), msg.Cmd(), m)
-		case *rpcgo.RequestMsg:
+		case *rpc.RequestMsg:
 			self.rpcSvr.svr.OnMessage(ctx, &rpcChannel{peer: msg.From(), node: n, self: self}, m)
-		case *rpcgo.ResponseMsg:
-			self.rpcCli.cli.OnMessage(nil, m)
+		case *rpc.ResponseMsg:
+			self.rpcCli.cli.OnMessage(m)
 		}
 	case *ss.RelayMessage:
 		n.onRelayMessage(self, msg)
@@ -300,14 +300,14 @@ func (n *node) onMessage(ctx context.Context, self *Node, msg interface{}) {
 
 func (n *node) onEstablish(self *Node, conn *net.TCPConn) {
 	codec := ss.NewCodec(self.localAddr.LogicAddr())
-	n.socket = netgo.NewAsynSocket(netgo.NewTcpSocket(conn, codec), netgo.AsynSocketOption{
-		SendChanSize: SendChanSize,
-		Codec:        codec,
-		AutoRecv:     true,
-		Context:      context.TODO(),
+	n.socket = socket.New(conn, codec, socket.Options{
+		SendChanSize:  SendChanSize,
+		BatchSendSize: BatchSendSize,
+		AutoRecv:      true,
+		Context:       context.TODO(),
 	})
 
-	n.socket.SetPacketHandler(func(ctx context.Context, as *netgo.AsynSocket, packet interface{}) error {
+	n.socket.SetPacketHandler(func(ctx context.Context, packet interface{}) error {
 		if self.getNodeByLogicAddr(n.addr.LogicAddr()) != n {
 			return ErrInvaildNode
 		} else {
@@ -316,7 +316,7 @@ func (n *node) onEstablish(self *Node, conn *net.TCPConn) {
 		}
 	})
 
-	n.socket.SetCloseCallback(func(as *netgo.AsynSocket, err error) {
+	n.socket.SetCloseCallback(func(err error) {
 		n.Lock()
 		n.socket = nil
 		n.Unlock()

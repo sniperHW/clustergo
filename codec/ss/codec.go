@@ -3,20 +3,20 @@ package ss
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
 
 	"github.com/sniperHW/clustergo/addr"
-	"github.com/sniperHW/clustergo/codec"
 	"github.com/sniperHW/clustergo/codec/buffer"
 	"github.com/sniperHW/clustergo/codec/pb"
-	"github.com/sniperHW/rpcgo"
+	"github.com/sniperHW/clustergo/rpc"
+	"github.com/sniperHW/clustergo/socket"
 	"google.golang.org/protobuf/proto"
 )
 
 const Namespace string = "ss"
 
+var _ socket.Codec = (*SSCodec)(nil)
+
 type SSCodec struct {
-	codec.LengthPayloadPacketReceiver
 	selfAddr addr.LogicAddr
 	reader   buffer.BufferReader
 	pbMeta   *pb.PbMeta
@@ -24,86 +24,65 @@ type SSCodec struct {
 
 func NewCodec(selfAddr addr.LogicAddr) *SSCodec {
 	return &SSCodec{
-		LengthPayloadPacketReceiver: codec.LengthPayloadPacketReceiver{
-			Buff:          make([]byte, 4096),
-			MaxPacketSize: MaxPacketSize,
-		},
 		selfAddr: selfAddr,
 		pbMeta:   pb.GetMeta(Namespace),
 		reader:   buffer.NewReader(binary.BigEndian, nil),
 	}
 }
 
-func (ss *SSCodec) encode(buffs net.Buffers, m *Message, cmd uint16, flag byte, data []byte) (net.Buffers, int) {
+func (ss *SSCodec) encode(dst []byte, m *Message, cmd uint16, flag byte, data []byte) ([]byte, int) {
 	payloadLen := sizeFlag + sizeToAndFrom + len(data)
-
 	if flag == PbMsg || flag == BinMsg {
 		payloadLen += sizeCmd
 	}
-
 	totalLen := sizeLen + payloadLen
-
-	if totalLen > MaxPacketSize {
-		return buffs, 0
+	if totalLen > socket.MaxPacketSize {
+		return dst, 0
 	}
-
-	b := make([]byte, 13, totalLen-len(data))
-
-	//写payload大小
-	binary.BigEndian.PutUint32(b, uint32(payloadLen))
-
-	//写flag
-	b[4] = flag
-
-	binary.BigEndian.PutUint32(b[5:], uint32(m.To()))
-	binary.BigEndian.PutUint32(b[9:], uint32(m.From()))
-
+	w := buffer.NeWriter(binary.BigEndian)
+	mark := len(dst)
+	dst = append(dst, 0, 0, 0, 0) // length prefix placeholder
+	binary.BigEndian.PutUint32(dst[mark:], uint32(payloadLen))
+	dst = append(dst, flag)
+	dst = w.AppendUint32(dst, uint32(m.To()))
+	dst = w.AppendUint32(dst, uint32(m.From()))
 	if flag == PbMsg || flag == BinMsg {
-		//写cmd
-		b = buffer.NeWriter(binary.BigEndian).AppendUint16(b, cmd)
+		dst = w.AppendUint16(dst, cmd)
 	}
-
-	return append(buffs, b, data), totalLen
+	dst = append(dst, data...)
+	return dst, totalLen
 }
 
-func (ss *SSCodec) Encode(buffs net.Buffers, o interface{}) (net.Buffers, int) {
+func (ss *SSCodec) Encode(dst []byte, o interface{}) ([]byte, int) {
 	switch o := o.(type) {
 	case *Message:
-		var data []byte
-		var err error
-
 		flag := byte(0)
-
 		switch msg := o.Payload().(type) {
 		case []byte:
 			if len(msg) == 0 {
-				return buffs, 0
+				return dst, 0
 			}
-			//设置Bin消息标记
 			setMsgType(&flag, BinMsg)
-			return ss.encode(buffs, o, o.cmd, flag, msg)
+			return ss.encode(dst, o, o.cmd, flag, msg)
 		case proto.Message:
-			var cmd uint32
-			if data, cmd, err = ss.pbMeta.Marshal(msg); err != nil {
-				return buffs, 0
+			data, cmd, err := ss.pbMeta.Marshal(msg)
+			if err != nil {
+				return dst, 0
 			}
-			//设置Pb消息标记
 			setMsgType(&flag, PbMsg)
-			return ss.encode(buffs, o, uint16(cmd), flag, data)
-		case *rpcgo.RequestMsg:
-			//设置RPC请求标记
+			return ss.encode(dst, o, uint16(cmd), flag, data)
+		case *rpc.RequestMsg:
 			setMsgType(&flag, RpcReq)
-			return ss.encode(buffs, o, 0, flag, rpcgo.EncodeRequest(msg))
-		case *rpcgo.ResponseMsg:
-			//设置RPC响应标记
+			return ss.encode(dst, o, 0, flag, rpc.EncodeRequest(msg))
+		case *rpc.ResponseMsg:
 			setMsgType(&flag, RpcResp)
-			return ss.encode(buffs, o, 0, flag, rpcgo.EncodeResponse(msg))
+			return ss.encode(dst, o, 0, flag, rpc.EncodeResponse(msg))
 		}
-		return buffs, 0
+		return dst, 0
 	case *RelayMessage:
-		return append(buffs, o.Payload()), len(o.Payload())
+		return append(dst, o.Payload()...), len(o.Payload())
 	default:
-		return buffs, 0
+		return dst, 0
 	}
 }
 
@@ -117,7 +96,6 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 	to := addr.LogicAddr(ss.reader.GetUint32())
 	from := addr.LogicAddr(ss.reader.GetUint32())
 	if ss.isTarget(to) {
-		//当前节点是数据包的目标接收方
 		switch getMsgType(flag) {
 		case BinMsg:
 			cmd := ss.reader.GetUint16()
@@ -132,13 +110,13 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 				return NewMessage(to, from, msg, cmd), nil
 			}
 		case RpcReq:
-			if req, err := rpcgo.DecodeRequest(ss.reader.GetAll()); err != nil {
+			if req, err := rpc.DecodeRequest(ss.reader.GetAll()); err != nil {
 				return nil, err
 			} else {
 				return NewMessage(to, from, req), nil
 			}
 		case RpcResp:
-			if resp, err := rpcgo.DecodeResponse(ss.reader.GetAll()); err != nil {
+			if resp, err := rpc.DecodeResponse(ss.reader.GetAll()); err != nil {
 				return nil, err
 			} else {
 				return NewMessage(to, from, resp), nil
@@ -147,7 +125,6 @@ func (ss *SSCodec) Decode(payload []byte) (interface{}, error) {
 			return nil, fmt.Errorf("invaild packet type")
 		}
 	} else {
-		//当前接收方不是目标节点，返回RelayMessage
 		return NewRelayMessage(to, from, payload), nil
 	}
 }
