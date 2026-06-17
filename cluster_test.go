@@ -236,7 +236,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			for atomic.AddInt32(&counter, 1) <= 100000 {
-				_, err = call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+				call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
 			}
 			wait.Done()
 		}()
