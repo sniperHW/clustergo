@@ -3,9 +3,9 @@ module github.com/sniperHW/clustergo
 go 1.25.0
 
 require (
+	github.com/nats-io/nats.go v1.52.0
 	github.com/redis/go-redis/v9 v9.5.2
 	github.com/sniperHW/netgo v0.0.0-20231214060736-2b26e624b5f6
-	github.com/sniperHW/rpcgo v0.0.0-20250501095528-a98841003660
 	github.com/stretchr/testify v1.8.4
 	github.com/xtaci/smux v1.5.24
 	go.etcd.io/etcd/client/v3 v3.5.11
@@ -29,7 +29,6 @@ require (
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.9 // indirect
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
-	github.com/nats-io/nats.go v1.52.0 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

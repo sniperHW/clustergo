@@ -49,8 +49,6 @@ github.com/redis/go-redis/v9 v9.5.2 h1:L0L3fcSNReTRGyZ6AqAEN0K56wYeYAwapBIhkvh0f
 github.com/redis/go-redis/v9 v9.5.2/go.mod h1:hdY0cQFCN4fnSYT6TkisLufl/4W5UIXyv0b/CLO2V2M=
 github.com/sniperHW/netgo v0.0.0-20231214060736-2b26e624b5f6 h1:dcUm3Yzg3Y8KVerhyh2VtYk6DfaVHnGnMr/tA5xal68=
 github.com/sniperHW/netgo v0.0.0-20231214060736-2b26e624b5f6/go.mod h1:5XP+qSGWoPip7z6RNZQxr3oDJqclD/4zx57dxaSa5Zc=
-github.com/sniperHW/rpcgo v0.0.0-20250501095528-a98841003660 h1:eZSObHC+UEsmFfG27T4NXGcD2un3ryt7TWrngvveVUc=
-github.com/sniperHW/rpcgo v0.0.0-20250501095528-a98841003660/go.mod h1:fCF3WWEs8aTTNZd4vd/9KaWTpwqFO9W4xbKTo7DqUvU=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
