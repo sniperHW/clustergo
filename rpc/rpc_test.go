@@ -122,3 +122,86 @@ func TestRPC_Error(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestRPC_EncodeDecodeRequest(t *testing.T) {
+	req := &RequestMsg{
+		Seq:      42,
+		Method:   "hello",
+		Arg:      []byte("arg-bytes"),
+		UserData: []byte("ud"),
+		Oneway:   true,
+	}
+	got, err := DecodeRequest(EncodeRequest(req))
+	if err != nil {
+		t.Fatalf("DecodeRequest: %v", err)
+	}
+	if got.Seq != req.Seq || got.Method != req.Method || string(got.Arg) != string(req.Arg) ||
+		string(got.UserData) != string(req.UserData) || got.Oneway != req.Oneway {
+		t.Fatalf("round-trip mismatch: got %+v want %+v", got, req)
+	}
+}
+
+func TestRPC_EncodeDecodeResponse(t *testing.T) {
+	// without error
+	resp := &ResponseMsg{Seq: 7, Ret: []byte("ret")}
+	got, err := DecodeResponse(EncodeResponse(resp))
+	if err != nil {
+		t.Fatalf("DecodeResponse: %v", err)
+	}
+	if got.Seq != resp.Seq || string(got.Ret) != string(resp.Ret) || got.Err != nil {
+		t.Fatalf("round-trip mismatch (no-err): got %+v", got)
+	}
+	// with error
+	respErr := &ResponseMsg{Seq: 9, Err: NewError(ErrMethod, "boom")}
+	got, err = DecodeResponse(EncodeResponse(respErr))
+	if err != nil {
+		t.Fatalf("DecodeResponse(err): %v", err)
+	}
+	if got.Err == nil || !got.Err.IsCode(ErrMethod) || got.Err.Error() != "boom" {
+		t.Fatalf("err round-trip mismatch: got %+v", got.Err)
+	}
+}
+
+func TestRPC_DecodeTruncated(t *testing.T) {
+	if _, err := DecodeRequest(nil); err == nil {
+		t.Fatal("expected error decoding nil request")
+	}
+	if _, err := DecodeRequest([]byte{1, 2, 3}); err == nil { // shorter than seq(8)
+		t.Fatal("expected error decoding truncated request")
+	}
+}
+
+// neverReply is a method handler that never calls Reply, so the client must rely on ctx.
+func TestRPC_CallCancelled(t *testing.T) {
+	client, server, ch := newPair()
+	Register(server, "hang", func(ctx context.Context, r *Replyer, arg *echoArg) {
+		// intentionally never reply
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+	var ret echoRet
+	err := client.Call(ctx, ch, "hang", &echoArg{Msg: "x"}, &ret)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if e, ok := err.(*Error); !ok || !e.IsCode(ErrCancel) {
+		t.Fatalf("expected ErrCancel, got %v", err)
+	}
+}
+
+func TestRPC_CallTimeout(t *testing.T) {
+	client, server, ch := newPair()
+	Register(server, "hang", func(ctx context.Context, r *Replyer, arg *echoArg) {
+		// intentionally never reply
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	var ret echoRet
+	err := client.Call(ctx, ch, "hang", &echoArg{Msg: "x"}, &ret)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if e, ok := err.(*Error); !ok || !e.IsCode(ErrTimeout) {
+		t.Fatalf("expected ErrTimeout, got %v", err)
+	}
+}

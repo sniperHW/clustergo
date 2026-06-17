@@ -30,7 +30,7 @@ func (e *Error) Error() string {
 	return e.str
 }
 
-func (e *Error) Is(code int) bool {
+func (e *Error) IsCode(code int) bool {
 	return e.code == code
 }
 
@@ -42,7 +42,6 @@ const (
 	ErrMethod
 	ErrOther
 	ErrServiceUnavaliable
-	ErrDisconnet
 	errEnd
 )
 

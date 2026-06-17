@@ -134,6 +134,7 @@ func (c *Client) OnMessage(resp *ResponseMsg) {
 	if ok {
 		switch v := ctx.(type) {
 		case syncContext:
+			// safe to send: channel is buffered(1) and Call is the sole reader; the seq was just LoadAndDelete'd.
 			v <- resp
 		case *asynContext:
 			ok := v.timer.Stop()
@@ -177,13 +178,17 @@ func (c *Client) AsyncCall(channel Channel, method string, arg interface{}, ret 
 		})
 		err = channel.Request(reqMessage)
 		if err != nil {
+			timerStopped := false
 			if _, ok := c.pending(reqMessage.Seq).LoadAndDelete(reqMessage.Seq); ok {
-				if ctx.timer.Stop() {
-					asynCtxPool.Put(ctx)
-				}
+				timerStopped = ctx.timer.Stop()
 			}
+			// Resolve ownership vs the timeout before returning ctx to the pool:
+			// only the CAS winner may Put, so no other goroutine reuses ctx first.
 			if atomic.CompareAndSwapInt32(&ctx.fired, 0, 1) {
 				c.callInInterceptor(reqMessage, nil, err)
+				if timerStopped {
+					asynCtxPool.Put(ctx)
+				}
 			}
 		}
 		return err

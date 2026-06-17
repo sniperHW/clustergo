@@ -11,13 +11,13 @@ type BytesWriter struct {
 
 func (bw *BytesWriter) WriteBool(v bool) {
 	if v {
-		bw.WriteByte(byte(1))
+		bw.writeByte(byte(1))
 	} else {
-		bw.WriteByte(byte(0))
+		bw.writeByte(byte(0))
 	}
 }
 
-func (bw *BytesWriter) WriteByte(v byte) {
+func (bw *BytesWriter) writeByte(v byte) {
 	bw.B = append(bw.B, v)
 }
 
