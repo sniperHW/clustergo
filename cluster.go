@@ -405,6 +405,7 @@ func (s *Node) Start(mb membership.Membership, localAddr addr.LogicAddr) (err er
 		if n := s.nodeCache.getNodeByLogicAddr(localAddr); n == nil {
 			//当前节点在配置中找不到
 			err = fmt.Errorf("%s not in config", localAddr.String())
+			return
 		} else {
 			s.localAddr = n.addr
 			mb.KeepAlive(localAddr, 5)
