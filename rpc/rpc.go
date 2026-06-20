@@ -43,6 +43,7 @@ const (
 	ErrMethod
 	ErrOther
 	ErrServiceUnavaliable
+	ErrBusy
 	errEnd
 )
 

@@ -28,21 +28,24 @@ func (w BufferWriter) AppendBytes(bs []byte, bytes []byte) []byte {
 }
 
 func (w BufferWriter) AppendUint16(bs []byte, u16 uint16) []byte {
-	bu := []byte{0, 0}
-	w.endian.PutUint16(bu, u16)
-	return w.AppendBytes(bs, bu)
+	mark := len(bs)
+	bs = append(bs, 0, 0)
+	w.endian.PutUint16(bs[mark:], u16)
+	return bs
 }
 
 func (w BufferWriter) AppendUint32(bs []byte, u32 uint32) []byte {
-	bu := []byte{0, 0, 0, 0}
-	w.endian.PutUint32(bu, u32)
-	return w.AppendBytes(bs, bu)
+	mark := len(bs)
+	bs = append(bs, 0, 0, 0, 0)
+	w.endian.PutUint32(bs[mark:], u32)
+	return bs
 }
 
 func (w BufferWriter) AppendUint64(bs []byte, u64 uint64) []byte {
-	bu := []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	w.endian.PutUint64(bu, u64)
-	return w.AppendBytes(bs, bu)
+	mark := len(bs)
+	bs = append(bs, 0, 0, 0, 0, 0, 0, 0, 0)
+	w.endian.PutUint64(bs[mark:], u64)
+	return bs
 }
 
 func (w BufferWriter) AppendInt16(bs []byte, i16 int16) []byte {

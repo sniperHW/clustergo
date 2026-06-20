@@ -240,3 +240,114 @@ func TestRPC_CallTimeout(t *testing.T) {
 		t.Fatalf("expected ErrTimeout, got %v", err)
 	}
 }
+
+// TestRPC_AsyncPool 验证 AsyncPool：慢方法异步执行不阻塞接收协程，
+// 结果仍能正确返回；队列满时立即回复 ErrBusy。
+func TestRPC_AsyncPool(t *testing.T) {
+	client, server, ch := newPair()
+	// 1 个 worker、队列容量 2：可同时容纳 2 个待处理任务。
+	pool := NewAsyncPool(1, 2)
+	Register(server, "echo", Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+		time.Sleep(10 * time.Millisecond) // 模拟耗时
+		r.Reply(&echoRet{Msg: arg.Msg})
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var ret echoRet
+	if err := client.Call(ctx, ch, "echo", &echoArg{Msg: "hi"}, &ret); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if ret.Msg != "hi" {
+		t.Fatalf("unexpected ret: %+v", ret)
+	}
+}
+
+// TestRPC_AsyncPoolBusy 验证队列满时返回 ErrBusy：用 0 worker 的池不现实，
+// 改为构造一个 worker 持续被占满的池，第三个请求应被拒绝。
+func TestRPC_AsyncPoolBusy(t *testing.T) {
+	pool := NewAsyncPool(1, 1) // 1 worker、队列容量 1：worker + 队列共可容纳 2 个任务
+	gate := make(chan struct{})
+
+	wrapped := Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+		<-gate // 占住唯一的 worker
+		r.Reply(&echoRet{Msg: arg.Msg})
+	})
+
+	// 第 1 个任务：进入 worker 执行并阻塞。
+	go wrapped(context.Background(), &Replyer{req: &RequestMsg{Oneway: true}}, &echoArg{Msg: "1"})
+	// 第 2 个任务：填满队列（等待进入 worker）。
+	go wrapped(context.Background(), &Replyer{req: &RequestMsg{Oneway: true}}, &echoArg{Msg: "2"})
+
+	time.Sleep(20 * time.Millisecond) // 等待前两个任务就位
+
+	// 第 3 个任务：worker 与队列均满，应立即收到 ErrBusy。
+	errs := make(chan *Error, 1)
+	wrapped(context.Background(), &Replyer{
+		channel: &errCollectChannel{onErr: func(e *Error) { errs <- e }},
+		req:     &RequestMsg{},
+	}, &echoArg{Msg: "3"})
+
+	select {
+	case e := <-errs:
+		if !e.IsCode(ErrBusy) {
+			t.Fatalf("expected ErrBusy, got %v", e)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected ErrBusy, timed out")
+	}
+
+	close(gate) // 放行 worker
+}
+
+// TestRPC_AsyncPoolShared 验证多个方法（不同 Arg 类型）共享同一个池：
+// 共享的队列满时，另一个方法也应收到 ErrBusy。
+func TestRPC_AsyncPoolShared(t *testing.T) {
+	client, server, ch := newPair()
+	// 1 worker、队列容量 1：worker + 队列共可容纳 2 个任务。
+	pool := NewAsyncPool(1, 1)
+	gate := make(chan struct{})
+
+	// echo 方法阻塞 worker。
+	Register(server, "echo", Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+		<-gate
+		r.Reply(&echoRet{Msg: arg.Msg})
+	}))
+	// fire 方法与 echo 共享同一个池。
+	Register(server, "fire", Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+		r.Reply(&echoRet{Msg: arg.Msg})
+	}))
+
+	// 用两个 echo 请求占满 worker + 队列（Oneway 不等待回复）。
+	go server.OnMessage(context.Background(), ch, &RequestMsg{Seq: 1, Method: "echo", Oneway: true, Arg: &echoArg{Msg: "a"}})
+	go server.OnMessage(context.Background(), ch, &RequestMsg{Seq: 2, Method: "echo", Oneway: true, Arg: &echoArg{Msg: "b"}})
+
+	time.Sleep(20 * time.Millisecond)
+
+	// 第三个请求走 fire（与 echo 共享池），应因池满收到 ErrBusy。
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var ret echoRet
+	err := client.Call(ctx, ch, "fire", &echoArg{Msg: "c"}, &ret)
+	if e, ok := err.(*Error); !ok || !e.IsCode(ErrBusy) {
+		t.Fatalf("expected ErrBusy from shared pool, got %v", err)
+	}
+
+	close(gate)
+}
+
+// errCollectChannel 是一个只用于收集 Error 回复的测试 channel。
+type errCollectChannel struct {
+	onErr func(*Error)
+}
+
+func (c *errCollectChannel) Request(*RequestMsg) error                            { return nil }
+func (c *errCollectChannel) RequestWithContext(context.Context, *RequestMsg) error { return nil }
+func (c *errCollectChannel) Reply(resp *ResponseMsg) error {
+	if resp.Err != nil && c.onErr != nil {
+		c.onErr(resp.Err)
+	}
+	return nil
+}
+func (c *errCollectChannel) Name() string                { return "err-collect" }
+func (c *errCollectChannel) IsRetryAbleError(error) bool { return false }

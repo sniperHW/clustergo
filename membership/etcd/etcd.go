@@ -55,6 +55,9 @@ func (s *Membership) getMembers(ctx context.Context) error {
 	for _, kv := range resp.Kvs {
 		var n membership.Node
 		if err := n.Unmarshal(kv.Value); err != nil {
+			if s.Logger != nil {
+				s.Logger.Warnf("etcd membership unmarshal member failed: %v", err)
+			}
 			continue
 		}
 		currentMembers[n.Addr.LogicAddr().String()] = &n

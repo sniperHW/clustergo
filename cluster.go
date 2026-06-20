@@ -31,7 +31,12 @@ var (
 	ErrNetAddrMismatch  = errors.New("net addr mismatch")
 	ErrPendingQueueFull = errors.New("pending queue full")
 	ErrBusy             = errors.New("busy")
+	ErrHandshakeTooBig  = errors.New("handshake payload too large")
 )
+
+// maxHandshakePayload 限制握手阶段读取的加密载荷上限，防止对端通过伪造
+// 长度前缀触发超大内存分配（DoS）。
+const maxHandshakePayload = 1024
 
 var (
 	SendChanSize       int           = 256                    //socket异步发送chan的大小
@@ -42,7 +47,10 @@ var (
 
 var RPCCodec rpc.Codec = PbCodec{}
 
-var cecret_key []byte = []byte("sanguo_2022")
+// secretKey 用于握手数据的加密/解密。优先从环境变量 CLUSTERGO_SECRET_KEY
+// 读取；未设置时回退到默认值并填充到最小安全长度（32 字节）。生产环境应
+// 通过环境变量设置高强度随机密钥。
+var secretKey = crypto.LoadKey("CLUSTERGO_SECRET_KEY", []byte("sanguo_2022"))
 
 type Handshake struct {
 	LogicAddr uint32 `json:"LogicAddr,omitempty"`
@@ -149,11 +157,15 @@ func (p *gopool) loop() {
 	}
 }
 
-func (p *gopool) Go(fn func()) {
+// Go 把 fn 投递到工作协程池执行。任务队列满时返回 ErrBusy，
+// 不再裸起 goroutine，避免突发流量下无限制创建协程导致 OOM。
+// 调用方应根据自身语义处理该错误（返回给上层、降级或记录日志）。
+func (p *gopool) Go(fn func()) error {
 	select {
 	case p.taskqueue <- fn:
+		return nil
 	default:
-		go fn()
+		return ErrBusy
 	}
 }
 
@@ -275,7 +287,7 @@ func (s *Node) SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr,
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.Go(func() {
+		return s.Go(func() {
 			s.msgManager.dispatchBinary(context.TODO(), to, cmd, msg)
 		})
 	} else {
@@ -309,7 +321,7 @@ func (s *Node) SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte, deadlin
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.Go(func() {
+		return s.Go(func() {
 			s.msgManager.dispatchBinary(context.TODO(), to, cmd, msg)
 		})
 	} else {
@@ -335,7 +347,7 @@ func (s *Node) SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...t
 		return errors.New("server not start")
 	}
 	if to == s.localAddr.LogicAddr() {
-		s.Go(func() {
+		return s.Go(func() {
 			s.msgManager.dispatchProto(context.TODO(), to, uint16(pb.GetCmd(ss.Namespace, msg)), msg)
 		})
 	} else {
@@ -472,6 +484,15 @@ func (s *Node) listenStream(session *smux.Session, onNewStream func(*smux.Stream
 }
 
 func (s *Node) onNewConnection(conn net.Conn) (err error) {
+	// 握手涉及解密、JSON 反序列化、类型断言等可能 panic 的操作，畸形/恶意
+	// 数据包不应让处理 goroutine 静默崩溃。捕获 panic 并转为错误，由调用方
+	// 关闭连接并记录日志。
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("onNewConnection panic: %v", r)
+		}
+	}()
+
 	buff := make([]byte, 4)
 	conn.SetReadDeadline(time.Now().Add(time.Second))
 	defer conn.SetReadDeadline(time.Time{})
@@ -483,6 +504,10 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 
 	datasize := int(binary.BigEndian.Uint32(buff))
 
+	if datasize > maxHandshakePayload {
+		return ErrHandshakeTooBig
+	}
+
 	buff = make([]byte, datasize)
 
 	_, err = io.ReadFull(conn, buff)
@@ -490,7 +515,7 @@ func (s *Node) onNewConnection(conn net.Conn) (err error) {
 		return err
 	}
 
-	if buff, err = crypto.AESCBCDecrypter(cecret_key, buff); nil != err {
+	if buff, err = crypto.AESDecrypt(secretKey, buff); nil != err {
 		return err
 	}
 

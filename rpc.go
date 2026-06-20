@@ -73,24 +73,21 @@ type selfChannel struct {
 }
 
 func (c *selfChannel) RequestWithContext(ctx context.Context, request *rpc.RequestMsg) error {
-	c.self.Go(func() {
+	return c.self.Go(func() {
 		c.self.rpcSvr.svr.OnMessage(context.TODO(), c, request)
 	})
-	return nil
 }
 
 func (c *selfChannel) Request(request *rpc.RequestMsg) error {
-	c.self.Go(func() {
+	return c.self.Go(func() {
 		c.self.rpcSvr.svr.OnMessage(context.TODO(), c, request)
 	})
-	return nil
 }
 
 func (c *selfChannel) Reply(response *rpc.ResponseMsg) error {
-	c.self.Go(func() {
+	return c.self.Go(func() {
 		c.self.rpcCli.cli.OnMessage(response)
 	})
-	return nil
 }
 
 func (c *selfChannel) Name() string {

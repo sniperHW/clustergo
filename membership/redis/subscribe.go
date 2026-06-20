@@ -71,6 +71,9 @@ func (cli *Membership) getMembers() error {
 		m, markdel := v.([]interface{})[1].(string), v.([]interface{})[2].(string)
 		var n membership.Node
 		if err = n.Unmarshal([]byte(m)); err != nil {
+			if cli.Logger != nil {
+				cli.Logger.Warnf("redis membership unmarshal member failed: %v", err)
+			}
 			continue
 		} else if markdel == "true" {
 			if _, ok := cli.members[n.Addr.LogicAddr().String()]; ok {

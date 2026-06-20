@@ -94,11 +94,16 @@ func (m *RelayMessage) To() addr.LogicAddr {
 }
 
 func (m *RelayMessage) GetRpcRequest() *rpc.RequestMsg {
+	// payload 布局: sizeLen(4) + sizeFlag(1) + sizeToAndFrom(8) = 13 字节头部，
+	// 之后才是 RPC body。不足则视为畸形包，避免 m.payload[4] / m.payload[13:] 越界。
+	if len(m.payload) < minSize {
+		return nil
+	}
 	if getMsgType(m.payload[4]) != RpcReq {
 		return nil
 	} else {
 		// nil codec: callers only inspect Seq/Oneway; the arg is not decoded here.
-		if req, err := rpc.DecodeRequest(m.payload[13:], nil); err != nil {
+		if req, err := rpc.DecodeRequest(m.payload[minSize:], nil); err != nil {
 			return nil
 		} else {
 			return req

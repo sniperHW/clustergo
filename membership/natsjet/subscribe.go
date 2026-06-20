@@ -37,6 +37,9 @@ func (s *Membership) getMembers(ctx context.Context) error {
 		}
 		var n membership.Node
 		if err := n.Unmarshal(entry.Value()); err != nil {
+			if s.Logger != nil {
+				s.Logger.Warnf("natsjet membership unmarshal member failed: %v", err)
+			}
 			continue
 		}
 		currentMembers[n.Addr.LogicAddr().String()] = &n
@@ -142,6 +145,9 @@ func (s *Membership) handleConfigEntry(entry nats.KeyValueEntry) {
 	case nats.KeyValuePut:
 		var n membership.Node
 		if err := n.Unmarshal(entry.Value()); err != nil {
+			if s.Logger != nil {
+				s.Logger.Warnf("natsjet membership unmarshal member failed: %v", err)
+			}
 			return
 		}
 		logicAddr = n.Addr.LogicAddr().String()

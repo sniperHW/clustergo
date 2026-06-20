@@ -192,7 +192,7 @@ func (cache *nodeCache) getNormalNode(tt uint32, n int) *node {
 		return nil
 	} else {
 		if n == 0 {
-			return nodeArray[int(rand.Int31())%len(nodeArray)]
+			return nodeArray[rand.Intn(len(nodeArray))]
 		} else {
 			return nodeArray[n%len(nodeArray)]
 		}
@@ -237,7 +237,7 @@ func (n *node) handshake(self *Node, conn *net.TCPConn, isStream bool) error {
 		return err
 	}
 
-	if j, err = crypto.AESCBCEncrypt(cecret_key, j); nil != err {
+	if j, err = crypto.AESEncrypt(secretKey, j); nil != err {
 		return err
 	}
 
@@ -480,11 +480,15 @@ func (n *node) sendMessage(self *Node, msg interface{}, deadline time.Time) (err
 			message:  msg,
 			deadline: deadline,
 		})
-		//尝试与对端建立连接
+		//尝试与对端建立连接。dial 是低频操作（仅在 pendingMsg 由空变非空时触发
+		//一次），不属于高频消息派发路径；即便 gopool 满也必须确保连接建立流程
+		//能继续，否则消息将永久滞留 pendingMsg。故此处 Go 失败时用独立协程兜底。
 		if n.pendingMsg.Len() == 1 {
-			self.Go(func() {
+			if self.Go(func() {
 				n.dial(self)
-			})
+			}) != nil {
+				go n.dial(self)
+			}
 		}
 		n.Unlock()
 	}
@@ -509,11 +513,13 @@ func (n *node) sendMessageWithContext(ctx context.Context, self *Node, msg inter
 			message: msg,
 			ctx:     ctx,
 		})
-		//尝试与对端建立连接
+		//尝试与对端建立连接（同 sendMessage，dial 低频，Go 失败时兜底）
 		if n.pendingMsg.Len() == 1 {
-			self.Go(func() {
+			if self.Go(func() {
 				n.dial(self)
-			})
+			}) != nil {
+				go n.dial(self)
+			}
 		}
 		n.Unlock()
 	}

@@ -43,21 +43,21 @@ func (bw *BytesWriter) writeByte(v byte) {
 }
 
 func (bw *BytesWriter) WriteUint16(v uint16) {
-	b := []byte{0, 0}
-	binary.BigEndian.PutUint16(b, v)
-	bw.B = append(bw.B, b...)
+	var b [2]byte
+	binary.BigEndian.PutUint16(b[:], v)
+	bw.B = append(bw.B, b[:]...)
 }
 
 func (bw *BytesWriter) WriteUint32(v uint32) {
-	b := []byte{0, 0, 0, 0}
-	binary.BigEndian.PutUint32(b, v)
-	bw.B = append(bw.B, b...)
+	var b [4]byte
+	binary.BigEndian.PutUint32(b[:], v)
+	bw.B = append(bw.B, b[:]...)
 }
 
 func (bw *BytesWriter) WriteUint64(v uint64) {
-	b := []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	binary.BigEndian.PutUint64(b, v)
-	bw.B = append(bw.B, b...)
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], v)
+	bw.B = append(bw.B, b[:]...)
 }
 
 func (bw *BytesWriter) WriteBytes(v []byte) {

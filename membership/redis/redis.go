@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sniperHW/clustergo"
 	"github.com/sniperHW/clustergo/membership"
 )
 
@@ -13,6 +14,7 @@ type Membership struct {
 	RedisCli      *redis.Client
 	MemberKey     string // hash key for members, default "members"
 	AliveKey      string // hash key for alive nodes, default "alive"
+	Logger        clustergo.Logger
 	memberVersion int64
 	aliveVersion  int64
 	alive         map[string]struct{}         //健康节点
