@@ -62,9 +62,6 @@ err := clustergo.SendPbMessage(toAddr, &MyMessage{}, time.Now().Add(time.Second)
 ```go
 err := clustergo.SendBinMessage(toAddr, cmdID, []byte("data"))
 err := clustergo.SendBinMessage(toAddr, cmdID, []byte("data"), time.Now().Add(time.Second))
-
-// 带 context（支持取消）
-err := clustergo.SendBinMessageWithContext(ctx, toAddr, cmdID, []byte("data"))
 ```
 
 ### 注册消息处理器

@@ -278,28 +278,6 @@ func (s *Node) RegisterBinaryHandler(cmd uint16, handler func(context.Context, a
 	return s
 }
 
-func (s *Node) SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
-	select {
-	case <-s.die:
-		return errors.New("server die")
-	case <-s.started:
-	default:
-		return errors.New("server not start")
-	}
-	if to == s.localAddr.LogicAddr() {
-		return s.Go(func() {
-			s.msgManager.dispatchBinary(context.TODO(), to, cmd, msg)
-		})
-	} else {
-		if n := s.getNodeByLogicAddr(to); n != nil {
-			n.sendMessageWithContext(ctx, s, ss.NewMessage(to, s.localAddr.LogicAddr(), msg, cmd))
-		} else {
-			return ErrInvaildNode
-		}
-	}
-	return nil
-}
-
 /*
  *  SendMessage系列函数的deadline参数选择
  *
@@ -664,10 +642,6 @@ func SendPbMessage(to addr.LogicAddr, msg proto.Message, deadline ...time.Time) 
 
 func SendBinMessage(to addr.LogicAddr, cmd uint16, msg []byte, deadline ...time.Time) error {
 	return GetDefaultNode().SendBinMessage(to, cmd, msg, deadline...)
-}
-
-func SendBinMessageWithContext(ctx context.Context, to addr.LogicAddr, cmd uint16, msg []byte) error {
-	return GetDefaultNode().SendBinMessageWithContext(ctx, to, cmd, msg)
 }
 
 func StartSmuxServer(onNewStream func(*smux.Stream)) {
