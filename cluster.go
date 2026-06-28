@@ -43,6 +43,8 @@ var (
 	DefaultSendTimeout time.Duration = time.Millisecond * 200 //
 	MaxPendingMsgSize  int           = 1024                   //连接建立前待发送消息缓冲区的大小，一旦缓冲区满，发送将返回ErrPendingQueueFull
 	BatchSendSize      int           = 65535
+	WorkerPoolSize                   = 16
+	TaskQueueSize                    = 32
 )
 
 var RPCCodec rpc.Codec = PbCodec{}
@@ -138,8 +140,6 @@ func (m *msgManager) dispatchBinary(ctx context.Context, from addr.LogicAddr, cm
 		logger.Errorf("unkonw cmd:%d\n", cmd)
 	}
 }
-
-const pool_goroutine_size = 16
 
 type gopool struct {
 	taskqueue chan func()
@@ -422,7 +422,7 @@ func (s *Node) Start(mb membership.Membership, localAddr addr.LogicAddr) (err er
 				}()
 			})
 			if err == nil {
-				for i := 0; i < pool_goroutine_size; i++ {
+				for i := 0; i < WorkerPoolSize; i++ {
 					go s.loop()
 				}
 				logger.Debugf("%s serve on:%s", localAddr.String(), s.localAddr.NetAddr().String())
@@ -568,7 +568,7 @@ func NewClusterNode(rpccodec rpc.Codec) *Node {
 	n := &Node{
 		gopool: gopool{
 			die:       make(chan struct{}),
-			taskqueue: make(chan func(), 256),
+			taskqueue: make(chan func(), TaskQueueSize),
 		},
 		nodeCache: nodeCache{
 			allnodes: map[addr.LogicAddr]*node{},

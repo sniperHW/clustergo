@@ -294,7 +294,12 @@ func (n *node) onMessage(ctx context.Context, self *Node, msg interface{}) {
 			self.rpcCli.cli.OnMessage(m)
 		}
 	case *ss.RelayMessage:
-		n.onRelayMessage(self, msg)
+		if self.Go(func() {
+			n.onRelayMessage(self, msg)
+		}) != nil {
+			//任务队列满，直接处理
+			n.onRelayMessage(self, msg)
+		}
 	}
 }
 
