@@ -31,7 +31,7 @@ clustergo.RegisterBinaryHandler(cmdID, func(ctx context.Context, from addr.Logic
 })
 
 // 5. 注册 RPC 服务（必须在 Start 之前）
-clustergo.RegisterService[MyReq]("myMethod", func(ctx context.Context, r *rpcgo.Replyer, arg *MyReq) {
+clustergo.GetDefaultNode().RegisterService[MyReq]("myMethod", func(ctx context.Context, r *rpc.Replyer, arg *MyReq) {
     r.Reply(&MyResp{...})
 })
 
@@ -82,19 +82,20 @@ clustergo.RegisterBinaryHandler(100, func(ctx context.Context, from addr.LogicAd
 ## RPC 调用
 
 ```go
+node := clustergo.GetDefaultNode() // 所有 RPC 接口都是 *Node 上的泛型成员函数
 // 同步调用
-ret, err := clustergo.Call[MyReq, MyResp](ctx, peerAddr, "method", &MyReq{})
+ret, err := node.Call[MyReq, MyResp](ctx, peerAddr, "method", &MyReq{})
 
 // 带超时
-ret, err := clustergo.CallWithTimeout[MyReq, MyResp](peerAddr, "method", &MyReq{}, time.Second*3)
+ret, err := node.CallWithTimeout[MyReq, MyResp](peerAddr, "method", &MyReq{}, time.Second*3)
 
 // 异步调用
-clustergo.AsyncCall[MyReq, MyResp](peerAddr, "method", &MyReq{}, time.Now().Add(time.Second), func(ret *MyResp, err error) {
+node.AsyncCall[MyReq, MyResp](peerAddr, "method", &MyReq{}, time.Now().Add(time.Second), func(ret *MyResp, err error) {
     // callback
 })
 
 // 单向（不等待响应）
-clustergo.Post[MyReq](ctx, peerAddr, "method", &MyReq{})
+node.Post[MyReq](ctx, peerAddr, "method", &MyReq{})
 ```
 
 ## 节点发现
@@ -136,7 +137,7 @@ node.RegisterProtoHandler(&MyMsg{}, handler)
 node.Start(mb, localAddr)
 // 使用 node 的方法而非包级函数
 node.SendPbMessage(to, msg)
-ret, err := clustergo.Call[Arg, Ret](ctx, node, to, "method", arg)  // 小写版本的独立 node 函数
+ret, err := node.Call[Arg, Ret](ctx, to, "method", arg)  // 泛型成员函数，同样适用于独立 node
 node.Stop()
 node.Wait()
 ```

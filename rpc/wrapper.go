@@ -17,8 +17,8 @@ import (
  * 用法：
  *
  *	pool := rpc.NewAsyncPool(4, 64) // 4 workers，队列容量 64
- *	rpc.Register(s, "echo",  pool.Wrap(func(c, r, a *EchoArg) { ... }))
- *	rpc.Register(s, "heavy", pool.Wrap(func(c, r, a *HeavyArg) { ... }))
+ *	s.Register("echo",  pool.Wrap(func(c, r, a *EchoArg) { ... }))
+ *	s.Register("heavy", pool.Wrap(func(c, r, a *HeavyArg) { ... }))
  *
  * 两个方法共享同一个 worker 池，任一方法占满队列，另一个也会收到 ErrBusy。
  */
@@ -53,9 +53,9 @@ func NewAsyncPool(workers, queue int) *AsyncPool {
 // Wrap 把业务方法 fn 派发到共享 worker 池异步执行。多个方法（含不同 Arg 类型）
 // 可复用同一个 AsyncPool，实现统一的并发与队列限流。
 //
-// 注意：Go 方法不允许带类型参数，因此 Wrap 是顶层泛型函数（pool 作为参数传入），
-// 而非 AsyncPool 的方法。
-func Wrap[Arg any](p *AsyncPool, fn func(context.Context, *Replyer, *Arg)) func(context.Context, *Replyer, *Arg) {
+// Wrap 是 AsyncPool 上的泛型成员函数（Go 方法允许自带类型参数），
+// 调用时 Arg 由 fn 的函数类型推导得出。
+func (p *AsyncPool) Wrap[Arg any](fn func(context.Context, *Replyer, *Arg)) func(context.Context, *Replyer, *Arg) {
 	if p == nil {
 		return fn
 	}

@@ -18,17 +18,18 @@ func cli() {
 	localaddr, _ := addr.MakeLogicAddr("1.2.1")
 	clustergo.Start(membership.NewClient("127.0.0.1:18110"), localaddr)
 
+	node := clustergo.GetDefaultNode()
 	echoAddr, _ := clustergo.GetAddrByType(1)
 
 	for i := 0; i < 10; i++ {
-		resp, err := echo.CallWithTimeout(echoAddr, &echo.EchoReq{Msg: fmt.Sprintf("hello:%d", i)}, time.Second)
+		resp, err := echo.CallWithTimeout(node, echoAddr, &echo.EchoReq{Msg: fmt.Sprintf("hello:%d", i)}, time.Second)
 		clustergo.Log().Debug(resp, err)
 	}
 
 	var wait sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wait.Add(1)
-		echo.AsyncCall(echoAddr, &echo.EchoReq{Msg: fmt.Sprintf("hello async:%d", i)}, time.Now().Add(time.Second), func(resp *echo.EchoRsp, err error) {
+		echo.AsyncCall(node, echoAddr, &echo.EchoReq{Msg: fmt.Sprintf("hello async:%d", i)}, time.Now().Add(time.Second), func(resp *echo.EchoRsp, err error) {
 			clustergo.Log().Debug(resp, err)
 			wait.Done()
 		})

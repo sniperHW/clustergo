@@ -52,49 +52,41 @@ import (
 	"context"
 	"time"
 
-	"github.com/sniperHW/rpcgo"
 	"github.com/sniperHW/clustergo"
 	"github.com/sniperHW/clustergo/addr"
+	"github.com/sniperHW/clustergo/rpc"
 )
 
 type Replyer struct {
-	replyer *rpcgo.Replyer
+	replyer *rpc.Replyer
 }
 
-func (this *Replyer) Reply(result *Response, err error) {
-	this.replyer.Reply(result, err)
+func (r *Replyer) Reply(result *EchoRsp) {
+	r.replyer.Reply(result)
+}
+
+func (r *Replyer) Error(err error) {
+	r.replyer.Error(err)
 }
 
 type EchoService interface {
-	OnCall(context.Context, *Replyer, *Request)
+	ServeEcho(context.Context, *Replyer, *EchoReq)
 }
 
-func Register(o EchoService) {
-	clustergo.RegisterRPC("echo", func(ctx context.Context, r *rpcgo.Replyer, arg *Request) {
-		o.OnCall(ctx, &Replyer{replyer: r}, arg)
+// node 为承载该服务的节点，RegisterService 是 Node 上的泛型成员函数，
+// 类型参数 Arg 由 method 的函数类型推导得出。
+func Register(node *clustergo.Node, o EchoService) {
+	node.RegisterService("echo", func(ctx context.Context, r *rpc.Replyer, arg *EchoReq) {
+		o.ServeEcho(ctx, &Replyer{replyer: r}, arg)
 	})
 }
 
-func Call(ctx context.Context, peer addr.LogicAddr, arg *Request) (*Response, error) {
-	var resp Response
-	err := clustergo.Call(ctx, peer, "echo", arg, &resp)
-	return &resp, err
+func Call(node *clustergo.Node, ctx context.Context, peer addr.LogicAddr, arg *EchoReq) (*EchoRsp, error) {
+	return node.Call[*EchoReq, EchoRsp](ctx, peer, "echo", arg)
 }
 
-func CallWithCallback(peer addr.LogicAddr, deadline time.Time, arg *Request, cb func(*Response, error)) func() bool {
-	var resp Response
-	var fn func(interface{}, error)
-	if cb != nil {
-		fn = func(ret interface{}, err error) {
-			if ret != nil {
-				cb(ret.(*Response), err)
-			} else {
-				cb(nil, err)
-			}
-		}
-	}
-
-	return clustergo.CallWithCallback(peer, deadline, "echo", arg, &resp, fn)
+func AsyncCall(node *clustergo.Node, peer addr.LogicAddr, arg *EchoReq, deadline time.Time, callback func(*EchoRsp, error)) error {
+	return node.AsyncCall[*EchoReq, EchoRsp](peer, "echo", arg, deadline, callback)
 }
 ```
 
@@ -130,7 +122,7 @@ func main() {
 	clustergo.InitLogger(l.Sugar())
 
 	//注册服务
-	echo.Register(&echoService{})
+	echo.Register(clustergo.GetDefaultNode(), &echoService{})
 
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")
 	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
@@ -164,11 +156,12 @@ func main() {
 	clustergo.Start(discovery.NewClient("127.0.0.1:8110"), localaddr)
 
 	//假设echo服务全部由逻辑地址type=1的节点提供，这里任意获取一个type=1的节点
+	node := clustergo.GetDefaultNode()
 	echoAddr, _ := clustergo.GetAddrByType(1)
 
 	//执行10次同步调用
 	for i := 0; i < 10; i++ {
-		resp, err := echo.Call(context.TODO(), echoAddr, &echo.Request{Msg: "hello"})
+		resp, err := echo.Call(node, context.TODO(), echoAddr, &echo.EchoReq{Msg: "hello"})
 		l.Sugar().Debug(resp, err)
 	}
 	clustergo.Stop()

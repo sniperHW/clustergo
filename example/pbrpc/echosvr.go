@@ -22,7 +22,7 @@ func (e *echoService) ServeEcho(ctx context.Context, replyer *echo.Replyer, requ
 func svr() {
 	l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 	clustergo.InitLogger(l.Sugar())
-	echo.Register(&echoService{})
+	echo.Register(clustergo.GetDefaultNode(), &echoService{})
 
 	localaddr, _ := addr.MakeLogicAddr("1.1.1")
 	clustergo.Start(membership.NewClient("127.0.0.1:18110"), localaddr)

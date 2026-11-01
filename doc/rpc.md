@@ -39,40 +39,50 @@ type selfChannel struct {
 var RPCCodec rpcgo.Codec = PbCodec{}
 ```
 
-## 公开 API（包级函数，使用默认 Node）
+## 公开 API（Node 的泛型成员函数）
+
+所有 RPC 调用接口都是 `*Node` 上的泛型成员函数（Go 1.27 起方法可以自带类型参数），
+类型参数由实参类型或 method 的函数类型推导，通常无需显式写出。
+默认单例节点通过 `clustergo.GetDefaultNode()` 获取。
+
+```go
+node := clustergo.GetDefaultNode()
+```
 
 ### 注册服务端方法
 
 ```go
-// 泛型注册，Arg 为请求参数类型
-clustergo.RegisterService[Arg](name string, method func(context.Context, *rpcgo.Replyer, *Arg)) error
+// Arg 为请求参数类型，由 method 的函数类型推导
+node.RegisterService[Arg](name string, method func(context.Context, *rpc.Replyer, *Arg)) error
+
 ```
 
 ### 调用方式
 
 ```go
 // 同步调用（带 context）
-ret, err := clustergo.Call[Arg, Ret](ctx, peerAddr, "method", arg)
+ret, err := node.Call[Arg, Ret](ctx, peerAddr, "method", arg)
 
 // 同步调用（带超时 duration）
-ret, err := clustergo.CallWithTimeout[Arg, Ret](peerAddr, "method", arg, time.Second)
+ret, err := node.CallWithTimeout[Arg, Ret](peerAddr, "method", arg, time.Second)
 
 // 异步调用（回调方式）
-clustergo.AsyncCall[Arg, Ret](peerAddr, "method", arg, deadline, func(ret *Ret, err error) {
+node.AsyncCall[Arg, Ret](peerAddr, "method", arg, deadline, func(ret *Ret, err error) {
     // 处理结果
 })
 
 // 单向调用（不等待响应）
-clustergo.Post[Arg](ctx, peerAddr, "method", arg)
+node.Post[Arg](ctx, peerAddr, "method", arg)
 ```
 
-### 使用独立 Node 实例
+### 多节点场景
 
-所有包级函数都有对应的小写版本，接受额外的 `*Node` 参数（用于测试）：
+传入不同的 `*Node` 即可在多个节点实例上注册/调用，无需额外的包级函数：
 
 ```go
-ret, err := clustergo.call[Arg, Ret](ctx, node, peerAddr, "method", arg)
-err := clustergo.post[Arg](ctx, node, peerAddr, "method", arg)
+var node1, node2 *clustergo.Node
+node1.RegisterService("hello", handler)                                    // 在 node1 上注册
+ret, err := node2.Call[string, string](ctx, node1Addr, "hello", "sniperHW") // 从 node2 调用
 ```
 
 ## RPCServer 拦截器
@@ -106,23 +116,23 @@ RPC 调用返回的错误会区分可重试错误：
 
 ```go
 // 1. 定义 Replyer 包装
-type Replyer struct { replyer *rpcgo.Replyer }
+type Replyer struct { replyer *rpc.Replyer }
 
 // 2. 定义服务接口
 type Echo interface {
     ServeEcho(context.Context, *Replyer, *EchoReq)
 }
 
-// 3. 注册函数
-func Register(o Echo) {
-    clustergo.RegisterService("echo", func(ctx context.Context, r *rpcgo.Replyer, arg *EchoReq) {
+// 3. 注册函数（node 为承载该服务的节点）
+func Register(node *clustergo.Node, o Echo) {
+    node.RegisterService("echo", func(ctx context.Context, r *rpc.Replyer, arg *EchoReq) {
         o.ServeEcho(ctx, &Replyer{replyer: r}, arg)
     })
 }
 
 // 4. 类型安全的客户端调用函数
-func Call(ctx context.Context, peer addr.LogicAddr, arg *EchoReq) (*EchoRsp, error) {
-    return clustergo.Call[*EchoReq, EchoRsp](ctx, peer, "echo", arg)
+func Call(node *clustergo.Node, ctx context.Context, peer addr.LogicAddr, arg *EchoReq) (*EchoRsp, error) {
+    return node.Call[*EchoReq, EchoRsp](ctx, peer, "echo", arg)
 }
 ```
 

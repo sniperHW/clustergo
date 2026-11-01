@@ -28,20 +28,20 @@ type Test interface {
 	ServeTest(context.Context, *Replyer, *TestReq)
 }
 
-func Register(o Test) {
-	clustergo.RegisterService("test", func(ctx context.Context, r *rpc.Replyer, arg *TestReq) {
+func Register(node *clustergo.Node, o Test) {
+	node.RegisterService("test", func(ctx context.Context, r *rpc.Replyer, arg *TestReq) {
 		o.ServeTest(ctx, &Replyer{replyer: r}, arg)
 	})
 }
 
-func Call(ctx context.Context, peer addr.LogicAddr, arg *TestReq) (*TestRsp, error) {
-	return clustergo.Call[*TestReq, TestRsp](ctx, peer, "test", arg)
+func Call(node *clustergo.Node, ctx context.Context, peer addr.LogicAddr, arg *TestReq) (*TestRsp, error) {
+	return node.Call[*TestReq, TestRsp](ctx, peer, "test", arg)
 }
 
-func CallWithTimeout(peer addr.LogicAddr, arg *TestReq, d time.Duration) (*TestRsp, error) {
-	return clustergo.CallWithTimeout[*TestReq, TestRsp](peer, "test", arg, d)
+func CallWithTimeout(node *clustergo.Node, peer addr.LogicAddr, arg *TestReq, d time.Duration) (*TestRsp, error) {
+	return node.CallWithTimeout[*TestReq, TestRsp](peer, "test", arg, d)
 }
 
-func AsyncCall(peer addr.LogicAddr, arg *TestReq, deadline time.Time, callback func(*TestRsp, error)) error {
-	return clustergo.AsyncCall[*TestReq, TestRsp](peer, "test", arg, deadline, callback)
+func AsyncCall(node *clustergo.Node, peer addr.LogicAddr, arg *TestReq, deadline time.Time, callback func(*TestRsp, error)) error {
+	return node.AsyncCall[*TestReq, TestRsp](peer, "test", arg, deadline, callback)
 }

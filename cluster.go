@@ -564,6 +564,43 @@ func (s *Node) GetRPCServer() *RPCServer {
 	return s.rpcSvr
 }
 
+// RegisterService 在节点上注册一个RPC服务方法。Arg为请求参数类型，
+// 通常由method的函数类型推导得出。
+func (s *Node) RegisterService[Arg any](name string, method func(context.Context, *rpc.Replyer, *Arg)) error {
+	return s.rpcSvr.svr.Register(name, method)
+}
+
+// Call 同步调用RPC方法，成功时返回指向结果的指针。
+func (s *Node) Call[Arg any, Ret any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {
+	r := new(Ret)
+	if err = s.rpcCli.Call(ctx, to, method, arg, r); err == nil {
+		ret = r
+	}
+	return
+}
+
+// Post 单向调用RPC方法，不等待响应。
+func (s *Node) Post[Arg any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (err error) {
+	err = s.rpcCli.Call(ctx, to, method, arg, nil)
+	return
+}
+
+// CallWithTimeout 带超时的同步调用RPC方法。
+func (s *Node) CallWithTimeout[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, d time.Duration) (ret *Ret, err error) {
+	r := new(Ret)
+	if err = s.rpcCli.CallWithTimeout(to, method, arg, r, d); err == nil {
+		ret = r
+	}
+	return
+}
+
+// AsyncCall 异步调用RPC方法，结果通过callback回调返回。
+func (s *Node) AsyncCall[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
+	return s.rpcCli.AsyncCall(to, method, arg, new(Ret), deadline, func(r interface{}, err error) {
+		callback(r.(*Ret), err)
+	})
+}
+
 func NewClusterNode(rpccodec rpc.Codec) *Node {
 	n := &Node{
 		gopool: gopool{
@@ -650,67 +687,4 @@ func StartSmuxServer(onNewStream func(*smux.Stream)) {
 
 func OpenStream(peer addr.LogicAddr) (*smux.Stream, error) {
 	return GetDefaultNode().OpenStream(peer)
-}
-
-func RegisterService[Arg any](name string, method func(context.Context, *rpc.Replyer, *Arg)) error {
-	return rpc.Register(GetDefaultNode().rpcSvr.svr, name, method)
-}
-
-func Call[Arg any, Ret any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {
-	r := new(Ret)
-	if err = GetRPCClient().Call(ctx, to, method, arg, r); err == nil {
-		ret = r
-	}
-	return
-}
-
-func Post[Arg any](ctx context.Context, to addr.LogicAddr, method string, arg Arg) (err error) {
-	err = GetRPCClient().Call(ctx, to, method, arg, nil)
-	return
-}
-
-func CallWithTimeout[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, d time.Duration) (ret *Ret, err error) {
-	r := new(Ret)
-	if err = GetRPCClient().CallWithTimeout(to, method, arg, r, d); err == nil {
-		ret = r
-	}
-	return
-}
-
-func AsyncCall[Arg any, Ret any](to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
-	return GetRPCClient().AsyncCall(to, method, arg, new(Ret), deadline, func(r interface{}, err error) {
-		callback(r.(*Ret), err)
-	})
-}
-
-// for unit test only
-func registerService[Arg any](node *Node, name string, method func(context.Context, *rpc.Replyer, *Arg)) error {
-	return rpc.Register(node.rpcSvr.svr, name, method)
-}
-
-func call[Arg any, Ret any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg) (ret *Ret, err error) {
-	r := new(Ret)
-	if err = node.GetRPCClient().Call(ctx, to, method, arg, r); err == nil {
-		ret = r
-	}
-	return
-}
-
-func post[Arg any](ctx context.Context, node *Node, to addr.LogicAddr, method string, arg Arg) (err error) {
-	err = node.GetRPCClient().Call(ctx, to, method, arg, nil)
-	return
-}
-
-func callWithTimeout[Arg any, Ret any](node *Node, to addr.LogicAddr, method string, arg Arg, d time.Duration) (ret *Ret, err error) {
-	r := new(Ret)
-	if err = node.GetRPCClient().CallWithTimeout(to, method, arg, r, d); err == nil {
-		ret = r
-	}
-	return
-}
-
-func asyncCall[Arg any, Ret any](node *Node, to addr.LogicAddr, method string, arg Arg, deadline time.Time, callback func(*Ret, error)) error {
-	return node.GetRPCClient().AsyncCall(to, method, arg, new(Ret), deadline, func(r interface{}, err error) {
-		callback(r.(*Ret), err)
-	})
 }

@@ -123,7 +123,7 @@ func TestBenchmarkRPCAsync(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	node1.RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
@@ -211,7 +211,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	node1.RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
@@ -224,7 +224,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 	err = node1.Start(localDiscovery, node1Addr.LogicAddr())
 	assert.Nil(t, err)
 
-	_, err = call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+	_, err = node2.Call[string, string](context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW")
 
 	begtime := time.Now()
 
@@ -236,7 +236,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			for atomic.AddInt32(&counter, 1) <= 100000 {
-				call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+				node2.Call[string, string](context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW")
 			}
 			wait.Done()
 		}()
@@ -249,7 +249,7 @@ func TestBenchmarkRPCSync(t *testing.T) {
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	node1.Wait()
 
-	_, err = call[string, string](context.TODO(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+	_, err = node2.Call[string, string](context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.NotNil(t, err)
 
 	localDiscovery.RemoveNode(node2Addr.LogicAddr())
@@ -293,7 +293,7 @@ func TestSingleNode(t *testing.T) {
 		return true
 	}))
 
-	registerService(s, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	s.RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -305,7 +305,7 @@ func TestSingleNode(t *testing.T) {
 		Msg: "hello",
 	})
 
-	resp, err := callWithTimeout[string, string](s, localAddr.LogicAddr(), "hello", "sniperHW", time.Second)
+	resp, err := s.CallWithTimeout[string, string](localAddr.LogicAddr(), "hello", "sniperHW", time.Second)
 	assert.Nil(t, err)
 	assert.Equal(t, *resp, "hello world:sniperHW")
 
@@ -337,12 +337,12 @@ func TestTwoNode(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	node1.RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
 
-	registerService(node1, "Delay", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	node1.RegisterService("Delay", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on Delay")
 		time.Sleep(time.Second * 5)
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
@@ -355,7 +355,7 @@ func TestTwoNode(t *testing.T) {
 	logger.Debug("Start OK")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
-	_, err = call[string, string](ctx, node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+	_, err = node2.Call[string, string](ctx, node1Addr.LogicAddr(), "hello", "sniperHW")
 	cancel()
 	logger.Debug(err)
 
@@ -367,12 +367,12 @@ func TestTwoNode(t *testing.T) {
 	})
 
 	//var resp string
-	resp, err := call[string, string](context.Background(), node2, node1Addr.LogicAddr(), "hello", "sniperHW")
+	resp, err := node2.Call[string, string](context.Background(), node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.Nil(t, err)
 	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	go func() {
-		_, err := call[string, string](context.Background(), node2, node1Addr.LogicAddr(), "Delay", "sniperHW")
+		_, err := node2.Call[string, string](context.Background(), node1Addr.LogicAddr(), "Delay", "sniperHW")
 		assert.Nil(t, err)
 	}()
 
@@ -431,7 +431,7 @@ func TestHarbor(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	registerService(node1, "hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	node1.RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -463,20 +463,20 @@ func TestHarbor(t *testing.T) {
 		Msg: "hello",
 	})
 
-	resp, err := call[string, string](context.TODO(), node2, type1Addr, "hello", "sniperHW")
+	resp, err := node2.Call[string, string](context.TODO(), type1Addr, "hello", "sniperHW")
 	assert.Nil(t, err)
 	assert.Equal(t, *resp, "hello world:sniperHW")
 
 	//将1.1.1移除
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
-	_, err = call[string, string](context.TODO(), node2, type1Addr, "hello", "sniperHW")
+	_, err = node2.Call[string, string](context.TODO(), type1Addr, "hello", "sniperHW")
 	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
 	logger.Debug(err)
 
 	//将harbor1移除
 	localDiscovery.RemoveNode(harbor1Addr.LogicAddr())
 
-	_, err = call[string, string](context.TODO(), node2, type1Addr, "hello", "sniperHW")
+	_, err = node2.Call[string, string](context.TODO(), type1Addr, "hello", "sniperHW")
 	assert.Equal(t, "route message to target:1.1.1 failed", err.Error())
 	logger.Debug(err)
 
@@ -657,7 +657,7 @@ func TestDefault(t *testing.T) {
 		logger.Debug(msg.(*ss.Echo).Msg)
 	})
 
-	RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
+	GetDefaultNode().RegisterService("hello", func(_ context.Context, replyer *rpc.Replyer, arg *string) {
 		logger.Debugf("on hello call,channel:%s", replyer.Channel().Name())
 		replyer.Reply(fmt.Sprintf("hello world:%s", *arg))
 	})
@@ -675,7 +675,7 @@ func TestDefault(t *testing.T) {
 	SendBinMessage(node1Addr.LogicAddr(), 1, []byte("binMessage"))
 
 	//调用自身hello
-	resp, err := Call[string, string](context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW")
+	resp, err := GetDefaultNode().Call[string, string](context.TODO(), node1Addr.LogicAddr(), "hello", "sniperHW")
 	assert.Nil(t, err)
 	assert.Equal(t, *resp, "hello world:sniperHW")
 

@@ -53,7 +53,7 @@ func newPair() (*Client, *Server, *loopChannel) {
 
 func TestRPC_Call(t *testing.T) {
 	client, server, ch := newPair()
-	Register(server, "echo", func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("echo", func(ctx context.Context, r *Replyer, arg *echoArg) {
 		r.Reply(&echoRet{Msg: arg.Msg})
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -69,7 +69,7 @@ func TestRPC_Call(t *testing.T) {
 
 func TestRPC_AsyncCall(t *testing.T) {
 	client, server, ch := newPair()
-	Register(server, "echo", func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("echo", func(ctx context.Context, r *Replyer, arg *echoArg) {
 		r.Reply(&echoRet{Msg: arg.Msg})
 	})
 	done := make(chan error, 1)
@@ -100,7 +100,7 @@ func TestRPC_AsyncCall(t *testing.T) {
 func TestRPC_Post(t *testing.T) {
 	client, server, ch := newPair()
 	called := make(chan struct{}, 1)
-	Register(server, "fire", func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("fire", func(ctx context.Context, r *Replyer, arg *echoArg) {
 		called <- struct{}{}
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -117,7 +117,7 @@ func TestRPC_Post(t *testing.T) {
 
 func TestRPC_Error(t *testing.T) {
 	client, server, ch := newPair()
-	Register(server, "fail", func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("fail", func(ctx context.Context, r *Replyer, arg *echoArg) {
 		r.Error(NewError(ErrMethod, "boom"))
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -209,7 +209,7 @@ func TestRPC_DecodeTruncated(t *testing.T) {
 // neverReply is a method handler that never calls Reply, so the client must rely on ctx.
 func TestRPC_CallCancelled(t *testing.T) {
 	client, server, ch := newPair()
-	Register(server, "hang", func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("hang", func(ctx context.Context, r *Replyer, arg *echoArg) {
 		// intentionally never reply
 	})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -226,7 +226,7 @@ func TestRPC_CallCancelled(t *testing.T) {
 
 func TestRPC_CallTimeout(t *testing.T) {
 	client, server, ch := newPair()
-	Register(server, "hang", func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("hang", func(ctx context.Context, r *Replyer, arg *echoArg) {
 		// intentionally never reply
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -247,7 +247,7 @@ func TestRPC_AsyncPool(t *testing.T) {
 	client, server, ch := newPair()
 	// 1 个 worker、队列容量 2：可同时容纳 2 个待处理任务。
 	pool := NewAsyncPool(1, 2)
-	Register(server, "echo", Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("echo", pool.Wrap(func(ctx context.Context, r *Replyer, arg *echoArg) {
 		time.Sleep(10 * time.Millisecond) // 模拟耗时
 		r.Reply(&echoRet{Msg: arg.Msg})
 	}))
@@ -269,7 +269,7 @@ func TestRPC_AsyncPoolBusy(t *testing.T) {
 	pool := NewAsyncPool(1, 1) // 1 worker、队列容量 1：worker + 队列共可容纳 2 个任务
 	gate := make(chan struct{})
 
-	wrapped := Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+	wrapped := pool.Wrap(func(ctx context.Context, r *Replyer, arg *echoArg) {
 		<-gate // 占住唯一的 worker
 		r.Reply(&echoRet{Msg: arg.Msg})
 	})
@@ -309,12 +309,12 @@ func TestRPC_AsyncPoolShared(t *testing.T) {
 	gate := make(chan struct{})
 
 	// echo 方法阻塞 worker。
-	Register(server, "echo", Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("echo", pool.Wrap(func(ctx context.Context, r *Replyer, arg *echoArg) {
 		<-gate
 		r.Reply(&echoRet{Msg: arg.Msg})
 	}))
 	// fire 方法与 echo 共享同一个池。
-	Register(server, "fire", Wrap(pool, func(ctx context.Context, r *Replyer, arg *echoArg) {
+	server.Register("fire", pool.Wrap(func(ctx context.Context, r *Replyer, arg *echoArg) {
 		r.Reply(&echoRet{Msg: arg.Msg})
 	}))
 

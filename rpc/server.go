@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -97,6 +98,51 @@ func (s *Server) SetInInterceptor(interceptor []func(*Replyer, *RequestMsg) bool
 
 func (s *Server) Stop() {
 	s.stoped.CompareAndSwap(false, true)
+}
+
+// Register 注册一个RPC方法。name为方法名，method为业务处理函数；Arg为请求参数类型，
+// 框架在调用method之前会把请求参数解码成*Arg。Arg通常由method的函数类型推导得出，
+// 如: s.Register("echo", func(ctx context.Context, r *Replyer, arg *EchoArg) { ... })。
+func (s *Server) Register[Arg any](name string, method func(context.Context, *Replyer, *Arg)) error {
+	s.Lock()
+	defer s.Unlock()
+	if name == "" {
+		return errors.New("RegisterMethod nams is nil")
+	} else if _, ok := s.methods[name]; ok {
+		return fmt.Errorf("duplicate method:%s", name)
+	} else {
+
+		caller := func(c context.Context, s *Server, req *RequestMsg, replyer *Replyer) (err error) {
+			arg := new(Arg)
+			if err = req.decodeArgInto(arg); err != nil {
+				return NewError(ErrOther, fmt.Sprintf("arg decode error:%v", err))
+			}
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Errorf("method:%s channel:%s %s", req.Method, replyer.channel.Name(), fmt.Sprintf("%v: %s", r, string(debug.Stack())))
+					err = NewError(ErrOther, "method panic")
+				}
+			}()
+			req.Arg = arg
+
+			for _, v := range s.inInterceptor {
+				if !v(replyer, req) {
+					return
+				}
+			}
+			method(c, replyer, arg)
+			return nil
+		}
+		s.methods[name] = caller
+		return nil
+	}
+}
+
+// UnRegister 移除已注册的RPC方法。
+func (s *Server) UnRegister(name string) {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.methods, name)
 }
 
 func (s *Server) method(name string) method {

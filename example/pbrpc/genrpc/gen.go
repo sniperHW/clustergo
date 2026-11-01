@@ -40,23 +40,23 @@ type {{.Service}} interface {
 	Serve{{.Service}}(context.Context, *Replyer,*{{.Request}})
 }
 
-func Register(o {{.Service}}) {
-	clustergo.RegisterService("{{.Method}}",func(ctx context.Context, r *rpc.Replyer,arg *{{.Request}}) {
+func Register(node *clustergo.Node, o {{.Service}}) {
+	node.RegisterService("{{.Method}}",func(ctx context.Context, r *rpc.Replyer,arg *{{.Request}}) {
 		o.Serve{{.Service}}(ctx,&Replyer{replyer:r},arg)
 	})
 }
 
 
-func Call(ctx context.Context, peer addr.LogicAddr,arg *{{.Request}}) (*{{.Response}},error) {
-	return clustergo.Call[*{{.Request}},{{.Response}}](ctx,peer,"{{.Method}}",arg)
+func Call(node *clustergo.Node, ctx context.Context, peer addr.LogicAddr,arg *{{.Request}}) (*{{.Response}},error) {
+	return node.Call[*{{.Request}},{{.Response}}](ctx,peer,"{{.Method}}",arg)
 }
 
-func CallWithTimeout(peer addr.LogicAddr,arg *{{.Request}},d time.Duration) (*{{.Response}},error) {
-	return clustergo.CallWithTimeout[*{{.Request}},{{.Response}}](peer,"{{.Method}}",arg,d)
+func CallWithTimeout(node *clustergo.Node, peer addr.LogicAddr,arg *{{.Request}},d time.Duration) (*{{.Response}},error) {
+	return node.CallWithTimeout[*{{.Request}},{{.Response}}](peer,"{{.Method}}",arg,d)
 }
 
-func AsyncCall(peer addr.LogicAddr,arg *{{.Request}},deadline time.Time,callback func(*{{.Response}},error)) error {
-	return clustergo.AsyncCall[*{{.Request}},{{.Response}}](peer,"{{.Method}}",arg,deadline,callback)
+func AsyncCall(node *clustergo.Node, peer addr.LogicAddr,arg *{{.Request}},deadline time.Time,callback func(*{{.Response}},error)) error {
+	return node.AsyncCall[*{{.Request}},{{.Response}}](peer,"{{.Method}}",arg,deadline,callback)
 }
 
 `
