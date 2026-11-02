@@ -285,7 +285,7 @@ func TestSingleNode(t *testing.T) {
 		//设置钩子函数,当Replyer发送应答时调用
 		replyer.AppendOutInterceptor(func(req *rpc.RequestMsg, ret interface{}, err error) {
 			if err == nil {
-				logger.Debugf("call %s(\"%v\") use:%v", req.Method, *req.Arg.(*string), time.Now().Sub(beg))
+				logger.Debugf("call %s(\"%v\") use:%v", req.Method, *req.Arg.(*string), time.Since(beg))
 			} else {
 				logger.Debugf("call %s(\"%v\") with error:%v", req.Method, *req.Arg.(*string), err)
 			}
@@ -382,7 +382,7 @@ func TestTwoNode(t *testing.T) {
 	localDiscovery.RemoveNode(node1Addr.LogicAddr())
 	logger.Debugf("waitting...")
 	node1.Wait() //Delay返回后，Wait才会返回
-	logger.Debugf("wait:%v", time.Now().Sub(beg))
+	logger.Debugf("wait:%v", time.Since(beg))
 
 	_, err = node2.GetAddrByType(1)
 	assert.NotNil(t, err)
