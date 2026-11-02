@@ -24,12 +24,12 @@ clustergo/
 │   ├── redis/     Redis 实现（pub/sub + lua script）
 │   └── etcd/      etcd 实现（watch + lease）
 ├── pkg/crypto/    AES-CBC 加解密（用于握手）
-├── logger/        日志接口
+├── logger/        全局日志器与 Logger 接口（clustergo 与 rpc 共用）
 ├── logfile/       日志文件轮转
 ├── node.go        内部 node 结构（连接管理、pending 队列、dial 状态机）
 ├── cluster.go     Node 公开 API（Start/Stop/Send/RPC）、消息分发、nodeCache
 ├── rpc.go         RPC channel 适配（rpcChannel / selfChannel）、RPCClient/RPCServer 封装
-└── logger.go      Logger 接口定义
+└── logger.go      InitLogger/Log 封装（转发到 logger 包）
 ```
 
 ## 启动流程

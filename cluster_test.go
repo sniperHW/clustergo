@@ -15,6 +15,7 @@ import (
 	"github.com/sniperHW/clustergo/addr"
 	"github.com/sniperHW/clustergo/codec/pb"
 	"github.com/sniperHW/clustergo/codec/ss"
+	"github.com/sniperHW/clustergo/logger"
 	"github.com/sniperHW/clustergo/logger/zap"
 	"github.com/sniperHW/clustergo/membership"
 	"github.com/sniperHW/clustergo/rpc"

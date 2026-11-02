@@ -7,6 +7,8 @@ import (
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
+
+	"github.com/sniperHW/clustergo/logger"
 )
 
 type method func(context.Context, *Server, *RequestMsg, *Replyer) error

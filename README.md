@@ -113,7 +113,7 @@ type echoService struct {
 }
 
 func (e *echoService) OnCall(ctx context.Context, replyer *echo.Replyer, request *echo.Request) {
-	clustergo.Logger().Debug("echo:", request.Msg)
+	clustergo.Log().Debug("echo:", request.Msg)
 	replyer.Reply(&echo.Response{Msg: request.Msg}, nil)
 }
 

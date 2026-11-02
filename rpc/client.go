@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/clustergo/logger"
 )
 
 var syncCtxPool = sync.Pool{

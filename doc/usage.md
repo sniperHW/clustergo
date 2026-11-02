@@ -9,9 +9,11 @@ import (
     "github.com/sniperHW/clustergo/logger/zap"
 )
 
-// 1. 初始化日志（必须在其他操作之前）
+// 1. 初始化日志（可选：不初始化则丢弃日志，Panic/Fatal 仍会 panic）
+//    logger.Logger 定义在 logger 包，clustergo 与 rpc 共用同一个全局实例
 l := zap.NewZapLogger("1.1.1.log", "./logfile", "debug", 1024*1024*100, 14, 28, true)
 clustergo.InitLogger(l.Sugar())
+// 或直接注入到 logger 包（等价）：logger.InitLogger(l.Sugar())
 
 // 2. 创建 Membership 实现
 mb := redis.Membership{RedisCli: redisCli}
